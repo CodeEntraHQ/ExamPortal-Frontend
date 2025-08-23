@@ -10,7 +10,7 @@ const API_BASE_URL = 'http://localhost:8000';
  */
 export const fetchApi = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
   // Default headers
   const headers = {
     'Content-Type': 'application/json',
@@ -27,7 +27,7 @@ export const fetchApi = async (endpoint, options = {}) => {
       window.location.href = '/login';
       return { status: 'FAILURE', responseMsg: 'SESSION_EXPIRED' };
     }
-    
+
     headers['Authorization'] = `Bearer ${token}`;
   }
 
@@ -39,7 +39,7 @@ export const fetchApi = async (endpoint, options = {}) => {
 
   try {
     const response = await fetch(url, config);
-    
+
     // Handle unauthorized responses (e.g., token rejected by server)
     if (response.status === 401) {
       // Clear auth data and redirect to login
@@ -48,7 +48,7 @@ export const fetchApi = async (endpoint, options = {}) => {
       window.location.href = '/login';
       return { status: 'FAILURE', responseMsg: 'AUTHENTICATION_FAILED' };
     }
-    
+
     const data = await response.json();
     return data;
   } catch (error) {

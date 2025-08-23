@@ -1,8 +1,8 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom';
 
 export default function Landing() {
-  const navigate = useNavigate()
-  
+  const navigate = useNavigate();
+
   return (
     <section className="relative h-[calc(100vh-8rem)] bg-gradient-to-br from-blue-100 via-indigo-50 to-sky-100 overflow-hidden">
       {/* Animated background elements */}
@@ -16,7 +16,7 @@ export default function Landing() {
       </div>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-100/40 via-transparent to-transparent"></div>
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_var(--tw-gradient-stops))] from-indigo-100/40 via-transparent to-transparent"></div>
-      
+
       {/* Content Container */}
       <div className="relative z-10 flex items-center h-full">
         <div className="max-w-2xl px-8 ml-16">
@@ -24,33 +24,36 @@ export default function Landing() {
             Welcome to Your College Exam Portal
           </h1>
           <p className="mb-8 text-lg text-slate-600">
-            A secure and modern platform for conducting exams and quizzes online. 
-            Simple, reliable, and designed to keep the focus on learning.
+            A secure and modern platform for conducting exams and quizzes
+            online. Simple, reliable, and designed to keep the focus on
+            learning.
           </p>
           <div className="flex gap-4">
-            <button 
+            <button
               onClick={() => navigate('/login')}
               className="px-8 py-3 text-lg font-semibold text-white bg-primary 
                 border-2 border-primary/20
                 shadow-[4px_4px_0px_0px] shadow-indigo-600
                 transition-all duration-200 
                 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px] hover:shadow-indigo-600
-                active:translate-x-[4px] active:translate-y-[4px] active:shadow-none">
+                active:translate-x-[4px] active:translate-y-[4px] active:shadow-none"
+            >
               Login
             </button>
-            <button 
+            <button
               onClick={() => navigate('/register')}
               className="px-8 py-3 text-lg font-semibold text-primary bg-white
                 border-2 border-primary
                 shadow-[4px_4px_0px_0px] shadow-primary
                 transition-all duration-200
                 hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px]
-                active:translate-x-[4px] active:translate-y-[4px] active:shadow-none">
+                active:translate-x-[4px] active:translate-y-[4px] active:shadow-none"
+            >
               Register
             </button>
           </div>
         </div>
       </div>
     </section>
-  )
+  );
 }
