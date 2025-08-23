@@ -6,7 +6,7 @@ import profileLogin from '../assets/profile-login.svg'
 import { useAuth } from '../hooks/useAuth'
 
 export default function Header() {
-  const { user, setUser, logout } = useAuth()
+  const { user, logout } = useAuth()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
   const navigate = useNavigate()

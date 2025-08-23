@@ -19,9 +19,7 @@ const MOCK_USERS = [
   }
 ];
 
-/**
- * Mock API implementation for authentication
- */
+// eslint-disable-next-line no-unused-vars
 const mockAuthApi = {
   /**
    * Mock login implementation

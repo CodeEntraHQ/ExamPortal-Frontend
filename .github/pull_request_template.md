@@ -9,3 +9,4 @@ https://www.atlassian.com/software/jira/TIC-XXXXX
 ## Type of Change
 - [ ] Tested in local
 - [ ] Running in local
+- [ ] I have formatted the code using `npm run tidy`
