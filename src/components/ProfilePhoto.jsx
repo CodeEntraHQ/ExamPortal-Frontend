@@ -1,4 +1,4 @@
-import defaultProfile from '../assets/profile-default.svg'
+import defaultProfile from '../assets/profile-default.svg';
 
 export default function ProfilePhoto({ src }) {
   return (
@@ -7,5 +7,5 @@ export default function ProfilePhoto({ src }) {
       alt="Profile"
       className="object-cover w-8 h-8 border-2 rounded-full border-primary"
     />
-  )
+  );
 }

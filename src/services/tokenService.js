@@ -32,19 +32,19 @@ export const tokenService = {
    */
   isTokenExpired: (token) => {
     if (!token) return true;
-    
+
     try {
       // Validate token format before decoding
       if (!token.includes('.') || token.split('.').length !== 3) {
         console.error('Invalid token format');
         return true;
       }
-      
+
       // Get the payload part of the JWT token
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
       const payload = JSON.parse(window.atob(base64));
-      
+
       // Check if the token has expired
       return payload.exp * 1000 < Date.now();
     } catch (error) {
@@ -60,14 +60,14 @@ export const tokenService = {
    */
   decodeToken: (token) => {
     if (!token) return null;
-    
+
     try {
       // Validate token format before decoding
       if (!token.includes('.') || token.split('.').length !== 3) {
         console.error('Invalid token format');
         return null;
       }
-      
+
       // Get the payload part of the JWT token
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -76,5 +76,5 @@ export const tokenService = {
       console.error('Error decoding token:', error);
       return null;
     }
-  }
+  },
 };

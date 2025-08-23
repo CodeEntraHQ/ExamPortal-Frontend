@@ -3,9 +3,9 @@ import { AuthContext } from './AuthContext';
 import { authService } from '../services/authService';
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [loading, setLoading] = useState(true)
-  
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   // Check for existing auth on mount
   useEffect(() => {
     const checkAuth = () => {
@@ -15,10 +15,10 @@ export function AuthProvider({ children }) {
       }
       setLoading(false);
     };
-    
+
     checkAuth();
   }, []);
-  
+
   // Provide auth context
   const authContextValue = {
     user,
@@ -27,12 +27,12 @@ export function AuthProvider({ children }) {
     logout: () => {
       authService.logout();
       setUser(null);
-    }
+    },
   };
-  
+
   return (
     <AuthContext.Provider value={authContextValue}>
       {children}
     </AuthContext.Provider>
-  )
+  );
 }

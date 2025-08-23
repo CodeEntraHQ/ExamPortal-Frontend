@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom';
 
 export default function Footer() {
   return (
@@ -7,15 +7,15 @@ export default function Footer() {
         &copy; {new Date().getFullYear()} ExamEntra. All rights reserved.
       </span>
       <nav className="flex gap-6">
-        <Link 
-          to="/about-us" 
+        <Link
+          to="/about-us"
           className="text-primary relative group transition-colors duration-300 hover:text-indigo-700"
         >
           <span className="relative z-10">About Us</span>
           <span className="absolute inset-x-0 -bottom-1 h-0.5 bg-indigo-200 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300"></span>
         </Link>
-        <Link 
-          to="/contact-us" 
+        <Link
+          to="/contact-us"
           className="text-primary relative group transition-colors duration-300 hover:text-indigo-700"
         >
           <span className="relative z-10">Contact Us</span>
@@ -23,5 +23,5 @@ export default function Footer() {
         </Link>
       </nav>
     </footer>
-  )
+  );
 }
