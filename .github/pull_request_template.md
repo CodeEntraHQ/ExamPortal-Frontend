@@ -4,9 +4,9 @@
 
 ## JIRA
 
-https://www.atlassian.com/software/jira/TIC-XXXXX
+https://github.com/CodeEntraHQ/ExamPortal-Frontend/issues/XX
 
-- [ ] I have changed the JIRA no. Above 👆
+- [ ] I have changed the Issue no. Above 👆
 
 ## Type of Change
 
