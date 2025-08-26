@@ -1,0 +1,5 @@
+# Force LF for all text files
+* text=auto eol=lf
+
+# Treat these as binary (no EOL conversion)
+*.{png,jpg,jpeg,gif,webp,ico,mp4,mp3,ogg,woff,woff2,ttf} binary

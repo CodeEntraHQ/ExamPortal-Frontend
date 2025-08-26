@@ -34,7 +34,7 @@ export default function Header() {
   };
 
   return (
-    <header className="grid items-center h-16 grid-cols-3 px-8 border-b shadow-lg bg-white/80 backdrop-blur-sm border-indigo-50 shadow-indigo-100/20">
+    <header className="grid items-center h-16 grid-cols-3 px-8 border-b shadow-lg bg-white/80 backdrop-blur-sm border-indigo-50 shadow-indigo-100/20 z-10">
       <div className="flex items-center gap-2 group">
         <Link
           to={user ? (user.role === 'ADMIN' ? '/admin' : '/student') : '/'}

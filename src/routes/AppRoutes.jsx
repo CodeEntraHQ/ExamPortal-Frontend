@@ -7,8 +7,7 @@ import Admin from '../pages/Admin.jsx';
 import Student from '../pages/Student.jsx';
 import AboutUs from '../pages/AboutUs.jsx';
 import ContactUs from '../pages/ContactUs.jsx';
-import Header from '../components/Header.jsx';
-import Footer from '../components/Footer.jsx';
+import Layout from '../components/Layout.jsx';
 import { useAuth } from '../hooks/useAuth';
 
 // Protected route component
@@ -64,65 +63,61 @@ function PublicRoute({ children, allowLanding = false }) {
 export default function AppRoutes() {
   return (
     <BrowserRouter>
-      <div className="flex flex-col min-h-screen">
-        <Header />
-        <main className="flex-1 bg-background">
-          <Routes>
-            <Route
-              path="/"
-              element={
-                <PublicRoute allowLanding={true}>
-                  <Landing />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/login"
-              element={
-                <PublicRoute>
-                  <Login />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/register"
-              element={
-                <PublicRoute>
-                  <Register />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/forgot-password"
-              element={
-                <PublicRoute>
-                  <ForgotPassword />
-                </PublicRoute>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute allowedRoles={['ADMIN']}>
-                  <Admin />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/student"
-              element={
-                <ProtectedRoute allowedRoles={['STUDENT']}>
-                  <Student />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="/about-us" element={<AboutUs />} />
-            <Route path="/contact-us" element={<ContactUs />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-        <Footer />
-      </div>
+      <Layout>
+        <Routes>
+          <Route
+            path="/"
+            element={
+              <PublicRoute allowLanding={true}>
+                <Landing />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PublicRoute>
+                <Register />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicRoute>
+                <ForgotPassword />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <Admin />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student"
+            element={
+              <ProtectedRoute allowedRoles={['STUDENT']}>
+                <Student />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/about-us" element={<AboutUs />} />
+          <Route path="/contact-us" element={<ContactUs />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
     </BrowserRouter>
   );
 }
