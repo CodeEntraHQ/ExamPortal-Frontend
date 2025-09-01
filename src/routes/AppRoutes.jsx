@@ -13,6 +13,7 @@ import { useAuth } from '../hooks/useAuth';
 // Protected route component
 function ProtectedRoute({ children, allowedRoles, redirectPath = '/login' }) {
   const { user, loading } = useAuth();
+  console.log('from routes -> ', user);
 
   // Show loading state or spinner while checking auth
   if (loading) {
@@ -38,7 +39,7 @@ function ProtectedRoute({ children, allowedRoles, redirectPath = '/login' }) {
 }
 
 // Public route that redirects authenticated users to their role-specific page
-function PublicRoute({ children, allowLanding = false }) {
+function PublicRoute({ children }) {
   const { user, loading } = useAuth();
 
   // Show loading state or spinner while checking auth
@@ -48,9 +49,7 @@ function PublicRoute({ children, allowLanding = false }) {
     );
   }
 
-  // If authenticated, redirect to role-specific page
-  // But allow access to landing page if allowLanding is true
-  if (user && !allowLanding) {
+  if (user) {
     return (
       <Navigate to={user.role === 'ADMIN' ? '/admin' : '/student'} replace />
     );

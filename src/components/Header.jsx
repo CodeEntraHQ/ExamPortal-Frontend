@@ -13,17 +13,17 @@ export default function Header() {
 
   // Close dropdown when clicking outside
   useEffect(() => {
+    setDropdownOpen(false);
     function handleClickOutside(event) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
       }
     }
-
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [dropdownRef]);
+  }, [dropdownRef, user]);
 
   const handleLogout = () => {
     logout();
