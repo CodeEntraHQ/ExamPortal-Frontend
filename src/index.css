@@ -1,13 +1,62 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-html,
-body,
-#root {
-  @apply h-full;
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
 }
 
-body {
-  @apply bg-background;
+@layer components {
+  /* Primary Button - Modern Green */
+  .btn-primary {
+    @apply bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 shadow-sm hover:shadow-md;
+  }
+
+  /* Secondary Button - Soft Green */
+  .btn-secondary {
+    @apply bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:ring-offset-2 border border-primary-200;
+  }
+
+  /* Outline Button - Green Border */
+  .btn-outline {
+    @apply bg-transparent hover:bg-primary-50 text-primary-600 font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 border border-primary-300 hover:border-primary-400;
+  }
+
+  /* Card Component - Modern Design */
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-secondary-200 p-6 hover:shadow-md transition-shadow duration-300;
+  }
+
+  /* Input Field - Green Focus */
+  .input-field {
+    @apply block w-full rounded-lg border-secondary-300 shadow-sm focus:border-primary-400 focus:ring-2 focus:ring-primary-200 focus:ring-offset-0 sm:text-sm transition-all duration-200 placeholder-secondary-400;
+  }
+
+  /* Success Button */
+  .btn-success {
+    @apply bg-success-500 hover:bg-success-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-success-400 focus:ring-offset-2;
+  }
+
+  /* Warning Button */
+  .btn-warning {
+    @apply bg-warning-500 hover:bg-warning-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-warning-400 focus:ring-offset-2;
+  }
+
+  /* Error Button */
+  .btn-error {
+    @apply bg-error-500 hover:bg-error-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-error-400 focus:ring-offset-2;
+  }
+
+  /* Info Button */
+  .btn-info {
+    @apply bg-info-500 hover:bg-info-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-info-400 focus:ring-offset-2;
+  }
 }

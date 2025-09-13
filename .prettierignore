@@ -1,4 +1,17 @@
-{
-  "singleQuote": true,
-  "jsxSingleQuote": false
-}
+node_modules
+dist
+build
+.next
+.nuxt
+coverage
+.nyc_output
+.cache
+.parcel-cache
+*.log
+.DS_Store
+.vscode
+.idea
+*.min.js
+*.min.css
+package-lock.json
+yarn.lock

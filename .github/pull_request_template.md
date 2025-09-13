@@ -12,4 +12,3 @@ https://github.com/CodeEntraHQ/ExamPortal-Frontend/issues/XX
 
 - [ ] Tested in local
 - [ ] Running in local
-- [ ] I have formatted the code using `npm run tidy`

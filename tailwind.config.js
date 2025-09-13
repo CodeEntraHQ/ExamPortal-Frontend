@@ -1,58 +1,111 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
   theme: {
     extend: {
       colors: {
-        primary: '#6366F1',
-        secondary: '#10B981',
-        background: '#F3F4F6',
-        neutral: '#FFFFFF',
-        accent: '#F59E0B',
-        error: '#F43F5E',
-        text: '#1F2937',
+        // Modern Green Primary Palette - Works great in both light & dark themes
+        primary: {
+          50: '#f0fdf4',   // Very light green - perfect for backgrounds
+          100: '#dcfce7',  // Light green - subtle highlights
+          200: '#bbf7d0',  // Soft green - borders, dividers
+          300: '#86efac',  // Medium light green - hover states
+          400: '#4ade80',  // Vibrant green - accents
+          500: '#22c55e',  // Main brand green - primary actions
+          600: '#16a34a',  // Darker green - primary hover
+          700: '#15803d',  // Deep green - text, icons
+          800: '#166534',  // Very dark green - headings
+          900: '#14532d',  // Darkest green - emphasis
+          950: '#052e16',  // Almost black green - strong contrast
+        },
+        // Modern Neutral Secondary Palette - Complements green perfectly
+        secondary: {
+          50: '#f8fafc',   // Almost white - light backgrounds
+          100: '#f1f5f9',  // Very light gray - subtle backgrounds
+          200: '#e2e8f0',  // Light gray - borders, dividers
+          300: '#cbd5e1',  // Medium light gray - disabled states
+          400: '#94a3b8',  // Medium gray - secondary text
+          500: '#64748b',  // Base gray - body text
+          600: '#475569',  // Dark gray - headings
+          700: '#334155',  // Darker gray - strong text
+          800: '#1e293b',  // Very dark gray - dark backgrounds
+          900: '#0f172a',  // Almost black - darkest backgrounds
+          950: '#020617',  // Pure dark - maximum contrast
+        },
+        // Semantic Colors - Using green variations
+        success: {
+          50: '#f0fdf4',
+          100: '#dcfce7',
+          200: '#bbf7d0',
+          300: '#86efac',
+          400: '#4ade80',
+          500: '#22c55e',
+          600: '#16a34a',
+          700: '#15803d',
+          800: '#166534',
+          900: '#14532d',
+        },
+        warning: {
+          50: '#fffbeb',
+          100: '#fef3c7',
+          200: '#fde68a',
+          300: '#fcd34d',
+          400: '#fbbf24',
+          500: '#f59e0b',
+          600: '#d97706',
+          700: '#b45309',
+          800: '#92400e',
+          900: '#78350f',
+        },
+        error: {
+          50: '#fef2f2',
+          100: '#fee2e2',
+          200: '#fecaca',
+          300: '#fca5a5',
+          400: '#f87171',
+          500: '#ef4444',
+          600: '#dc2626',
+          700: '#b91c1c',
+          800: '#991b1b',
+          900: '#7f1d1d',
+        },
+        info: {
+          50: '#eff6ff',
+          100: '#dbeafe',
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#3b82f6',
+          600: '#2563eb',
+          700: '#1d4ed8',
+          800: '#1e40af',
+          900: '#1e3a8a',
+        }
       },
-      keyframes: {
-        float1: {
-          '0%, 100%': { transform: 'translate(0, 0) scale(1)', opacity: '0.5' },
-          '33%': {
-            transform: 'translate(30px, -50px) scale(1.1)',
-            opacity: '0.8',
-          },
-          '66%': {
-            transform: 'translate(-20px, 20px) scale(0.9)',
-            opacity: '0.6',
-          },
-        },
-        float2: {
-          '0%, 100%': { transform: 'translate(0, 0) scale(1)', opacity: '0.6' },
-          '33%': {
-            transform: 'translate(-40px, 40px) scale(0.9)',
-            opacity: '0.8',
-          },
-          '66%': {
-            transform: 'translate(20px, -25px) scale(1.1)',
-            opacity: '0.5',
-          },
-        },
-        float3: {
-          '0%, 100%': { transform: 'translate(0, 0) scale(1)', opacity: '0.5' },
-          '33%': {
-            transform: 'translate(25px, 25px) scale(1.1)',
-            opacity: '0.7',
-          },
-          '66%': {
-            transform: 'translate(-30px, -40px) scale(0.9)',
-            opacity: '0.6',
-          },
-        },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       animation: {
-        float1: 'float1 12s ease-in-out infinite',
-        float2: 'float2 15s ease-in-out infinite',
-        float3: 'float3 18s ease-in-out infinite',
+        'fade-in': 'fadeIn 0.5s ease-in-out',
+        'slide-up': 'slideUp 0.3s ease-out',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(10px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        },
       },
     },
   },
-  plugins: [],
-};
+  plugins: [
+    require('@tailwindcss/forms'),
+    require('@tailwindcss/typography'),
+  ],
+}

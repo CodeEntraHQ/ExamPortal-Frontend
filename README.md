@@ -1,77 +1,104 @@
 # ExamPortal Frontend
 
-[![React](https://img.shields.io/badge/React-19.1.1-blue.svg)](https://reactjs.org/)
-[![Vite](https://img.shields.io/badge/Vite-7.1.2-purple.svg)](https://vitejs.dev/)
-[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4.13-38B2AC.svg)](https://tailwindcss.com/)
+[![React](https://img.shields.io/badge/React-19.1.1-61DAFB?style=flat-square&logo=react&logoColor=white)](https://reactjs.org/)
+[![Vite](https://img.shields.io/badge/Vite-7.1.2-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4.17-38B2AC?style=flat-square&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![ESLint](https://img.shields.io/badge/ESLint-9.33.0-4B32C3?style=flat-square&logo=eslint&logoColor=white)](https://eslint.org/)
+[![Prettier](https://img.shields.io/badge/Prettier-3.6.2-F7B93E?style=flat-square&logo=prettier&logoColor=white)](https://prettier.io/)
+[![Husky](https://img.shields.io/badge/Husky-9.1.7-000000?style=flat-square&logo=husky&logoColor=white)](https://typicode.github.io/husky/)
+[![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
 
-A modern web application for managing and taking exams online. This frontend application is built with React and Vite, providing a fast and responsive user experience.
+A modern React application built with Vite, Tailwind CSS, and TypeScript for the ExamPortal.
 
-## Features
+## Getting Started
 
-- User authentication (Login/Register)
-- Student dashboard for taking exams
-- Admin panel for managing exams and users
-- Responsive design with TailwindCSS
+### Prerequisites
 
-## Prerequisites
+- Node.js (v18 or higher)
+- npm or yarn
 
-- Node.js (v18 or higher recommended)
-- npm (v9 or higher recommended)
-
-## Installation
-
-1. Clone the repository
-
-```bash
-git clone https://github.com/yourusername/ExamPortal-Frontend.git
-cd ExamPortal-Frontend
-```
-
-2. Install dependencies
+### Installation
 
 ```bash
 npm install
 ```
 
-3. Start the development server
+### Development
 
 ```bash
 npm run dev
 ```
 
-4. Open your browser and navigate to http://localhost:5173
+This will start the development server at `http://localhost:3000`
 
-## Available Scripts
+### Available Scripts
 
-```bash
-# Start development server
-npm run dev
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
+- `npm run lint:fix` - Fix ESLint errors
+- `npm run format` - Format code with Prettier
+- `npm run format:check` - Check code formatting
 
-# Build for production
-npm run build
+## GitHub Workflow
 
-# Preview production build
-npm run preview
+### 🔄 Development Process
 
-# Lint code
-npm run lint
+**⚠️ IMPORTANT**: Never commit directly to the `main` branch. Always use feature branches and pull requests.
 
-## Technologies Used
+#### **Step-by-Step Development Workflow:**
 
-- React 19
-- React Router v7
-- Vite 7
-- TailwindCSS 3
-- ESLint 9
+1. **🔄 Always Pull Latest Changes First**
+   ```bash
+   git checkout main
+   git pull origin main
+   ```
 
-## Contributing
+2. **🌿 Create and Switch to Feature Branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   # or for bug fixes:
+   git checkout -b bugfix/issue-description
+   ```
 
-1. Create your feature branch (`git checkout -b feature/amazing-feature`)
-2. Commit your changes (`git commit -m 'Add some amazing feature'`)
-3. Push to the branch (`git push origin feature/amazing-feature`)
-4. Open a Pull Request
+3. **💻 Make Your Changes**
+   - Write your code
+   - Test your changes
+   - Ensure all linting passes
 
-## License
+4. **✅ Commit Your Changes**
+   ```bash
+   git add .
+   git commit -m "feat: add new feature description"
+   # or
+   git commit -m "fix: resolve issue description"
+   ```
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-```
+5. **🚀 Push Feature Branch**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+6. **📝 Create Pull Request**
+   - Go to GitHub repository
+   - Click "Compare & pull request"
+   - Add descriptive title and description
+   - Request review from team members
+   - Wait for approval before merging
+
+#### **Branch Naming Conventions:**
+- **Features**: `feature/feature-name` (e.g., `feature/user-authentication`)
+- **Bug fixes**: `bugfix/issue-description` (e.g., `bugfix/login-validation`)
+- **Hotfixes**: `hotfix/critical-issue` (e.g., `hotfix/security-patch`)
+- **Refactoring**: `refactor/component-name` (e.g., `refactor/dashboard-cleanup`)
+
+## Code Quality
+
+This project uses:
+- **ESLint** for code linting
+- **Prettier** for code formatting
+- **Husky** for pre-commit hooks
+- **lint-staged** for running linters on staged files
+
+All code is automatically formatted and linted before commits.
