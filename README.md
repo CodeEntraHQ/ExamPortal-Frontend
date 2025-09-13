@@ -8,7 +8,7 @@
 [![Husky](https://img.shields.io/badge/Husky-9.1.7-000000?style=flat-square&logo=husky&logoColor=white)](https://typicode.github.io/husky/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org/)
 
-A modern React application built with Vite, Tailwind CSS, and TypeScript for the ExamPortal project.
+A modern React application built with Vite, Tailwind CSS, and TypeScript for the ExamPortal.
 
 ## Getting Started
 
@@ -40,6 +40,58 @@ This will start the development server at `http://localhost:3000`
 - `npm run lint:fix` - Fix ESLint errors
 - `npm run format` - Format code with Prettier
 - `npm run format:check` - Check code formatting
+
+## GitHub Workflow
+
+### 🔄 Development Process
+
+**⚠️ IMPORTANT**: Never commit directly to the `main` branch. Always use feature branches and pull requests.
+
+#### **Step-by-Step Development Workflow:**
+
+1. **🔄 Always Pull Latest Changes First**
+   ```bash
+   git checkout main
+   git pull origin main
+   ```
+
+2. **🌿 Create and Switch to Feature Branch**
+   ```bash
+   git checkout -b feature/your-feature-name
+   # or for bug fixes:
+   git checkout -b bugfix/issue-description
+   ```
+
+3. **💻 Make Your Changes**
+   - Write your code
+   - Test your changes
+   - Ensure all linting passes
+
+4. **✅ Commit Your Changes**
+   ```bash
+   git add .
+   git commit -m "feat: add new feature description"
+   # or
+   git commit -m "fix: resolve issue description"
+   ```
+
+5. **🚀 Push Feature Branch**
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+6. **📝 Create Pull Request**
+   - Go to GitHub repository
+   - Click "Compare & pull request"
+   - Add descriptive title and description
+   - Request review from team members
+   - Wait for approval before merging
+
+#### **Branch Naming Conventions:**
+- **Features**: `feature/feature-name` (e.g., `feature/user-authentication`)
+- **Bug fixes**: `bugfix/issue-description` (e.g., `bugfix/login-validation`)
+- **Hotfixes**: `hotfix/critical-issue` (e.g., `hotfix/security-patch`)
+- **Refactoring**: `refactor/component-name` (e.g., `refactor/dashboard-cleanup`)
 
 ## Code Quality
 
