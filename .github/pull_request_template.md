@@ -2,7 +2,7 @@
 
 <-- Please include a summary of the changes. -->
 
-## JIRA
+## Github Issue No
 
 https://github.com/CodeEntraHQ/ExamPortal-Frontend/issues/XX
 
