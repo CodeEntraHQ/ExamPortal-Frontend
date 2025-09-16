@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks';
 import defaultProfile from '../../assets/default-profile.svg';
 import avatar1 from '../../assets/profile-avatar-1.svg';
 import avatar2 from '../../assets/profile-avatar-2.svg';
@@ -51,12 +51,12 @@ export default function ProfileDropdown() {
       </button>
 
       {isOpen && (
-        <div className='absolute right-0 mt-2 w-56 bg-white dark:bg-secondary-800 border border-secondary-200 dark:border-secondary-700 rounded-lg shadow-lg z-50'>
+        <div className='absolute right-0 z-50 w-56 mt-2 bg-white border rounded-lg shadow-lg dark:bg-secondary-800 border-secondary-200 dark:border-secondary-700'>
           <div className='px-4 py-3 border-b border-secondary-200 dark:border-secondary-700'>
             <p className='text-sm font-medium text-secondary-900 dark:text-secondary-100'>
               {user?.name}
             </p>
-            <p className='text-sm text-secondary-500 dark:text-secondary-400 capitalize'>
+            <p className='text-sm capitalize text-secondary-500 dark:text-secondary-400'>
               {user?.role}
             </p>
           </div>
@@ -64,7 +64,7 @@ export default function ProfileDropdown() {
           <div className='py-1'>
             <Link
               to='/profile'
-              className='flex items-center px-4 py-2 text-sm text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors'
+              className='flex items-center px-4 py-2 text-sm transition-colors text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-700'
               onClick={() => setIsOpen(false)}
             >
               <svg
@@ -85,7 +85,7 @@ export default function ProfileDropdown() {
 
             <Link
               to='/edit-profile'
-              className='flex items-center px-4 py-2 text-sm text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors'
+              className='flex items-center px-4 py-2 text-sm transition-colors text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-700'
               onClick={() => setIsOpen(false)}
             >
               <svg
@@ -106,7 +106,7 @@ export default function ProfileDropdown() {
 
             <Link
               to='/settings'
-              className='flex items-center px-4 py-2 text-sm text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-700 transition-colors'
+              className='flex items-center px-4 py-2 text-sm transition-colors text-secondary-700 dark:text-secondary-300 hover:bg-secondary-100 dark:hover:bg-secondary-700'
               onClick={() => setIsOpen(false)}
             >
               <svg
@@ -135,7 +135,7 @@ export default function ProfileDropdown() {
           <div className='py-1 border-t border-secondary-200 dark:border-secondary-700'>
             <button
               onClick={handleLogout}
-              className='flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors'
+              className='flex items-center w-full px-4 py-2 text-sm text-red-600 transition-colors dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20'
             >
               <svg
                 className='w-4 h-4 mr-3'

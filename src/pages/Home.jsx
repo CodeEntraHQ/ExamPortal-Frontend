@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks';
 import { ROLE_MAPPING } from '../utils/constants';
 import Button from '../components/ui/Button';
 import AnimatedBackground from '../components/ui/AnimatedBackground';

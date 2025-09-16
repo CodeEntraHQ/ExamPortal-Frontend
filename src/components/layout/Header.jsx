@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks';
 import ThemeToggle from '../ui/ThemeToggle';
 import ProfileDropdown from '../ui/ProfileDropdown';
 import defaultProfile from '../../assets/default-profile.svg';

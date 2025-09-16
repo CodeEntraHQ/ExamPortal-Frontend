@@ -1,4 +1,4 @@
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks';
 import Card from '../../components/ui/Card';
 
 export default function StudentDashboard() {

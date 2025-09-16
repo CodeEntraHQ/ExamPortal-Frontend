@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks';
 import { ROLE_MAPPING } from '../utils/constants';
 
 export default function ProtectedRoute({ children, requiredRole = null }) {
