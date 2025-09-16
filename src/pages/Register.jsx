@@ -1,4 +1,7 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useAuth } from '../hooks';
+import { ROLE_MAPPING } from '../utils/constants';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -6,6 +9,35 @@ import Label from '../components/ui/Label';
 import AnimatedBackground from '../components/ui/AnimatedBackground';
 
 export default function Register() {
+  const { isAuthenticated, user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect authenticated users to their appropriate dashboard
+  useEffect(() => {
+    if (!loading && isAuthenticated && user) {
+      const rolePath = ROLE_MAPPING[user.role] || user.role.toLowerCase();
+      navigate(`/dashboard/${rolePath}`, { replace: true });
+    }
+  }, [isAuthenticated, user, loading, navigate]);
+
+  // Show loading while checking authentication
+  if (loading) {
+    return (
+      <div className='min-h-[calc(100vh-4rem)] flex items-center justify-center'>
+        <div className='text-center'>
+          <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto'></div>
+          <p className='mt-4 text-secondary-600 dark:text-secondary-300'>
+            Loading...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render register page if user is authenticated (they'll be redirected)
+  if (isAuthenticated) {
+    return null;
+  }
   return (
     <AnimatedBackground className='min-h-[calc(100vh-4rem)]'>
       <div className='min-h-[calc(100vh-4rem)] py-8 pb-20'>
