@@ -37,6 +37,13 @@ export const USER_ROLES = {
   SUPER_ADMIN: 'superadmin',
 };
 
+// Role mapping for navigation
+export const ROLE_MAPPING = {
+  SUPERADMIN: 'superadmin',
+  ADMIN: 'admin',
+  STUDENT: 'student',
+};
+
 // Form validation
 export const VALIDATION = {
   EMAIL_REGEX: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,

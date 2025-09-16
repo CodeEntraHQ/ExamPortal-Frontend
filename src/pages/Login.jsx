@@ -1,4 +1,7 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { ROLE_MAPPING } from '../utils/constants';
 import AnimatedBackground from '../components/ui/AnimatedBackground';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -6,6 +9,65 @@ import Input from '../components/ui/Input';
 import Label from '../components/ui/Label';
 
 export default function Login() {
+  const { login, loading, isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Redirect authenticated users to their appropriate dashboard
+  useEffect(() => {
+    if (!loading && isAuthenticated && user) {
+      const rolePath = ROLE_MAPPING[user.role] || user.role.toLowerCase();
+      navigate(`/dashboard/${rolePath}`, { replace: true });
+    }
+  }, [isAuthenticated, user, loading, navigate]);
+
+  // Show loading while checking authentication
+  if (loading) {
+    return (
+      <div className='min-h-[calc(100vh-4rem)] flex items-center justify-center'>
+        <div className='text-center'>
+          <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto'></div>
+          <p className='mt-4 text-secondary-600 dark:text-secondary-300'>
+            Loading...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render login page if user is authenticated (they'll be redirected)
+  if (isAuthenticated) {
+    return null;
+  }
+
+  const handleChange = e => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+    // Clear error when user starts typing
+    if (error) setError('');
+  };
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError('');
+
+    const result = await login(formData.email, formData.password);
+
+    if (!result.success) {
+      setError(result.error);
+    }
+
+    setIsSubmitting(false);
+  };
   return (
     <AnimatedBackground className='min-h-[calc(100vh-4rem)]'>
       <div className='min-h-[calc(100vh-4rem)] py-8 pb-20'>
@@ -25,13 +87,24 @@ export default function Login() {
 
               {/* Form Box - Large and spacious */}
               <Card className='p-12 border-2 shadow-2xl backdrop-blur-xl bg-white/95 dark:bg-secondary-800/90 border-primary-200 dark:border-secondary-700/40'>
-                <form className='space-y-8'>
+                {error && (
+                  <div className='mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg'>
+                    <p className='text-red-600 dark:text-red-400 text-sm'>
+                      {error}
+                    </p>
+                  </div>
+                )}
+                <form className='space-y-8' onSubmit={handleSubmit}>
                   <div className='space-y-3'>
                     <Label htmlFor='email'>Email Address</Label>
                     <Input
                       id='email'
+                      name='email'
                       type='email'
                       placeholder='Enter your email'
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
                       rightIcon={
                         <svg
                           className='w-6 h-6 text-secondary-400'
@@ -54,8 +127,12 @@ export default function Login() {
                     <Label htmlFor='password'>Password</Label>
                     <Input
                       id='password'
+                      name='password'
                       type='password'
                       placeholder='Enter your password'
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
                       rightIcon={
                         <svg
                           className='w-6 h-6 text-secondary-400'
@@ -98,8 +175,9 @@ export default function Login() {
                     color='primary'
                     shadowColor='primary'
                     className='w-full py-4 text-xl'
+                    disabled={isSubmitting || loading}
                   >
-                    Sign In
+                    {isSubmitting ? 'Signing In...' : 'Sign In'}
                   </Button>
                 </form>
 
