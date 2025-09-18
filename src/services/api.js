@@ -7,7 +7,7 @@ class ApiService {
 
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    const token = localStorage.getItem('token');
+    const token = sessionStorage.getItem('token');
 
     const config = {
       headers: {
@@ -34,6 +34,14 @@ class ApiService {
       const data = await response.json();
 
       if (!response.ok) {
+        // Handle token expiry (401 Unauthorized)
+        if (response.status === 401) {
+          this.logout();
+          // Dispatch custom event for token expiry
+          window.dispatchEvent(new CustomEvent('tokenExpired'));
+          throw new Error('Session expired. Please login again.');
+        }
+
         // Handle backend error format
         if (data.status === 'FAILURE') {
           throw new Error(
@@ -62,36 +70,59 @@ class ApiService {
   }
 
   async logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('tokenExpiry');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('tokenExpiry');
   }
 
   // Token management
   setToken(token) {
-    localStorage.setItem('token', token);
+    sessionStorage.setItem('token', token);
+    // Extract expiry from JWT token
+    this.setTokenExpiryFromJWT(token);
   }
 
   getToken() {
-    return localStorage.getItem('token');
+    return sessionStorage.getItem('token');
   }
 
   setUser(user) {
-    localStorage.setItem('user', JSON.stringify(user));
+    sessionStorage.setItem('user', JSON.stringify(user));
   }
 
   getUser() {
-    const user = localStorage.getItem('user');
+    const user = sessionStorage.getItem('user');
     return user ? JSON.parse(user) : null;
   }
 
   setTokenExpiry(expiryTime) {
-    localStorage.setItem('tokenExpiry', expiryTime.toString());
+    sessionStorage.setItem('tokenExpiry', expiryTime.toString());
   }
 
   getTokenExpiry() {
-    const expiry = localStorage.getItem('tokenExpiry');
+    const expiry = sessionStorage.getItem('tokenExpiry');
     return expiry ? parseInt(expiry) : null;
+  }
+
+  // Extract expiry time from JWT token
+  setTokenExpiryFromJWT(token) {
+    try {
+      if (!token) return;
+
+      // Decode JWT payload (without verification since we just need the expiry)
+      const payload = JSON.parse(atob(token.split('.')[1]));
+
+      if (payload.exp) {
+        // Convert from seconds to milliseconds
+        const expiryTime = payload.exp * 1000;
+        this.setTokenExpiry(expiryTime);
+      }
+    } catch (error) {
+      console.error('Failed to extract token expiry:', error);
+      // Fallback to current time + 30 minutes if extraction fails
+      const fallbackExpiry = Date.now() + 30 * 60 * 1000;
+      this.setTokenExpiry(fallbackExpiry);
+    }
   }
 
   isTokenExpired() {

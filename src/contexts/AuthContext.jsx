@@ -1,26 +1,162 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../services';
 import { ROLE_MAPPING } from '../utils/constants';
+import { tokenManager } from '../utils/tokenManager';
+import { useUserActivity } from '../hooks/useUserActivity';
+import { TokenRenewalPopup } from '../components/TokenRenewalPopup';
 import { AuthContext } from './AuthContext';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showRenewalPopup, setShowRenewalPopup] = useState(false);
+  const [popupTimeRemaining, setPopupTimeRemaining] = useState(0);
   const navigate = useNavigate();
 
+  // User activity tracking
+  const { isActive, isIdle, forceActive } = useUserActivity();
+
+  // Token management
+  const popupTimerRef = useRef(null);
+
+  // Define logout function first
+  const logout = useCallback(() => {
+    setLoading(true);
+    authService.logout();
+    setUser(null);
+    setShowRenewalPopup(false);
+    setLoading(false);
+    navigate('/');
+  }, [navigate]);
+
+  // Token renewal function
+  const renewToken = useCallback(async () => {
+    try {
+      const response = await authService.renewToken();
+      if (response.status === 'SUCCESS') {
+        const { token } = response.payload;
+        authService.setToken(token);
+        setShowRenewalPopup(false);
+        console.log('Token renewed successfully');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Token renewal failed:', error);
+      return false;
+    }
+  }, []);
+
+  // Handle renewal popup actions
+  const handleRenewSession = useCallback(async () => {
+    const success = await renewToken();
+    if (!success) {
+      logout();
+    }
+  }, [renewToken, logout]);
+
+  const handleRenewalPopupLogout = useCallback(() => {
+    setShowRenewalPopup(false);
+    logout();
+  }, [logout]);
+
+  const dismissRenewalPopup = useCallback(() => {
+    setShowRenewalPopup(false);
+    forceActive(); // Force user back to active state
+  }, [forceActive]);
+
+  // Initialize authentication
   useEffect(() => {
-    // Check if user is already logged in
     const initializeAuth = () => {
       if (authService.isAuthenticated()) {
         const userData = authService.getUser();
         setUser(userData);
+      } else {
+        authService.logout();
       }
       setLoading(false);
     };
 
     initializeAuth();
   }, []);
+
+  // Activity-based token management
+  useEffect(() => {
+    if (!user) return;
+
+    const checkTokenStatus = () => {
+      const token = authService.getToken();
+      if (!token) {
+        logout();
+        return;
+      }
+
+      const tokenConfig = tokenManager.getTokenConfig(token);
+
+      // If token is expired, logout immediately
+      if (tokenConfig.isExpired) {
+        console.log('Token expired, logging out user');
+        logout();
+        return;
+      }
+
+      // If token should be renewed
+      if (tokenConfig.shouldRenew) {
+        if (isActive && !showRenewalPopup) {
+          // User is active and popup is not shown - auto renew
+          console.log('User is active, auto-renewing token');
+          renewToken();
+        } else if (isIdle && !showRenewalPopup) {
+          // User is idle and popup is not shown - show renewal popup
+          console.log('User is idle, showing renewal popup');
+          setShowRenewalPopup(true);
+          setPopupTimeRemaining(tokenConfig.timeUntilExpiry);
+
+          // Set timer for popup auto-logout
+          if (popupTimerRef.current) {
+            clearTimeout(popupTimerRef.current);
+          }
+          popupTimerRef.current = setTimeout(() => {
+            logout();
+          }, tokenConfig.timeUntilExpiry);
+        }
+        // Note: Once popup is shown (!showRenewalPopup = false), auto-renewal is blocked
+        // User must manually choose to renew or logout via the popup
+      }
+    };
+
+    // Check token status immediately
+    checkTokenStatus();
+
+    // Set up periodic checking
+    const config = tokenManager.getTokenConfig(authService.getToken());
+    const interval = setInterval(
+      checkTokenStatus,
+      config?.checkInterval || 30000
+    );
+
+    return () => {
+      clearInterval(interval);
+      if (popupTimerRef.current) {
+        clearTimeout(popupTimerRef.current);
+      }
+    };
+  }, [user, isActive, isIdle, showRenewalPopup, logout, renewToken]);
+
+  // Listen for token expiry events from API calls
+  useEffect(() => {
+    const handleTokenExpiry = () => {
+      console.log('Token expired during API call, logging out user');
+      logout();
+    };
+
+    window.addEventListener('tokenExpired', handleTokenExpiry);
+
+    return () => {
+      window.removeEventListener('tokenExpired', handleTokenExpiry);
+    };
+  }, [logout]);
 
   const login = async (email, password) => {
     try {
@@ -31,12 +167,8 @@ export const AuthProvider = ({ children }) => {
         const { token, user: userData } = response.payload;
 
         // Store token and user data
-        authService.setToken(token);
+        authService.setToken(token); // This will automatically extract and set the correct expiry
         authService.setUser(userData);
-
-        // Calculate token expiry (5 minutes from now - matching backend)
-        const expiryTime = Date.now() + 5 * 60 * 1000;
-        authService.setTokenExpiry(expiryTime);
 
         setUser(userData);
 
@@ -62,21 +194,27 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    setLoading(true);
-    authService.logout();
-    setUser(null);
-    setLoading(false);
-    navigate('/');
-  };
-
   const value = {
     user,
     loading,
     login,
     logout,
+    renewToken,
     isAuthenticated: !!user,
+    isActive,
+    isIdle,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      <TokenRenewalPopup
+        isVisible={showRenewalPopup}
+        timeRemaining={popupTimeRemaining}
+        onRenew={handleRenewSession}
+        onLogout={handleRenewalPopupLogout}
+        onDismiss={dismissRenewalPopup}
+      />
+    </AuthContext.Provider>
+  );
 };
