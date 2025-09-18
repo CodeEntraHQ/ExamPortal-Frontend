@@ -12,7 +12,7 @@ export function getSystemTheme() {
 
 export function getStoredTheme() {
   try {
-    return localStorage.getItem(THEME_CONFIG.STORAGE_KEY);
+    return sessionStorage.getItem(THEME_CONFIG.STORAGE_KEY);
   } catch (error) {
     console.warn('Failed to get stored theme:', error);
     return null;
@@ -39,7 +39,7 @@ export function toggleTheme() {
   const isDark = document.documentElement.classList.contains('dark');
   const next = isDark ? THEME_CONFIG.THEMES.LIGHT : THEME_CONFIG.THEMES.DARK;
   try {
-    localStorage.setItem(THEME_CONFIG.STORAGE_KEY, next);
+    sessionStorage.setItem(THEME_CONFIG.STORAGE_KEY, next);
   } catch (error) {
     console.warn('Failed to save theme preference:', error);
   }
