@@ -1,10 +1,17 @@
 import apiService from './api.js';
 
 class AuthService {
-  async login(email, password) {
+  async getCaptcha() {
+    return apiService.request('/v1/users/captcha', {
+      method: 'GET',
+    });
+  }
+
+  async login(email, password, captcha, captchaToken) {
     return apiService.request('/v1/users/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, captcha }),
+      captchaToken,
     });
   }
 

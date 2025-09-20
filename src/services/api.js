@@ -8,11 +8,13 @@ class ApiService {
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
     const token = localStorage.getItem('token');
+    const captchaToken = options.captchaToken;
 
     const config = {
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { Authorization: `Bearer ${token}` }),
+        ...(captchaToken && { Authorization: `Bearer ${captchaToken}` }),
+        ...(!captchaToken && token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
       ...options,

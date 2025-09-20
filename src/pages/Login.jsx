@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks';
+import authService from '../services/authService';
 import { ROLE_MAPPING } from '../utils/constants';
 import AnimatedBackground from '../components/ui/AnimatedBackground';
 import Button from '../components/ui/Button';
@@ -14,9 +15,12 @@ export default function Login() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    captcha: '',
   });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [captcha, setCaptcha] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
 
   // Redirect authenticated users to their appropriate dashboard
   useEffect(() => {
@@ -25,6 +29,19 @@ export default function Login() {
       navigate(`/dashboard/${rolePath}`, { replace: true });
     }
   }, [isAuthenticated, user, loading, navigate]);
+
+  useEffect(() => {
+    const fetchCaptcha = async () => {
+      try {
+        const response = await authService.getCaptcha();
+        setCaptcha(`data:image/svg+xml;base64,${response.payload.captcha}`);
+        setCaptchaToken(response.payload.token);
+      } catch {
+        setError('Failed to load captcha');
+      }
+    };
+    fetchCaptcha();
+  }, []);
 
   // Show loading while checking authentication
   if (loading) {
@@ -60,7 +77,12 @@ export default function Login() {
     setIsSubmitting(true);
     setError('');
 
-    const result = await login(formData.email, formData.password);
+    const result = await login(
+      formData.email,
+      formData.password,
+      formData.captcha,
+      captchaToken
+    );
 
     if (!result.success) {
       setError(result.error);
@@ -149,6 +171,28 @@ export default function Login() {
                         </svg>
                       }
                     />
+                  </div>
+
+                  <div className='space-y-3'>
+                    <Label htmlFor='captcha'>Captcha</Label>
+                    <div className='flex items-center space-x-4'>
+                      {captcha && (
+                        <img
+                          src={captcha}
+                          alt='Captcha'
+                          className='w-48 h-16 rounded-lg'
+                        />
+                      )}
+                      <Input
+                        id='captcha'
+                        name='captcha'
+                        type='text'
+                        placeholder='Enter captcha'
+                        value={formData.captcha}
+                        onChange={handleChange}
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className='flex items-center justify-between'>
