@@ -1,8 +1,9 @@
-const API_BASE_URL = 'http://localhost:8000';
+import { API_CONFIG } from '../utils/constants.js';
 
 class ApiService {
   constructor() {
-    this.baseURL = API_BASE_URL;
+    this.baseURL = API_CONFIG.BASE_URL;
+    this.timeout = API_CONFIG.TIMEOUT;
   }
 
   async request(endpoint, options = {}) {

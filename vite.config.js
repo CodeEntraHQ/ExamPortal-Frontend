@@ -18,12 +18,12 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
-    open: true,
+    port: parseInt(process.env.VITE_DEV_PORT),
+    open: process.env.VITE_DEV_OPEN_BROWSER === 'true',
   },
   build: {
-    outDir: 'dist',
-    sourcemap: true,
+    outDir: process.env.VITE_BUILD_OUT_DIR,
+    sourcemap: process.env.VITE_BUILD_SOURCEMAP === 'true',
     rollupOptions: {
       output: {
         manualChunks: {
