@@ -3,11 +3,13 @@
  * and provides configuration for activity-based token renewal
  */
 
+import { TOKEN_CONFIG } from './constants.js';
+
 export class TokenManager {
   constructor() {
-    this.RENEWAL_THRESHOLD = 2 * 60 * 1000; // 2 minutes before expiry
-    this.IDLE_THRESHOLD = 5 * 60 * 1000; // 5 minutes of inactivity
-    this.CHECK_INTERVAL = 30 * 1000; // Check every 30 seconds
+    this.RENEWAL_THRESHOLD = TOKEN_CONFIG.RENEWAL_THRESHOLD;
+    this.IDLE_THRESHOLD = TOKEN_CONFIG.IDLE_THRESHOLD;
+    this.CHECK_INTERVAL = TOKEN_CONFIG.CHECK_INTERVAL;
   }
 
   /**

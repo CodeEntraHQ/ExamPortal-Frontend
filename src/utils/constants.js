@@ -1,24 +1,7 @@
 /**
  * Application constants and configuration
+ * Centralized configuration for all constants and environment variables
  */
-
-// Theme configuration
-export const THEME_CONFIG = {
-  STORAGE_KEY: 'examentra-theme',
-  DEFAULT_THEME: 'light',
-  THEMES: {
-    LIGHT: 'light',
-    DARK: 'dark',
-  },
-};
-
-// Application metadata
-export const APP_CONFIG = {
-  NAME: 'ExamEntra',
-  DESCRIPTION:
-    'A secure and modern platform for conducting scholarship exams online',
-  VERSION: '1.0.0',
-};
 
 // Route paths
 export const ROUTES = {
@@ -56,4 +39,46 @@ export const ANIMATION = {
   FAST: '150ms',
   NORMAL: '200ms',
   SLOW: '300ms',
+};
+
+// API Configuration
+export const API_CONFIG = {
+  BASE_URL: import.meta.env.VITE_API_BASE_URL,
+  TIMEOUT: parseInt(import.meta.env.VITE_API_TIMEOUT),
+};
+
+// Application Configuration
+export const APP_CONFIG = {
+  NAME: import.meta.env.VITE_APP_NAME,
+  DESCRIPTION: import.meta.env.VITE_APP_DESCRIPTION,
+  VERSION: import.meta.env.VITE_APP_VERSION,
+};
+
+// Token Management Configuration
+export const TOKEN_CONFIG = {
+  RENEWAL_THRESHOLD: parseInt(import.meta.env.VITE_TOKEN_RENEWAL_THRESHOLD),
+  IDLE_THRESHOLD: parseInt(import.meta.env.VITE_TOKEN_IDLE_THRESHOLD),
+  CHECK_INTERVAL: parseInt(import.meta.env.VITE_TOKEN_CHECK_INTERVAL),
+};
+
+// Theme Configuration
+export const THEME_CONFIG = {
+  STORAGE_KEY: import.meta.env.VITE_THEME_STORAGE_KEY,
+  DEFAULT_THEME: import.meta.env.VITE_DEFAULT_THEME,
+  THEMES: {
+    LIGHT: 'light',
+    DARK: 'dark',
+  },
+};
+
+// Development Configuration
+export const DEV_CONFIG = {
+  PORT: parseInt(import.meta.env.VITE_DEV_PORT),
+  OPEN_BROWSER: import.meta.env.VITE_DEV_OPEN_BROWSER === 'true',
+};
+
+// Build Configuration
+export const BUILD_CONFIG = {
+  OUT_DIR: import.meta.env.VITE_BUILD_OUT_DIR,
+  SOURCEMAP: import.meta.env.VITE_BUILD_SOURCEMAP === 'true',
 };
