@@ -46,7 +46,7 @@ jobs:
       REGISTRY: ghcr.io
       IMAGE_NAME: ${{ github.repository }}
       TAG: ${{ github.sha }}
-      GHCR_USERNAME: CodeEntraHQ
+      GHCR_USERNAME: codeentrahq
     steps:
       - name: GHCR Login on EC2
         uses: appleboy/ssh-action@v0.1.10
