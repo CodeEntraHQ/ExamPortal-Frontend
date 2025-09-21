@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Grid, AddCard } from '../../components/ui';
 import CollegeCard from '../../components/colleges/CollegeCard';
+import AddCollegeModal from '../../components/modals/AddCollegeModal';
 import collegeService from '../../services/collegeService.js';
 
 export default function SuperAdminDashboard() {
   const [colleges, setColleges] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   useEffect(() => {
     fetchColleges();
@@ -27,7 +29,18 @@ export default function SuperAdminDashboard() {
   };
 
   const handleAddCollege = () => {
-    // TODO: Implement add college modal/page
+    setIsAddModalOpen(true);
+  };
+
+  const handleModalClose = () => {
+    setIsAddModalOpen(false);
+  };
+
+  const handleCollegeCreated = newCollege => {
+    // Add the new college to the list
+    setColleges(prevColleges => [newCollege, ...prevColleges]);
+    // Optionally show a success message
+    console.log('College created successfully:', newCollege);
   };
 
   const handleCollegeClick = college => {
@@ -107,6 +120,13 @@ export default function SuperAdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* Add College Modal */}
+      <AddCollegeModal
+        isOpen={isAddModalOpen}
+        onClose={handleModalClose}
+        onSuccess={handleCollegeCreated}
+      />
     </div>
   );
 }
