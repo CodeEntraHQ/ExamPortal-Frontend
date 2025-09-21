@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: snok/container-retention-policy@v3.0.0
         with:
-          account: snok
+          account: codeentrahq
           token: ${{ secrets.GHCR_PAT }}
           image-names: "examportal-frontend examportal-backend"  # two packages selected
           image-tags: "*"  # any image tag
