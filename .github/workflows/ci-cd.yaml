@@ -16,7 +16,7 @@ jobs:
       REGISTRY: ghcr.io
       IMAGE_NAME: examportal-frontend
       TAG: ${{ github.sha }}
-      GHCR_USERNAME: CodeEntraHQ
+      GHCR_USERNAME: codeentrahq
     outputs:                            #  used to pass values from one job to another
       image_tag: ${{ env.TAG }}
       image_name: ${{ env.IMAGE_NAME }}    
@@ -46,7 +46,7 @@ jobs:
       REGISTRY: ghcr.io
       IMAGE_NAME: examportal-frontend
       TAG: ${{ github.sha }}
-      GHCR_USERNAME: CodeEntraHQ
+      GHCR_USERNAME: codeentrahq
     steps:
       - name: GHCR Login on EC2
         uses: appleboy/ssh-action@v0.1.10
