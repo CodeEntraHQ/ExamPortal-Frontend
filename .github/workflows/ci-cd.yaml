@@ -48,7 +48,7 @@ jobs:
       TAG: ${{ github.sha }}
       GHCR_USERNAME: codeentrahq
     steps:
-      - name: SSH Login & Update Docker Compose (using yq)
+      - name: SSH, Login to GHCR & Update Docker Compose (using yq)
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -66,7 +66,8 @@ jobs:
             yq -i '.services.app-frontend.image = "ghcr.io/${{ env.GHCR_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}"' docker-compose.yaml
             # Pull the new image and perform rolling restart for zero downtime
             docker compose pull app-frontend
-            docker compose up -d --pull always --remove-orphans app-frontend
+            docker compose down
+            docker compose up -d 
             # Optionally, you can use healthchecks and wait-for-it scripts for more robust zero-downtime
 
 # ----
