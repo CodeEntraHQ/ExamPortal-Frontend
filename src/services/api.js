@@ -36,12 +36,12 @@ class ApiService {
 
       if (!response.ok) {
         // Handle token expiry (401 Unauthorized)
-        if (response.status === 401) {
-          this.logout();
-          // Dispatch custom event for token expiry
-          window.dispatchEvent(new CustomEvent('tokenExpired'));
-          throw new Error('Session expired. Please login again.');
-        }
+        // if (response.status === 401) {
+        //   this.logout();
+        //   // Dispatch custom event for token expiry
+        //   window.dispatchEvent(new CustomEvent('tokenExpired'));
+        //   throw new Error('Session expired. Please login again.');
+        // }
 
         // Handle backend error format
         if (data.status === 'FAILURE') {
