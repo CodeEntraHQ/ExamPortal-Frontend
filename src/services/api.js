@@ -11,12 +11,12 @@ class ApiService {
     const token = sessionStorage.getItem('token');
 
     const config = {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...(token && { Authorization: `Bearer ${token}` }),
         ...options.headers,
       },
-      ...options,
     };
 
     try {
@@ -43,6 +43,60 @@ class ApiService {
           throw new Error('Session expired. Please login again.');
         }
 
+        // Handle backend error format
+        if (data.status === 'FAILURE') {
+          throw new Error(
+            data.responseMessage ||
+              data.responseCode ||
+              `Request failed with status ${response.status}`
+          );
+        }
+        throw new Error(
+          data.message || `Request failed with status ${response.status}`
+        );
+      }
+
+      // Check if backend returned a failure status even with 200 OK
+      if (data.status === 'FAILURE') {
+        throw new Error(
+          data.responseMessage || data.responseCode || 'Request failed'
+        );
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
+    }
+  }
+
+  async requestPublic(endpoint, options = {}) {
+    const url = `${this.baseURL}${endpoint}`;
+
+    const config = {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    };
+
+    try {
+      const response = await fetch(url, config);
+
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text);
+        throw new Error(
+          `Server returned non-JSON response: ${response.status} ${response.statusText}`
+        );
+      }
+
+      const data = await response.json();
+
+      if (!response.ok) {
         // Handle backend error format
         if (data.status === 'FAILURE') {
           throw new Error(

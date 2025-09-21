@@ -158,10 +158,15 @@ export const AuthProvider = ({ children }) => {
     };
   }, [logout]);
 
-  const login = async (email, password) => {
+  const login = async (email, password, captcha, captchaToken) => {
     try {
       setLoading(true);
-      const response = await authService.login(email, password);
+      const response = await authService.login(
+        email,
+        password,
+        captcha,
+        captchaToken
+      );
 
       if (response.status === 'SUCCESS') {
         const { token, user: userData } = response.payload;

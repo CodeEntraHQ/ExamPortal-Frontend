@@ -52,7 +52,7 @@ const Input = forwardRef(function Input(
         {...props}
       />
       {rightIcon && (
-        <div className='absolute inset-y-0 right-0 flex items-center pr-6'>
+        <div className='absolute inset-y-0 right-0 flex items-center pr-4'>
           {rightIcon}
         </div>
       )}

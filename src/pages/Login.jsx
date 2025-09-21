@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks';
+import { getCaptcha } from '../services/captchaService';
 import { ROLE_MAPPING } from '../utils/constants';
 import AnimatedBackground from '../components/ui/AnimatedBackground';
 import Button from '../components/ui/Button';
@@ -14,9 +15,12 @@ export default function Login() {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
+    captcha: '',
   });
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [captchaData, setCaptchaData] = useState(null);
+  const [captchaToken, setCaptchaToken] = useState(null);
 
   // Redirect authenticated users to their appropriate dashboard
   useEffect(() => {
@@ -25,6 +29,20 @@ export default function Login() {
       navigate(`/dashboard/${rolePath}`, { replace: true });
     }
   }, [isAuthenticated, user, loading, navigate]);
+
+  const fetchCaptcha = async () => {
+    try {
+      const { captchaData, captchaToken } = await getCaptcha();
+      setCaptchaData(captchaData);
+      setCaptchaToken(captchaToken);
+    } catch {
+      setError('Failed to load captcha. Please refresh the page.');
+    }
+  };
+
+  useEffect(() => {
+    fetchCaptcha();
+  }, []);
 
   // Show loading while checking authentication
   if (loading) {
@@ -60,7 +78,12 @@ export default function Login() {
     setIsSubmitting(true);
     setError('');
 
-    const result = await login(formData.email, formData.password);
+    const result = await login(
+      formData.email,
+      formData.password,
+      formData.captcha,
+      captchaToken
+    );
 
     if (!result.success) {
       setError(result.error);
@@ -149,6 +172,56 @@ export default function Login() {
                         </svg>
                       }
                     />
+                  </div>
+
+                  <div className='space-y-3'>
+                    <Label htmlFor='captcha'>Captcha</Label>
+                    <div className='flex items-center space-x-4'>
+                      <div className='w-1/2 h-16 bg-gray-200 rounded-lg flex items-center justify-center'>
+                        {captchaData ? (
+                          <img
+                            src={`data:image/svg+xml;base64,${captchaData}`}
+                            alt='Captcha'
+                            className='h-full w-full object-cover rounded-lg'
+                          />
+                        ) : (
+                          <p className='text-gray-500'>Loading...</p>
+                        )}
+                      </div>
+                      <Input
+                        id='captcha'
+                        name='captcha'
+                        type='text'
+                        placeholder='Enter captcha'
+                        value={formData.captcha}
+                        onChange={handleChange}
+                        required
+                        className='flex-grow'
+                        rightIcon={
+                          <button
+                            type='button'
+                            onClick={fetchCaptcha}
+                            className='p-2 rounded-lg text-white hover:text-gray-200 focus:outline-none transition-colors duration-200'
+                            aria-label='Refresh captcha'
+                            title='Refresh captcha'
+                          >
+                            <svg
+                              className='w-6 h-6 text-secondary-400'
+                              viewBox='0 0 24 24'
+                              fill='none'
+                              stroke='currentColor'
+                            >
+                              <path
+                                strokeWidth='2'
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                                d='M21 12a9 9 0 11-3.89-7.43M21 4v4h-4'
+                              />
+                            </svg>
+                          </button>
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div className='flex items-center justify-between'>
