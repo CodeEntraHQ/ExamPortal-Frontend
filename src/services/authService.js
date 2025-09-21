@@ -17,6 +17,13 @@ class AuthService {
     });
   }
 
+  async changePassword(oldPassword, newPassword) {
+    return apiService.request('/v1/users/password/change', {
+      method: 'POST',
+      body: JSON.stringify({ oldPassword, newPassword }),
+    });
+  }
+
   async logout() {
     apiService.logout();
   }

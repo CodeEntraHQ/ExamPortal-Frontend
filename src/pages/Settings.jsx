@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks';
+import { authService } from '../services';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -13,14 +14,33 @@ export default function Settings() {
     e.preventDefault();
     setIsLoading(true);
 
-    // TODO: Implement password change API call
+    const formData = new FormData(e.target);
+    const oldPassword = formData.get('currentPassword');
+    const newPassword = formData.get('newPassword');
+    const confirmPassword = formData.get('confirmPassword');
+
+    if (newPassword !== confirmPassword) {
+      alert('New passwords do not match.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      alert('Password changed successfully!');
-      e.target.reset();
+      const response = await authService.changePassword(
+        oldPassword,
+        newPassword
+      );
+      if (response.status === 'SUCCESS') {
+        alert('Password changed successfully!');
+        e.target.reset();
+      } else {
+        alert(
+          response.responseMessage ||
+            'Failed to change password. Please try again.'
+        );
+      }
     } catch (error) {
-      alert('Failed to change password. Please try again.', error);
+      alert(error.message || 'Failed to change password. Please try again.');
     } finally {
       setIsLoading(false);
     }
