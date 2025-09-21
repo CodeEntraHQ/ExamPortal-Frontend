@@ -33,11 +33,11 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }} .
+          docker build -t ${{ env.REGISTRY }}/${{ env.GHCR_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.TAG }} .
 
       - name: Push Docker image
         run: |
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
+          docker push ${{ env.REGISTRY }}/${{ env.GHCR_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -46,7 +46,7 @@ jobs:
       REGISTRY: ghcr.io
       IMAGE_NAME: examportal-frontend
       TAG: ${{ github.sha }}
-      GHCR_USERNAME: codeentrahq
+      GHCR_USERNAME: CodeEntraHQ
     steps:
       - name: GHCR Login on EC2
         uses: appleboy/ssh-action@v0.1.10
