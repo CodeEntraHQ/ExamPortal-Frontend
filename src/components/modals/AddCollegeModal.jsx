@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNotification } from '../../hooks';
 import { Button, Input, Label, Textarea } from '../ui';
 import collegeService from '../../services/collegeService.js';
 import { validateForm } from '../../utils/validation.js';
@@ -8,9 +9,9 @@ export default function AddCollegeModal({ isOpen, onClose, onSuccess }) {
     name: '',
     address: '',
   });
+  const { addSuccess, addError } = useNotification();
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
   const modalRef = useRef(null);
   const nameInputRef = useRef(null);
 
@@ -66,7 +67,6 @@ export default function AddCollegeModal({ isOpen, onClose, onSuccess }) {
 
     setFormData({ name: '', address: '' });
     setErrors({});
-    setSubmitError('');
     onClose();
   };
 
@@ -78,7 +78,6 @@ export default function AddCollegeModal({ isOpen, onClose, onSuccess }) {
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
-    setSubmitError('');
   };
 
   const validateCollegeForm = () => {
@@ -109,7 +108,6 @@ export default function AddCollegeModal({ isOpen, onClose, onSuccess }) {
     }
 
     setIsSubmitting(true);
-    setSubmitError('');
 
     try {
       const collegeData = {
@@ -120,6 +118,7 @@ export default function AddCollegeModal({ isOpen, onClose, onSuccess }) {
       const newCollege = await collegeService.createCollege(collegeData);
 
       // Success - close modal and refresh college list
+      addSuccess('College created successfully!');
       handleClose();
       onSuccess(newCollege);
     } catch (error) {
@@ -127,13 +126,13 @@ export default function AddCollegeModal({ isOpen, onClose, onSuccess }) {
 
       // Handle specific error messages from backend
       if (error.message.includes('already exists')) {
-        setSubmitError(
+        addError(
           'A college with this name already exists. Please choose a different name.'
         );
       } else if (error.message.includes('validation')) {
-        setSubmitError('Please check the form data and try again.');
+        addError('Please check the form data and try again.');
       } else {
-        setSubmitError('Failed to create college. Please try again.');
+        addError('Failed to create college. Please try again.');
       }
     } finally {
       setIsSubmitting(false);
@@ -219,30 +218,6 @@ export default function AddCollegeModal({ isOpen, onClose, onSuccess }) {
                 disabled={isSubmitting}
               />
             </div>
-
-            {/* Submit Error */}
-            {submitError && (
-              <div className='p-4 border border-red-200 rounded-lg bg-red-50 dark:bg-red-900/20 dark:border-red-800'>
-                <div className='flex items-center'>
-                  <svg
-                    className='w-5 h-5 mr-2 text-red-500'
-                    fill='none'
-                    stroke='currentColor'
-                    viewBox='0 0 24 24'
-                  >
-                    <path
-                      strokeLinecap='round'
-                      strokeLinejoin='round'
-                      strokeWidth={2}
-                      d='M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
-                    />
-                  </svg>
-                  <span className='text-sm text-red-600 dark:text-red-400'>
-                    {submitError}
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Footer */}

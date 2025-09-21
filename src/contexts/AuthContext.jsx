@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useNotification } from '../hooks';
 import { authService } from '../services';
 import { ROLE_MAPPING } from '../utils/constants';
 import { tokenManager } from '../utils/tokenManager';
@@ -8,6 +9,7 @@ import { TokenRenewalPopup } from '../components/TokenRenewalPopup';
 import { AuthContext } from './AuthContext';
 
 export const AuthProvider = ({ children }) => {
+  const { addSuccess } = useNotification();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showRenewalPopup, setShowRenewalPopup] = useState(false);
@@ -177,6 +179,8 @@ export const AuthProvider = ({ children }) => {
 
         setUser(userData);
 
+        addSuccess('Login successful!');
+
         // Navigate based on role
         const rolePath =
           ROLE_MAPPING[userData.role] || userData.role.toLowerCase();
@@ -199,9 +203,54 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const register = async userData => {
+    try {
+      setLoading(true);
+      // const response = await authService.register(userData);
+      // For now, we'll simulate a successful registration
+      const response = {
+        status: 'SUCCESS',
+        payload: {
+          token: 'fake-token',
+          user: { ...userData, id: 'fake-id' },
+        },
+      };
+
+      if (response.status === 'SUCCESS') {
+        const { token, user: newUserData } = response.payload;
+
+        // Store token and user data
+        authService.setToken(token);
+        authService.setUser(newUserData);
+
+        setUser(newUserData);
+
+        // Navigate based on role
+        const rolePath =
+          ROLE_MAPPING[newUserData.role] || newUserData.role.toLowerCase();
+        navigate(`/dashboard/${rolePath}`);
+
+        return { success: true };
+      } else {
+        return {
+          success: false,
+          error: 'Registration failed. Please try again.',
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message || 'Registration failed. Please try again.',
+      };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const value = {
     user,
     loading,
+    register,
     login,
     logout,
     renewToken,

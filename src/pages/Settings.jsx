@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../hooks';
+import { useAuth, useNotification } from '../hooks';
 import { authService } from '../services';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -8,6 +8,7 @@ import Label from '../components/ui/Label';
 
 export default function Settings() {
   const { user } = useAuth();
+  const { addSuccess, addError } = useNotification();
   const [isLoading, setIsLoading] = useState(false);
 
   const handlePasswordChange = async e => {
@@ -20,7 +21,7 @@ export default function Settings() {
     const confirmPassword = formData.get('confirmPassword');
 
     if (newPassword !== confirmPassword) {
-      alert('New passwords do not match.');
+      addError('New passwords do not match.');
       setIsLoading(false);
       return;
     }
@@ -31,16 +32,16 @@ export default function Settings() {
         newPassword
       );
       if (response.status === 'SUCCESS') {
-        alert('Password changed successfully!');
+        addSuccess('Password changed successfully!');
         e.target.reset();
       } else {
-        alert(
+        addError(
           response.responseMessage ||
             'Failed to change password. Please try again.'
         );
       }
     } catch (error) {
-      alert(error.message || 'Failed to change password. Please try again.');
+      addError(error.message || 'Failed to change password. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -159,7 +160,7 @@ export default function Settings() {
                       'Are you sure you want to delete your account? This action cannot be undone.'
                     )
                   ) {
-                    alert('Account deletion not implemented yet.');
+                    addError('Account deletion not implemented yet.');
                   }
                 }}
                 className='px-4 py-2 text-sm'

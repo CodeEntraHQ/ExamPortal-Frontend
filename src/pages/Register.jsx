@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { useEffect } from 'react';
-import { useAuth } from '../hooks';
+import { useState, useEffect } from 'react';
+import { useAuth, useNotification } from '../hooks';
 import { ROLE_MAPPING } from '../utils/constants';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -9,8 +9,16 @@ import Label from '../components/ui/Label';
 import AnimatedBackground from '../components/ui/AnimatedBackground';
 
 export default function Register() {
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, user, loading, register } = useAuth();
+  const { addError } = useNotification();
   const navigate = useNavigate();
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    role: '',
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Redirect authenticated users to their appropriate dashboard
   useEffect(() => {
@@ -38,6 +46,28 @@ export default function Register() {
   if (isAuthenticated) {
     return null;
   }
+
+  const handleChange = e => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    const result = await register(formData);
+
+    if (!result.success) {
+      addError(result.error);
+    }
+
+    setIsSubmitting(false);
+  };
+
   return (
     <AnimatedBackground className='min-h-[calc(100vh-4rem)]'>
       <div className='min-h-[calc(100vh-4rem)] py-8 pb-20'>
@@ -56,15 +86,19 @@ export default function Register() {
 
               {/* Form Box */}
               <Card className='p-12 border-2 shadow-2xl backdrop-blur-xl bg-white/95 dark:bg-secondary-800/90 border-primary-200 dark:border-secondary-700/40'>
-                <form className='space-y-8'>
+                <form className='space-y-8' onSubmit={handleSubmit}>
                   <div className='space-y-3'>
                     <Label htmlFor='fullName' required>
                       Full Name
                     </Label>
                     <Input
                       id='fullName'
+                      name='fullName'
                       type='text'
                       placeholder='Enter your full name'
+                      value={formData.fullName}
+                      onChange={handleChange}
+                      required
                     />
                   </div>
 
@@ -74,8 +108,12 @@ export default function Register() {
                     </Label>
                     <Input
                       id='email'
+                      name='email'
                       type='email'
                       placeholder='Enter your email'
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
                       rightIcon={
                         <svg
                           className='w-6 h-6 text-secondary-400'
@@ -100,8 +138,12 @@ export default function Register() {
                     </Label>
                     <Input
                       id='password'
+                      name='password'
                       type='password'
                       placeholder='Create a password'
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
                       rightIcon={
                         <svg
                           className='w-6 h-6 text-secondary-400'
@@ -126,7 +168,11 @@ export default function Register() {
                     </Label>
                     <select
                       id='role'
+                      name='role'
                       className='block w-full rounded-lg border-2 border-primary-200 dark:border-secondary-600 bg-white dark:bg-secondary-700 text-secondary-900 dark:text-secondary-100 shadow-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-100 dark:focus:ring-primary-900/20 focus:ring-offset-0 transition-all duration-200 py-4 px-6 text-lg'
+                      value={formData.role}
+                      onChange={handleChange}
+                      required
                     >
                       <option value=''>Select your role</option>
                       <option value='student'>Student</option>
@@ -141,8 +187,9 @@ export default function Register() {
                     color='primary'
                     shadowColor='primary'
                     className='w-full py-4 text-xl'
+                    disabled={isSubmitting}
                   >
-                    Create Account
+                    {isSubmitting ? 'Creating Account...' : 'Create Account'}
                   </Button>
                 </form>
 
