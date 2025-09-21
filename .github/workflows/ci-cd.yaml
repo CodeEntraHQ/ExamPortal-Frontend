@@ -71,7 +71,7 @@ jobs:
               sudo chmod +x /usr/bin/yq
             fi
             # Update the image tag in docker-compose.yaml using yq
-            yq -i '.services.app-frontend.image = "ghcr.io/${{ env.IMAGE_NAME }}:${{ env.TAG }}"' docker-compose.yaml
+            yq -i '.services.app-frontend.image = "ghcr.io/${{ env.GHCR_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.TAG }}"' docker-compose.yaml
             # Pull the new image and perform rolling restart for zero downtime
             sudo docker compose pull app-frontend
             sudo docker compose up -d --pull always app-frontend
