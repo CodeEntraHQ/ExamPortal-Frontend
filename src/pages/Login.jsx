@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { useAuth } from '../hooks';
+import { useAuth, useNotification } from '../hooks';
 import { getCaptcha } from '../services/captchaService';
 import { ROLE_MAPPING } from '../utils/constants';
 import AnimatedBackground from '../components/ui/AnimatedBackground';
@@ -11,13 +11,13 @@ import Label from '../components/ui/Label';
 
 export default function Login() {
   const { login, loading, isAuthenticated, user } = useAuth();
+  const { addError } = useNotification();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     captcha: '',
   });
-  const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [captchaData, setCaptchaData] = useState(null);
   const [captchaToken, setCaptchaToken] = useState(null);
@@ -36,7 +36,7 @@ export default function Login() {
       setCaptchaData(captchaData);
       setCaptchaToken(captchaToken);
     } catch {
-      setError('Failed to load captcha. Please refresh the page.');
+      addError('Failed to load captcha. Please refresh the page.');
     }
   };
 
@@ -69,14 +69,11 @@ export default function Login() {
       ...prev,
       [name]: value,
     }));
-    // Clear error when user starts typing
-    if (error) setError('');
   };
 
   const handleSubmit = async e => {
     e.preventDefault();
     setIsSubmitting(true);
-    setError('');
 
     const result = await login(
       formData.email,
@@ -86,7 +83,7 @@ export default function Login() {
     );
 
     if (!result.success) {
-      setError(result.error);
+      addError(result.error);
     }
 
     setIsSubmitting(false);
@@ -110,13 +107,6 @@ export default function Login() {
 
               {/* Form Box - Large and spacious */}
               <Card className='p-12 border-2 shadow-2xl backdrop-blur-xl bg-white/95 dark:bg-secondary-800/90 border-primary-200 dark:border-secondary-700/40'>
-                {error && (
-                  <div className='mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg'>
-                    <p className='text-red-600 dark:text-red-400 text-sm'>
-                      {error}
-                    </p>
-                  </div>
-                )}
                 <form className='space-y-8' onSubmit={handleSubmit}>
                   <div className='space-y-3'>
                     <Label htmlFor='email'>Email Address</Label>

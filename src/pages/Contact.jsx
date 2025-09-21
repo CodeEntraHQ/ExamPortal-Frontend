@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { useNotification } from '../hooks';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Input from '../components/ui/Input';
@@ -5,6 +7,23 @@ import Label from '../components/ui/Label';
 import Textarea from '../components/ui/Textarea';
 
 export default function Contact() {
+  const { addSuccess, addError } = useNotification();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async e => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      addSuccess('Message sent successfully!');
+    } catch {
+      addError('Failed to send message. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className='min-h-[calc(100vh-4rem)] p-8 pb-20'>
       <div className='max-w-4xl mx-auto'>
@@ -22,7 +41,7 @@ export default function Contact() {
             <h2 className='text-2xl font-bold text-secondary-900 dark:text-secondary-50 mb-6'>
               Send us a message
             </h2>
-            <form className='space-y-6'>
+            <form className='space-y-6' onSubmit={handleSubmit}>
               <div>
                 <Label htmlFor='contactName'>Name</Label>
                 <Input id='contactName' type='text' placeholder='Your name' />
@@ -56,8 +75,9 @@ export default function Contact() {
                 variant='primary'
                 color='primary'
                 shadowColor='primary'
+                disabled={isSubmitting}
               >
-                Send Message
+                {isSubmitting ? 'Sending...' : 'Send Message'}
               </Button>
             </form>
           </div>

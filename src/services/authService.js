@@ -11,6 +11,13 @@ class AuthService {
     });
   }
 
+  async register(userData) {
+    return apiService.request('/v1/users/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
   async renewToken() {
     return apiService.request('/v1/users/renew', {
       method: 'POST',

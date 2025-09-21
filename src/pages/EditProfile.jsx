@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../hooks';
+import { useAuth, useNotification } from '../hooks';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -7,6 +7,7 @@ import Label from '../components/ui/Label';
 
 export default function EditProfile() {
   const { user } = useAuth();
+  const { addSuccess, addError } = useNotification();
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -29,9 +30,9 @@ export default function EditProfile() {
     try {
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
-      alert('Profile updated successfully!');
-    } catch (error) {
-      alert('Failed to update profile. Please try again.', error);
+      addSuccess('Profile updated successfully!');
+    } catch {
+      addError('Failed to update profile. Please try again.');
     } finally {
       setIsLoading(false);
     }
