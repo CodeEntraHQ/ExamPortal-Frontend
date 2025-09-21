@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository }}
+      IMAGE_NAME: examportal-frontend
       TAG: ${{ github.sha }}
       GHCR_USERNAME: CodeEntraHQ
     outputs:                            #  used to pass values from one job to another
@@ -44,7 +44,7 @@ jobs:
     needs: build-and-push-to-ghcr
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: ${{ github.repository }}
+      IMAGE_NAME: examportal-frontend
       TAG: ${{ github.sha }}
       GHCR_USERNAME: codeentrahq
     steps:
