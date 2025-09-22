@@ -5,6 +5,7 @@ on:
     branches:
       - main          # just for testing
   pull_request:
+    types: [closed]
     branches:
       - main
 
