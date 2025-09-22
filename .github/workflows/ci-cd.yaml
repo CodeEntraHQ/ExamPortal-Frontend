@@ -3,8 +3,7 @@ name: Build & Deploy Frontend
 on:
   push:
     branches:
-      - main
-      - feature/containerize-ci-cd              # just for testing
+      - main          # just for testing
   pull_request:
     branches:
       - main
@@ -48,7 +47,7 @@ jobs:
       TAG: ${{ github.sha }}
       GHCR_USERNAME: codeentrahq
     steps:
-      - name: SSH, Login to GHCR & Update Docker Compose (using yq)
+      - name: SSH, Login to GHCR, Update Docker Compose (using yq) & Deploy with latest image
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.EC2_HOST }}
