@@ -1,16 +1,15 @@
-export default function CollegeCard({
-  college,
+export default function EntityCard({
+  entity,
   onClick,
   className = '',
   ...props
 }) {
-  if (!college) return null;
+  if (!entity) return null;
 
   return (
     <div
-      onClick={onClick}
       className={`
-        p-6 border-2 transition-all duration-200 cursor-pointer
+        relative p-6 border-2 transition-all duration-200 cursor-pointer
         bg-white dark:bg-secondary-800
         border-green-500/20 dark:border-green-400/20
         shadow-[4px_4px_0px_0px] shadow-green-600 dark:shadow-green-400
@@ -21,6 +20,28 @@ export default function CollegeCard({
       `.trim()}
       {...props}
     >
+      <button
+        onClick={e => {
+          e.stopPropagation();
+          onClick();
+        }}
+        className='absolute bottom-4 right-4 p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors'
+        aria-label='Edit entity'
+      >
+        <svg
+          className='w-5 h-5'
+          fill='none'
+          stroke='currentColor'
+          viewBox='0 0 24 24'
+        >
+          <path
+            strokeLinecap='round'
+            strokeLinejoin='round'
+            strokeWidth={2}
+            d='M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.5L15.232 5.232z'
+          />
+        </svg>
+      </button>
       <div className='flex items-start justify-between mb-4'>
         <div className='flex items-center gap-3'>
           <div className='flex items-center justify-center w-10 h-10 bg-green-100 rounded-lg dark:bg-green-900/30'>
@@ -40,7 +61,7 @@ export default function CollegeCard({
           </div>
           <div>
             <h3 className='text-lg font-semibold text-secondary-900 dark:text-secondary-50'>
-              {college.name}
+              {entity.name}
             </h3>
           </div>
         </div>
@@ -72,10 +93,10 @@ export default function CollegeCard({
               d='M15 11a3 3 0 11-6 0 3 3 0 016 0z'
             />
           </svg>
-          <span>{college.address || 'Address not provided'}</span>
+          <span>{entity.address || 'Address not provided'}</span>
         </div>
 
-        {college.created_at && (
+        {entity.created_at && (
           <div className='flex items-center gap-2 text-sm text-secondary-500 dark:text-secondary-400'>
             <svg
               className='w-4 h-4'
@@ -91,7 +112,7 @@ export default function CollegeCard({
               />
             </svg>
             <span>
-              Created {new Date(college.created_at).toLocaleDateString()}
+              Created {new Date(entity.created_at).toLocaleDateString()}
             </span>
           </div>
         )}

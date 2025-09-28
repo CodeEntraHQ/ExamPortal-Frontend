@@ -24,12 +24,10 @@ export const AuthProvider = ({ children }) => {
 
   // Define logout function first
   const logout = useCallback(() => {
-    setLoading(true);
-    authService.logout();
-    setUser(null);
+    navigate('/'); // 1. Navigate to a public route first.
+    authService.logout(); // 2. Clear session storage.
+    setUser(null); // 3. Clear React state, which triggers re-renders.
     setShowRenewalPopup(false);
-    setLoading(false);
-    navigate('/');
   }, [navigate]);
 
   // Token renewal function
@@ -68,12 +66,38 @@ export const AuthProvider = ({ children }) => {
     forceActive(); // Force user back to active state
   }, [forceActive]);
 
+  const processAndSetUser = userData => {
+    if (
+      userData &&
+      userData.profile_picture &&
+      userData.profile_picture.type === 'Buffer'
+    ) {
+      const buffer = new Uint8Array(userData.profile_picture.data);
+      const blob = new Blob([buffer], { type: 'image/jpeg' });
+      const reader = new FileReader();
+      reader.onload = () => {
+        const processedUser = {
+          ...userData,
+          profile_picture: reader.result,
+        };
+        setUser(processedUser);
+        authService.setUser(processedUser);
+      };
+      reader.readAsDataURL(blob);
+    } else {
+      setUser(userData);
+      if (userData) {
+        authService.setUser(userData);
+      }
+    }
+  };
+
   // Initialize authentication
   useEffect(() => {
     const initializeAuth = () => {
       if (authService.isAuthenticated()) {
         const userData = authService.getUser();
-        setUser(userData);
+        processAndSetUser(userData);
       } else {
         authService.logout();
       }
@@ -175,9 +199,7 @@ export const AuthProvider = ({ children }) => {
 
         // Store token and user data
         authService.setToken(token); // This will automatically extract and set the correct expiry
-        authService.setUser(userData);
-
-        setUser(userData);
+        processAndSetUser(userData);
 
         addSuccess('Login successful!');
 
@@ -247,8 +269,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const updateUser = updatedUser => {
+    processAndSetUser(updatedUser);
+  };
+
   const value = {
     user,
+    updateUser,
     loading,
     register,
     login,

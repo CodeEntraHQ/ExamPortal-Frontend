@@ -83,18 +83,14 @@ export const TokenRenewalPopup = ({
             <Button
               onClick={handleRenew}
               disabled={isRenewing}
-              variant='primary'
-              className='text-lg'
+              className='flex justify-center w-full px-4 py-3 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
             >
               {isRenewing ? 'Renewing...' : 'Renew Session'}
             </Button>
 
             <Button
               onClick={handleLogout}
-              variant='secondary'
-              color='red'
-              shadowColor='red'
-              className='text-lg'
+              className='flex justify-center w-full px-4 py-3 text-sm font-medium text-gray-700 bg-gray-200 border border-transparent rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500'
             >
               Logout
             </Button>

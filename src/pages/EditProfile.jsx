@@ -1,17 +1,19 @@
 import { useState } from 'react';
 import { useAuth, useNotification } from '../hooks';
+import userService from '../services/userService';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Label from '../components/ui/Label';
 
 export default function EditProfile() {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { addSuccess, addError } = useNotification();
   const [formData, setFormData] = useState({
     name: user?.name || '',
     email: user?.email || '',
   });
+  const [profilePicture, setProfilePicture] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleInputChange = e => {
@@ -22,17 +24,35 @@ export default function EditProfile() {
     }));
   };
 
+  const handleFileChange = e => {
+    if (e.target.files && e.target.files[0]) {
+      setProfilePicture(e.target.files[0]);
+    }
+  };
+
   const handleSubmit = async e => {
     e.preventDefault();
     setIsLoading(true);
 
-    // TODO: Implement profile update API call
+    const data = new FormData();
+    data.append('name', formData.name);
+
+    if (profilePicture) {
+      data.append('profile_picture', profilePicture);
+    }
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const response = await userService.updateUserProfile(data);
+      if (response && response.payload) {
+        const updatedUserData = {
+          ...user,
+          ...response.payload,
+        };
+        updateUser(updatedUserData);
+      }
       addSuccess('Profile updated successfully!');
-    } catch {
-      addError('Failed to update profile. Please try again.');
+    } catch (error) {
+      addError(error.message || 'Failed to update profile. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -73,6 +93,17 @@ export default function EditProfile() {
                 value={formData.email}
                 onChange={handleInputChange}
                 required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor='profile_picture'>Profile Picture</Label>
+              <Input
+                id='profile_picture'
+                name='profile_picture'
+                type='file'
+                onChange={handleFileChange}
+                accept='image/*'
               />
             </div>
 

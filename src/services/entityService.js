@@ -1,19 +1,19 @@
 import apiService from './api.js';
 
-class CollegeService {
-  async getColleges(page = 1, limit = 10) {
+class EntityService {
+  async getEntities(page = 1, limit = 10) {
     try {
       const response = await apiService.request(
-        `/v1/colleges?page=${page}&limit=${limit}`,
+        `/v1/entities?page=${page}&limit=${limit}`,
         {
           method: 'GET',
         }
       );
 
-      // Backend returns: { status: "SUCCESS", responseCode: "COLLEGES_FETCHED", payload: { colleges, total, page, limit, totalPages } }
+      // Backend returns: { status: "SUCCESS", responseCode: "ENTITIES_FETCHED", payload: { entities, total, page, limit, totalPages } }
       if (response.status === 'SUCCESS' && response.payload) {
         return {
-          colleges: response.payload.colleges || [],
+          entities: response.payload.entities || [],
           total: response.payload.total || 0,
           page: response.payload.page || 1,
           limit: response.payload.limit || 10,
@@ -23,14 +23,14 @@ class CollegeService {
 
       throw new Error('Invalid response format from server');
     } catch (error) {
-      console.error('Error fetching colleges:', error);
+      console.error('Error fetching entities:', error);
       throw error;
     }
   }
 
-  async getCollegeById(id) {
+  async getEntityById(id) {
     try {
-      const response = await apiService.request(`/v1/colleges/${id}`, {
+      const response = await apiService.request(`/v1/entities/${id}`, {
         method: 'GET',
       });
 
@@ -40,16 +40,16 @@ class CollegeService {
 
       throw new Error('Invalid response format from server');
     } catch (error) {
-      console.error('Error fetching college by ID:', error);
+      console.error('Error fetching entity by ID:', error);
       throw error;
     }
   }
 
-  async createCollege(collegeData) {
+  async createEntity(entityData) {
     try {
-      const response = await apiService.request('/v1/colleges', {
+      const response = await apiService.request('/v1/entities', {
         method: 'POST',
-        body: JSON.stringify(collegeData),
+        body: JSON.stringify(entityData),
       });
 
       if (response.status === 'SUCCESS' && response.payload) {
@@ -58,19 +58,16 @@ class CollegeService {
 
       throw new Error('Invalid response format from server');
     } catch (error) {
-      console.error('Error creating college:', error);
+      console.error('Error creating entity:', error);
       throw error;
     }
   }
 
-  async updateCollege(collegeId, collegeData) {
+  async updateEntity(entityData) {
     try {
-      const response = await apiService.request('/v1/colleges', {
+      const response = await apiService.request('/v1/entities', {
         method: 'PATCH',
-        body: JSON.stringify({
-          college_id: collegeId,
-          ...collegeData,
-        }),
+        body: JSON.stringify(entityData),
       });
 
       if (response.status === 'SUCCESS' && response.payload) {
@@ -79,27 +76,27 @@ class CollegeService {
 
       throw new Error('Invalid response format from server');
     } catch (error) {
-      console.error('Error updating college:', error);
+      console.error('Error updating entity:', error);
       throw error;
     }
   }
 
-  async deleteCollege(id) {
+  async deleteEntity(id) {
     try {
-      const response = await apiService.request(`/v1/colleges/${id}`, {
+      const response = await apiService.request(`/v1/entities/${id}`, {
         method: 'DELETE',
       });
 
       if (response.status === 'SUCCESS') {
-        return response.payload || { message: 'College deleted successfully' };
+        return response.payload || { message: 'Entity deleted successfully' };
       }
 
       throw new Error('Invalid response format from server');
     } catch (error) {
-      console.error('Error deleting college:', error);
+      console.error('Error deleting entity:', error);
       throw error;
     }
   }
 }
 
-export default new CollegeService();
+export default new EntityService();

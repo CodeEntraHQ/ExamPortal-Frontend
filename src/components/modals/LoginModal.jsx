@@ -1,11 +1,9 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { useAuth, useNotification } from '../hooks';
-import { getCaptcha } from '../services/captchaService';
-import { ROLE_MAPPING } from '../utils/constants';
-import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
-import Label from '../components/ui/Label';
+import { useState, useEffect, useRef } from 'react';
+import { useAuth, useNotification } from '../../hooks';
+import { getCaptcha } from '../../services/captchaService';
+import Button from '../ui/Button';
+import Input from '../ui/Input';
+import Label from '../ui/Label';
 
 // SVG Icon Components
 const EyeIcon = ({ className }) => (
@@ -40,10 +38,13 @@ const EyeOffIcon = ({ className }) => (
   </svg>
 );
 
-export default function Login() {
-  const { login, loading, isAuthenticated } = useAuth();
+export default function LoginModal({
+  isOpen,
+  onClose,
+  onSwitchToForgotPassword,
+}) {
+  const { login, loading } = useAuth();
   const { addError } = useNotification();
-  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -53,6 +54,7 @@ export default function Login() {
   const [captchaData, setCaptchaData] = useState(null);
   const [captchaToken, setCaptchaToken] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const modalRef = useRef(null);
 
   const fetchCaptcha = async () => {
     try {
@@ -65,23 +67,10 @@ export default function Login() {
   };
 
   useEffect(() => {
-    fetchCaptcha();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className='flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900'>
-        <div className='text-center'>
-          <div className='w-12 h-12 mx-auto border-b-2 rounded-full animate-spin border-green-500'></div>
-          <p className='mt-4 text-gray-600 dark:text-gray-300'>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (isAuthenticated) {
-    return null;
-  }
+    if (isOpen) {
+      fetchCaptcha();
+    }
+  }, [isOpen]);
 
   const handleChange = e => {
     const { name, value } = e.target;
@@ -103,31 +92,61 @@ export default function Login() {
     if (!result.success) {
       addError(result.error);
       fetchCaptcha(); // Refresh captcha on failed login
+    } else {
+      onClose(); // Close modal on successful login
     }
     setIsSubmitting(false);
   };
 
+  // Handle escape key to close modal
+  useEffect(() => {
+    const handleEscape = e => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
+  // Handle clicking outside modal to close
+  useEffect(() => {
+    const handleClickOutside = e => {
+      if (modalRef.current && !modalRef.current.contains(e.target)) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
   return (
-    <div
-      className='flex items-center justify-center min-h-screen bg-cover bg-center'
-      style={{
-        backgroundImage:
-          "url('https://images.unsplash.com/photo-1491841550275-5b462bf975db?q=80&w=2070&auto=format&fit=crop')",
-      }}
-    >
-      <div className='w-full max-w-md p-8 space-y-8 bg-white/10 dark:bg-gray-900/10 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/20'>
+    <div className='fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm'>
+      <div
+        ref={modalRef}
+        className='w-full max-w-md p-8 space-y-8 bg-white dark:bg-secondary-800 rounded-2xl shadow-2xl border-2 border-primary-200 dark:border-secondary-600'
+      >
         <div className='text-center'>
-          <h2 className='text-3xl font-extrabold text-white'>Welcome Back</h2>
-          <p className='mt-2 text-sm text-gray-200 dark:text-gray-300'>
+          <h2 className='text-3xl font-extrabold text-gray-900 dark:text-white'>
+            Welcome Back
+          </h2>
+          <p className='mt-2 text-sm text-gray-600 dark:text-gray-400'>
             Login to your account to continue.
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className='space-y-6'>
           <div>
-            <Label htmlFor='email' className='text-white'>
-              Email address
-            </Label>
+            <Label htmlFor='email'>Email address</Label>
             <Input
               id='email'
               name='email'
@@ -141,9 +160,7 @@ export default function Login() {
           </div>
 
           <div className='space-y-1'>
-            <Label htmlFor='password' className='text-white'>
-              Password
-            </Label>
+            <Label htmlFor='password'>Password</Label>
             <div className='relative'>
               <Input
                 id='password'
@@ -170,9 +187,7 @@ export default function Login() {
           </div>
 
           <div className='space-y-1'>
-            <Label htmlFor='captcha' className='text-white'>
-              Captcha
-            </Label>
+            <Label htmlFor='captcha'>Captcha</Label>
             <div className='flex items-center space-x-4'>
               <div className='w-1/2 h-12 bg-gray-100 dark:bg-gray-700 rounded-md flex items-center justify-center'>
                 {captchaData ? (
@@ -208,26 +223,27 @@ export default function Login() {
               />
               <label
                 htmlFor='remember-me'
-                className='block ml-2 text-sm text-white'
+                className='block ml-2 text-sm text-gray-900 dark:text-gray-300'
               >
                 Remember me
               </label>
             </div>
 
             <div className='text-sm'>
-              <Link
-                to='/forgot-password'
+              <button
+                type='button'
+                onClick={onSwitchToForgotPassword}
                 className='font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300'
               >
                 Forgot your password?
-              </Link>
+              </button>
             </div>
           </div>
 
           <div className='flex items-center space-x-4'>
             <Button
               type='button'
-              onClick={() => navigate('/')}
+              onClick={onClose}
               className='flex justify-center w-full px-4 py-3 text-sm font-medium text-gray-700 bg-gray-200 border border-transparent rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500'
             >
               Cancel
