@@ -3,13 +3,16 @@ import { useAuth } from '../../hooks';
 import ThemeToggle from '../ui/ThemeToggle';
 import ProfileDropdown from '../ui/ProfileDropdown';
 
-export default function Header() {
+export default function Header({ openLoginModal }) {
   const { isAuthenticated } = useAuth();
   return (
     <header className='fixed top-0 inset-x-0 bg-white/90 dark:bg-secondary-900/70 backdrop-blur supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-secondary-900/60 border-b-2 border-primary-200 dark:border-secondary-800 z-40 shadow-sm'>
       <div className='w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex items-center justify-between h-16'>
-          <Link to='/' className='flex items-center gap-2'>
+          <Link
+            to={isAuthenticated ? '/dashboard/superadmin' : '/'}
+            className='flex items-center gap-2'
+          >
             <div className='flex items-center justify-center w-8 h-8 rounded-lg shadow-sm bg-primary-500'>
               <span className='font-bold text-white'>E</span>
             </div>
@@ -53,12 +56,12 @@ export default function Header() {
             {isAuthenticated ? (
               <ProfileDropdown />
             ) : (
-              <Link
-                to='/login'
+              <button
+                onClick={openLoginModal}
                 className='inline-block bg-primary-500 hover:bg-primary-600 text-white font-bold py-2 px-4 rounded-lg text-sm transition'
               >
                 Login
-              </Link>
+              </button>
             )}
           </div>
         </div>

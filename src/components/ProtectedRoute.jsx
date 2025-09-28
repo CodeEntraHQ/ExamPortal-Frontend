@@ -1,9 +1,20 @@
+import { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks';
 import { ROLE_MAPPING } from '../utils/constants';
 
-export default function ProtectedRoute({ children, requiredRole = null }) {
+export default function ProtectedRoute({
+  children,
+  requiredRole = null,
+  openLoginModal,
+}) {
   const { isAuthenticated, user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      openLoginModal();
+    }
+  }, [loading, isAuthenticated, openLoginModal]);
 
   if (loading) {
     return (
@@ -19,7 +30,7 @@ export default function ProtectedRoute({ children, requiredRole = null }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to='/login' replace />;
+    return null; // Render nothing while the modal is opening
   }
 
   if (requiredRole && user?.role !== requiredRole) {

@@ -6,7 +6,7 @@ const ErrorPane = ({ message, onClose }) => {
   }
 
   return (
-    <div className='fixed bottom-4 right-4 w-80 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 p-6 rounded-xl shadow-2xl z-50 backdrop-blur-xl'>
+    <div className='fixed bottom-4 right-4 w-80 bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 p-6 rounded-xl shadow-2xl z-[100] backdrop-blur-xl'>
       <div className='flex justify-between items-start'>
         <div className='flex items-center'>
           <svg

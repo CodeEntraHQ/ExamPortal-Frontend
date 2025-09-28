@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import Layout from './components/layout/Layout';
@@ -13,20 +14,48 @@ import EditProfile from './pages/EditProfile';
 import Settings from './pages/Settings';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import ResetPassword from './pages/ResetPassword';
+import LoginModal from './components/modals/LoginModal';
+import ForgotPasswordModal from './components/modals/ForgotPasswordModal';
 
 function App() {
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isForgotPasswordModalOpen, setIsForgotPasswordModalOpen] =
+    useState(false);
+
+  const openLoginModal = () => setIsLoginModalOpen(true);
+  const closeLoginModal = () => setIsLoginModalOpen(false);
+
+  const openForgotPasswordModal = () => {
+    setIsLoginModalOpen(false);
+    setIsForgotPasswordModalOpen(true);
+  };
+
+  const closeForgotPasswordModal = () => {
+    setIsForgotPasswordModalOpen(false);
+  };
+
+  const switchToLoginModal = () => {
+    setIsForgotPasswordModalOpen(false);
+    setIsLoginModalOpen(true);
+  };
+
   return (
     <Router>
       <AuthProvider>
-        <Layout>
+        <Layout openLoginModal={openLoginModal}>
           <Routes>
             <Route path='/' element={<Home />} />
             <Route path='/login' element={<Login />} />
             <Route path='/register' element={<Register />} />
+            <Route path='/reset-password' element={<ResetPassword />} />
             <Route
               path='/dashboard/superadmin'
               element={
-                <ProtectedRoute requiredRole='SUPERADMIN'>
+                <ProtectedRoute
+                  requiredRole='SUPERADMIN'
+                  openLoginModal={openLoginModal}
+                >
                   <SuperAdminDashboard />
                 </ProtectedRoute>
               }
@@ -34,7 +63,10 @@ function App() {
             <Route
               path='/dashboard/admin'
               element={
-                <ProtectedRoute requiredRole='ADMIN'>
+                <ProtectedRoute
+                  requiredRole='ADMIN'
+                  openLoginModal={openLoginModal}
+                >
                   <AdminDashboard />
                 </ProtectedRoute>
               }
@@ -42,7 +74,10 @@ function App() {
             <Route
               path='/dashboard/student'
               element={
-                <ProtectedRoute requiredRole='STUDENT'>
+                <ProtectedRoute
+                  requiredRole='STUDENT'
+                  openLoginModal={openLoginModal}
+                >
                   <StudentDashboard />
                 </ProtectedRoute>
               }
@@ -50,7 +85,7 @@ function App() {
             <Route
               path='/profile'
               element={
-                <ProtectedRoute>
+                <ProtectedRoute openLoginModal={openLoginModal}>
                   <Profile />
                 </ProtectedRoute>
               }
@@ -58,7 +93,7 @@ function App() {
             <Route
               path='/edit-profile'
               element={
-                <ProtectedRoute>
+                <ProtectedRoute openLoginModal={openLoginModal}>
                   <EditProfile />
                 </ProtectedRoute>
               }
@@ -66,7 +101,7 @@ function App() {
             <Route
               path='/settings'
               element={
-                <ProtectedRoute>
+                <ProtectedRoute openLoginModal={openLoginModal}>
                   <Settings />
                 </ProtectedRoute>
               }
@@ -75,6 +110,16 @@ function App() {
             <Route path='/contact' element={<Contact />} />
           </Routes>
         </Layout>
+        <LoginModal
+          isOpen={isLoginModalOpen}
+          onClose={closeLoginModal}
+          onSwitchToForgotPassword={openForgotPasswordModal}
+        />
+        <ForgotPasswordModal
+          isOpen={isForgotPasswordModalOpen}
+          onClose={closeForgotPasswordModal}
+          onSwitchToLogin={switchToLoginModal}
+        />
       </AuthProvider>
     </Router>
   );

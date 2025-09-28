@@ -43,7 +43,10 @@ class UserService {
   async resetPassword(token, newPassword) {
     return apiService.request('/v1/users/password/reset', {
       method: 'POST',
-      body: JSON.stringify({ token, password: newPassword }),
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ password: newPassword }),
     });
   }
 

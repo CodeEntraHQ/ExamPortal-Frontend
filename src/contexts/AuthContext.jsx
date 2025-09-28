@@ -24,12 +24,10 @@ export const AuthProvider = ({ children }) => {
 
   // Define logout function first
   const logout = useCallback(() => {
-    setLoading(true);
-    authService.logout();
-    setUser(null);
+    navigate('/'); // 1. Navigate to a public route first.
+    authService.logout(); // 2. Clear session storage.
+    setUser(null); // 3. Clear React state, which triggers re-renders.
     setShowRenewalPopup(false);
-    setLoading(false);
-    navigate('/');
   }, [navigate]);
 
   // Token renewal function
