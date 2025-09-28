@@ -2,64 +2,182 @@ import { Link } from 'react-router-dom';
 
 export default function Footer() {
   return (
-    <footer className='fixed bottom-0 inset-x-0 bg-white/95 dark:bg-secondary-900 border-t-2 border-primary-200 dark:border-secondary-800 z-50 shadow-sm'>
-      <div className='w-full px-4 sm:px-6 lg:px-8 py-4'>
-        <div className='flex items-center justify-between'>
-          <div className='text-base text-secondary-600 dark:text-secondary-300'>
-            © 2024 ExamEntra. All rights reserved.
-          </div>
-          <nav className='flex items-center gap-4 text-base text-secondary-600 dark:text-secondary-300'>
-            <Link
-              to='/about'
-              className='hover:text-primary-600 transition-colors relative z-10'
-            >
-              About
+    <footer className='bg-secondary-100 dark:bg-secondary-900 border-t border-primary-200 dark:border-secondary-800'>
+      <div className='w-full max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8'>
+        <div className='xl:grid xl:grid-cols-3 xl:gap-8'>
+          <div className='space-y-8 xl:col-span-1'>
+            <Link to='/' className='flex items-center gap-2'>
+              <div className='flex items-center justify-center w-8 h-8 rounded-lg bg-primary-500'>
+                <span className='font-bold text-white'>E</span>
+              </div>
+              <span className='text-xl font-bold text-primary-700 dark:text-primary-400'>
+                ExamEntra
+              </span>
             </Link>
-            <Link
-              to='/contact'
-              className='hover:text-primary-600 transition-colors relative z-10'
-            >
-              Contact
-            </Link>
-          </nav>
-          <div className='flex items-center gap-4 text-secondary-600 dark:text-secondary-300'>
-            <a
-              href='#'
-              aria-label='X (Twitter)'
-              className='hover:text-primary-600'
-            >
-              <svg className='w-5 h-5' viewBox='0 0 24 24' fill='currentColor'>
-                <path d='M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z' />
-              </svg>
-            </a>
-            <a
-              href='#'
-              aria-label='Instagram'
-              className='hover:text-primary-600'
-            >
-              <svg className='w-5 h-5' viewBox='0 0 24 24' fill='currentColor'>
-                <path d='M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z' />
-              </svg>
-            </a>
-            <a
-              href='#'
-              aria-label='Facebook'
-              className='hover:text-primary-600'
-            >
-              <svg className='w-5 h-5' viewBox='0 0 24 24' fill='currentColor'>
-                <path d='M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z' />
-              </svg>
-            </a>
-            <a
-              href='#'
-              aria-label='LinkedIn'
-              className='hover:text-primary-600'
-            >
-              <svg className='w-5 h-5' viewBox='0 0 24 24' fill='currentColor'>
-                <path d='M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z' />
-              </svg>
-            </a>
+            <p className='text-secondary-500 dark:text-secondary-400 text-base'>
+              Your one-stop solution for managing and taking exams with ease.
+            </p>
+            <div className='flex space-x-6'>
+              <a
+                href='#'
+                className='text-secondary-400 hover:text-secondary-500'
+              >
+                <span className='sr-only'>Facebook</span>
+                <svg
+                  className='h-6 w-6'
+                  fill='currentColor'
+                  viewBox='0 0 24 24'
+                  aria-hidden='true'
+                >
+                  <path
+                    fillRule='evenodd'
+                    d='M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z'
+                    clipRule='evenodd'
+                  />
+                </svg>
+              </a>
+              <a
+                href='#'
+                className='text-secondary-400 hover:text-secondary-500'
+              >
+                <span className='sr-only'>Instagram</span>
+                <svg
+                  className='h-6 w-6'
+                  fill='currentColor'
+                  viewBox='0 0 24 24'
+                  aria-hidden='true'
+                >
+                  <path
+                    fillRule='evenodd'
+                    d='M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.024.06 1.378.06 3.808s-.012 2.784-.06 3.808c-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.024.048-1.378.06-3.808.06s-2.784-.013-3.808-.06c-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.048-1.024-.06-1.378-.06-3.808s.012-2.784.06-3.808c.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 016.08 2.525c.636-.247 1.363-.416 2.427-.465C9.53 2.013 9.884 2 12.315 2zM12 0C9.58 0 9.22.01 8.05.058c-1.26.058-2.148.277-2.913.572a6.9 6.9 0 00-2.4 1.626A6.9 6.9 0 001.12 6.16c-.295.765-.514 1.653-.572 2.913C.01 10.22 0 10.58 0 13.1s.01 2.88.058 4.05c.058 1.26.277 2.148.572 2.913a6.9 6.9 0 001.626 2.4 6.9 6.9 0 002.4 1.626c.765.295 1.653.514 2.913.572.97.048 1.32.058 3.85.058s2.88-.01 4.05-.058c1.26-.058 2.148-.277 2.913-.572a6.9 6.9 0 002.4-1.626 6.9 6.9 0 001.626-2.4c.295-.765.514-1.653.572-2.913.048-.97.058-1.32.058-3.85s-.01-2.88-.058-4.05c-.058-1.26-.277-2.148-.572-2.913a6.9 6.9 0 00-1.626-2.4A6.9 6.9 0 0018.04 1.12c-.765-.295-1.653-.514-2.913-.572C14.12.01 13.77 0 11.25 0h.065z'
+                    clipRule='evenodd'
+                  />
+                  <path
+                    fillRule='evenodd'
+                    d='M12 6.865A5.135 5.135 0 1012 17.135 5.135 5.135 0 0012 6.865zm0 8.468a3.333 3.333 0 110-6.666 3.333 3.333 0 010 6.666zm5.338-9.87a1.2 1.2 0 100 2.4 1.2 1.2 0 000-2.4z'
+                    clipRule='evenodd'
+                  />
+                </svg>
+              </a>
+              <a
+                href='#'
+                className='text-secondary-400 hover:text-secondary-500'
+              >
+                <span className='sr-only'>Twitter</span>
+                <svg
+                  className='h-6 w-6'
+                  fill='currentColor'
+                  viewBox='0 0 24 24'
+                  aria-hidden='true'
+                >
+                  <path d='M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.71v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84' />
+                </svg>
+              </a>
+            </div>
           </div>
+          <div className='mt-12 grid grid-cols-2 gap-8 xl:mt-0 xl:col-span-2'>
+            <div className='md:grid md:grid-cols-2 md:gap-8'>
+              <div>
+                <h3 className='text-sm font-semibold text-secondary-400 tracking-wider uppercase'>
+                  Solutions
+                </h3>
+                <ul className='mt-4 space-y-4'>
+                  <li>
+                    <Link
+                      to='#'
+                      className='text-base text-secondary-500 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-white'
+                    >
+                      Exams
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to='#'
+                      className='text-base text-secondary-500 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-white'
+                    >
+                      Analytics
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+              <div className='mt-12 md:mt-0'>
+                <h3 className='text-sm font-semibold text-secondary-400 tracking-wider uppercase'>
+                  Support
+                </h3>
+                <ul className='mt-4 space-y-4'>
+                  <li>
+                    <Link
+                      to='/contact'
+                      className='text-base text-secondary-500 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-white'
+                    >
+                      Contact
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to='#'
+                      className='text-base text-secondary-500 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-white'
+                    >
+                      Help
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </div>
+            <div className='md:grid md:grid-cols-2 md:gap-8'>
+              <div>
+                <h3 className='text-sm font-semibold text-secondary-400 tracking-wider uppercase'>
+                  Company
+                </h3>
+                <ul className='mt-4 space-y-4'>
+                  <li>
+                    <Link
+                      to='/about'
+                      className='text-base text-secondary-500 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-white'
+                    >
+                      About
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to='#'
+                      className='text-base text-secondary-500 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-white'
+                    >
+                      Blog
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+              <div className='mt-12 md:mt-0'>
+                <h3 className='text-sm font-semibold text-secondary-400 tracking-wider uppercase'>
+                  Legal
+                </h3>
+                <ul className='mt-4 space-y-4'>
+                  <li>
+                    <Link
+                      to='#'
+                      className='text-base text-secondary-500 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-white'
+                    >
+                      Policies
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      to='#'
+                      className='text-base text-secondary-500 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-white'
+                    >
+                      Terms
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className='mt-12 border-t border-secondary-200 dark:border-secondary-700 pt-8'>
+          <p className='text-base text-secondary-400 xl:text-center'>
+            &copy; 2024 ExamEntra. All rights reserved.
+          </p>
         </div>
       </div>
     </footer>

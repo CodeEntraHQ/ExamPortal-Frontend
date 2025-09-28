@@ -103,73 +103,74 @@ export default function Settings() {
             </form>
           </Card>
 
-          <Card>
-            <h3 className='mb-4 text-lg font-semibold text-secondary-900 dark:text-secondary-50'>
-              Account Information
-            </h3>
-            <div className='space-y-3'>
-              <div className='flex items-center justify-between py-2'>
-                <span className='text-secondary-700 dark:text-secondary-300'>
-                  User ID
-                </span>
-                <span className='font-mono text-sm text-secondary-900 dark:text-secondary-100'>
-                  {user?.id || 'N/A'}
-                </span>
+          <div className='space-y-6'>
+            <Card>
+              <h3 className='mb-4 text-lg font-semibold text-secondary-900 dark:text-secondary-50'>
+                Account Information
+              </h3>
+              <div className='space-y-3'>
+                <div className='flex items-center justify-between py-2'>
+                  <span className='text-secondary-700 dark:text-secondary-300'>
+                    User ID
+                  </span>
+                  <span className='font-mono text-sm text-secondary-900 dark:text-secondary-100'>
+                    {user?.id || 'N/A'}
+                  </span>
+                </div>
+                <div className='flex items-center justify-between py-2'>
+                  <span className='text-secondary-700 dark:text-secondary-300'>
+                    Account Type
+                  </span>
+                  <span className='capitalize text-secondary-900 dark:text-secondary-100'>
+                    {user?.role || 'N/A'}
+                  </span>
+                </div>
+                <div className='flex items-center justify-between py-2'>
+                  <span className='text-secondary-700 dark:text-secondary-300'>
+                    Member Since
+                  </span>
+                  <span className='text-secondary-900 dark:text-secondary-100'>
+                    {user?.created_at
+                      ? new Date(user.created_at).toLocaleDateString()
+                      : 'Unknown'}
+                  </span>
+                </div>
               </div>
-              <div className='flex items-center justify-between py-2'>
-                <span className='text-secondary-700 dark:text-secondary-300'>
-                  Account Type
-                </span>
-                <span className='capitalize text-secondary-900 dark:text-secondary-100'>
-                  {user?.role || 'N/A'}
-                </span>
+            </Card>
+            <Card>
+              <h3 className='mb-4 text-lg font-semibold text-secondary-900 dark:text-secondary-50'>
+                Danger Zone
+              </h3>
+              <div className='space-y-3'>
+                <div className='p-4 border border-red-200 rounded-lg dark:border-red-800 bg-red-50 dark:bg-red-900/20'>
+                  <h4 className='mb-2 font-medium text-red-800 dark:text-red-200'>
+                    Delete Account
+                  </h4>
+                  <p className='mb-3 text-sm text-red-600 dark:text-red-300'>
+                    Once you delete your account, there is no going back. Please
+                    be certain.
+                  </p>
+                  <Button
+                    color='red'
+                    shadowColor='red'
+                    onClick={() => {
+                      if (
+                        confirm(
+                          'Are you sure you want to delete your account? This action cannot be undone.'
+                        )
+                      ) {
+                        addError('Account deletion not implemented yet.');
+                      }
+                    }}
+                    className='px-4 py-2 text-sm'
+                  >
+                    Delete Account
+                  </Button>
+                </div>
               </div>
-              <div className='flex items-center justify-between py-2'>
-                <span className='text-secondary-700 dark:text-secondary-300'>
-                  Member Since
-                </span>
-                <span className='text-secondary-900 dark:text-secondary-100'>
-                  {user?.createdAt
-                    ? new Date(user.createdAt).toLocaleDateString()
-                    : 'Unknown'}
-                </span>
-              </div>
-            </div>
-          </Card>
-        </div>
-
-        <Card>
-          <h3 className='mb-4 text-lg font-semibold text-secondary-900 dark:text-secondary-50'>
-            Danger Zone
-          </h3>
-          <div className='space-y-3'>
-            <div className='p-4 border border-red-200 rounded-lg dark:border-red-800 bg-red-50 dark:bg-red-900/20'>
-              <h4 className='mb-2 font-medium text-red-800 dark:text-red-200'>
-                Delete Account
-              </h4>
-              <p className='mb-3 text-sm text-red-600 dark:text-red-300'>
-                Once you delete your account, there is no going back. Please be
-                certain.
-              </p>
-              <Button
-                color='red'
-                shadowColor='red'
-                onClick={() => {
-                  if (
-                    confirm(
-                      'Are you sure you want to delete your account? This action cannot be undone.'
-                    )
-                  ) {
-                    addError('Account deletion not implemented yet.');
-                  }
-                }}
-                className='px-4 py-2 text-sm'
-              >
-                Delete Account
-              </Button>
-            </div>
+            </Card>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   );

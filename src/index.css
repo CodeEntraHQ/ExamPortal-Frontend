@@ -10,7 +10,7 @@
   }
 
   body {
-    @apply bg-gray-50 text-gray-900 dark:bg-secondary-900 dark:text-secondary-50;
+    @apply bg-secondary-50 text-secondary-900 dark:bg-secondary-900 dark:text-secondary-50;
   }
 }
 
@@ -72,51 +72,7 @@
 }
 
 @layer components {
-  /* Theme toggle button */
-  .btn-ghost {
-    @apply bg-transparent hover:bg-secondary-100 dark:hover:bg-secondary-800 text-secondary-700 dark:text-secondary-200 font-medium py-2 px-3 rounded-lg transition-all duration-200;
-  }
-  /* Primary Button - Modern Green */
-  .btn-primary {
-    @apply bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 shadow-sm hover:shadow-md;
-  }
-
-  /* Secondary Button - Soft Green */
-  .btn-secondary {
-    @apply bg-primary-50 hover:bg-primary-100 text-primary-700 font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:ring-offset-2 border border-primary-200;
-  }
-
-  /* Outline Button - Green Border */
-  .btn-outline {
-    @apply bg-transparent hover:bg-primary-50 text-primary-600 font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-400 focus:ring-offset-2 border border-primary-300 hover:border-primary-400;
-  }
-
-  /* Legacy classes - kept for backward compatibility but prefer using components */
-  .card {
-    @apply bg-white dark:bg-secondary-800 rounded-xl shadow-sm border border-secondary-200 dark:border-secondary-700 p-6 hover:shadow-md transition-shadow duration-300;
-  }
-
   .input-field {
     @apply block w-full rounded-lg border-secondary-300 dark:border-secondary-600 bg-white dark:bg-secondary-700 text-secondary-900 dark:text-secondary-100 shadow-sm focus:border-primary-400 focus:ring-2 focus:ring-primary-200 focus:ring-offset-0 sm:text-sm transition-all duration-200 placeholder-secondary-400 dark:placeholder-secondary-500;
-  }
-
-  /* Success Button */
-  .btn-success {
-    @apply bg-success-500 hover:bg-success-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-success-400 focus:ring-offset-2;
-  }
-
-  /* Warning Button */
-  .btn-warning {
-    @apply bg-warning-500 hover:bg-warning-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-warning-400 focus:ring-offset-2;
-  }
-
-  /* Error Button */
-  .btn-error {
-    @apply bg-error-500 hover:bg-error-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-error-400 focus:ring-offset-2;
-  }
-
-  /* Info Button */
-  .btn-info {
-    @apply bg-info-500 hover:bg-info-600 text-white font-medium py-2 px-4 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-info-400 focus:ring-offset-2;
   }
 }

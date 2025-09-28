@@ -46,6 +46,13 @@ class UserService {
       body: JSON.stringify({ token, password: newPassword }),
     });
   }
+
+  async updateUserProfile(formData) {
+    return apiService.request('/v1/users', {
+      method: 'PATCH',
+      body: formData,
+    });
+  }
 }
 
 export default new UserService();
