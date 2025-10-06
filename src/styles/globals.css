@@ -1,0 +1,272 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  /* Light Theme Colors - Fresh Green Palette */
+  --background: #FAFFFE;
+  --foreground: #0F172A;
+  --card: #ffffff;
+  --card-foreground: #0F172A;
+  --popover: #ffffff;
+  --popover-foreground: #0F172A;
+  --primary: #059669;
+  --primary-foreground: #ffffff;
+  --secondary: #34D399;
+  --secondary-foreground: #0F172A;
+  --success: #10B981;
+  --success-foreground: #ffffff;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  --accent: #ECFDF5;
+  --accent-foreground: #0F172A;
+  --destructive: #DC2626;
+  --destructive-foreground: #ffffff;
+  --border: #E2E8F0;
+  --input: transparent;
+  --input-background: #ffffff;
+  --switch-background: #CBD5E1;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #059669;
+  /* Chart colors optimized for green theme */
+  --chart-1: #059669;
+  --chart-2: #10B981;
+  --chart-3: #F59E0B;
+  --chart-4: #DC2626;
+  --chart-5: #7C3AED;
+  --radius: 0.625rem;
+  /* Navigation colors for light theme */
+  --nav: #ffffff;
+  --nav-foreground: #0F172A;
+  --nav-primary: #059669;
+  --nav-primary-foreground: #ffffff;
+  --nav-accent: #ECFDF5;
+  --nav-accent-foreground: #0F172A;
+  --nav-border: #E2E8F0;
+  --nav-ring: #059669;
+}
+
+.dark {
+  /* Dark Theme Colors - Fresh Green Palette */
+  --background: #0F172A;
+  --foreground: #F8FAFC;
+  --card: #1E293B;
+  --card-foreground: #F8FAFC;
+  --popover: #1E293B;
+  --popover-foreground: #F8FAFC;
+  --primary: #10B981;
+  --primary-foreground: #0F172A;
+  --secondary: #6EE7B7;
+  --secondary-foreground: #0F172A;
+  --success: #34D399;
+  --success-foreground: #0F172A;
+  --muted: #334155;
+  --muted-foreground: #CBD5E1;
+  --accent: #065F46;
+  --accent-foreground: #F8FAFC;
+  --destructive: #EF4444;
+  --destructive-foreground: #F8FAFC;
+  --border: #334155;
+  --input: #334155;
+  --input-background: #334155;
+  --switch-background: #475569;
+  --ring: #10B981;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  /* Chart colors optimized for dark green theme */
+  --chart-1: #10B981;
+  --chart-2: #34D399;
+  --chart-3: #FBBF24;
+  --chart-4: #EF4444;
+  --chart-5: #A78BFA;
+  /* Navigation colors for dark theme */
+  --nav: #1E293B;
+  --nav-foreground: #F8FAFC;
+  --nav-primary: #10B981;
+  --nav-primary-foreground: #0F172A;
+  --nav-accent: #065F46;
+  --nav-accent-foreground: #F8FAFC;
+  --nav-border: #334155;
+  --nav-ring: #10B981;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-nav: var(--nav);
+  --color-nav-foreground: var(--nav-foreground);
+  --color-nav-primary: var(--nav-primary);
+  --color-nav-primary-foreground: var(--nav-primary-foreground);
+  --color-nav-accent: var(--nav-accent);
+  --color-nav-accent-foreground: var(--nav-accent-foreground);
+  --color-nav-border: var(--nav-border);
+  --color-nav-ring: var(--nav-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=" text-"]), :not(:has([class^="text-"])))) {
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+html {
+  font-size: var(--font-size);
+}
+
+/* Navigation improvements for better spacing and contrast */
+.nav-profile-btn {
+  min-height: 3rem;
+}
+
+@media (max-width: 640px) {
+  .nav-profile-btn {
+    min-height: 2.5rem;
+  }
+}
+
+/* Ensure proper dropdown menu contrast in dark mode */
+.dark [data-slot="dropdown-menu-content"] {
+  background: var(--popover);
+  border-color: var(--nav-border);
+}
+
+.dark [data-slot="dropdown-menu-item"] {
+  color: var(--nav-foreground);
+}
+
+.dark [data-slot="dropdown-menu-item"]:hover {
+  background-color: var(--nav-accent);
+  color: var(--nav-accent-foreground);
+}
+
+/* Sidebar improvements */
+.sidebar-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(155, 155, 155, 0.5) transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(155, 155, 155, 0.5);
+  border-radius: 20px;
+}
+
+.sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(155, 155, 155, 0.8);
+}
+
+/* Improve layout spacing */
+@media (min-width: 768px) {
+  .main-content-with-sidebar {
+    margin-left: 20rem; /* 320px sidebar width */
+  }
+}
+
+/* Dark mode sidebar improvements */
+.dark .sidebar-scrollbar {
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.dark .sidebar-scrollbar::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.dark .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+}
