@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
+import { login as apiLogin } from '../services/api/auth';
+import { removeToken } from '../services/api';
 
 type UserRole = 'SUPERADMIN' | 'ADMIN' | 'STUDENT';
 
@@ -20,47 +22,21 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demonstration
-const mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'Super Admin',
-    email: 'superadmin@example.com',
-    role: 'SUPERADMIN'
-  },
-  {
-    id: '2',
-    name: 'School Admin',
-    email: 'admin@school.com',
-    role: 'ADMIN',
-    entityId: 'school-1',
-    entityName: 'Springfield High School'
-  },
-  {
-    id: '3',
-    name: 'John Student',
-    email: 'student@example.com',
-    role: 'STUDENT',
-    entityId: 'school-1',
-    entityName: 'Springfield High School'
-  }
-];
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   const login = async (email: string, password: string) => {
-    // Mock login - in real app this would call an API
-    const foundUser = mockUsers.find(u => u.email === email);
-    if (foundUser) {
-      setUser(foundUser);
+    const userData = await apiLogin(email, password);
+    if (userData) {
+      setUser(userData);
     } else {
-      throw new Error('Invalid credentials');
+      throw new Error('Login failed: No user data returned');
     }
   };
 
   const logout = () => {
     setUser(null);
+    removeToken();
   };
 
   return (
