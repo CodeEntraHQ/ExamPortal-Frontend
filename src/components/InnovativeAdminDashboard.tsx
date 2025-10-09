@@ -21,7 +21,6 @@ import {
   Plus,
   Building,
   BarChart3,
-  PieChart,
   LineChart,
   Zap,
   Shield,

@@ -12,7 +12,6 @@ import {
   Award,
   TrendingUp,
   BarChart3,
-  PieChart,
   Calendar,
   Download,
   Share,

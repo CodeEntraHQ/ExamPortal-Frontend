@@ -24,7 +24,6 @@ import {
   Eye,
   Play,
   BarChart3,
-  PieChart,
   TrendingDown,
   Star
 } from 'lucide-react';
