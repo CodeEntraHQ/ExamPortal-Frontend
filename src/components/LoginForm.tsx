@@ -183,6 +183,12 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
             </CardHeader>
             <CardContent>
               <form onSubmit={handle2FASubmit} className="space-y-4">
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="otp">Authentication Code</Label>
                   <Input
@@ -195,17 +201,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
                     className="text-center text-lg tracking-widest"
                     required
                   />
-                  <p className="text-sm text-muted-foreground text-center">
-                    Use <strong>123456</strong> for demo
-                  </p>
                 </div>
-                
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
                 
                 <Button type="submit" className="w-full" disabled={isLoading || otpCode.length !== 6}>
                   {isLoading ? (
@@ -301,7 +297,13 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
                   </Button>
                 </div>
               ) : (
-                <form onSubmit={handleForgotPassword} className="space-y-4">
+                <form onSubmit={handleForgotPassword} className="space-y-4"> 
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="forgot-email">Email Address</Label>
                     <Input
@@ -313,13 +315,6 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
                       required
                     />
                   </div>
-                  
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
                   
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? (
@@ -384,6 +379,12 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -440,13 +441,6 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
             {/* Captcha Component */}
             <CaptchaComponent onVerify={setCaptchaVerified} />
 
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
             <Button 
               type="submit" 
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" 
@@ -474,13 +468,6 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
               </Button>
             </div>
           </form>
-
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Demo accounts:</p>
-            <p>• superadmin@example.com (Super Admin)</p>
-            <p>• admin@school.com (School Admin)</p>
-            <p>• student@example.com (Student)</p>
-          </div>
         </CardContent>
       </Card>
       </motion.div>

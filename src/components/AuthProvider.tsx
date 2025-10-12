@@ -11,10 +11,19 @@ interface User {
   role: UserRole;
   entityId?: string;
   entityName?: string;
+  profile_picture_link?: string;
+  phone_number?: string;
+  address?: string;
+  bio?: string;
+  created_at?: string;
+  gender?: string;
+  roll_number?: string;
+  last_login_at?: string;
 }
 
 interface AuthContextType {
   user: User | null;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -42,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user,
+      setUser,
       login,
       logout,
       isAuthenticated: !!user

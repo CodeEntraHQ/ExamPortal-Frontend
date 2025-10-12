@@ -63,10 +63,12 @@ export const authenticatedFetch = async (url: string, options: RequestInit = {})
       window.location.href = '/login'; 
     }
     const errorData = await response.json().catch(() => ({ message: 'An error occurred' }));
-    throw new Error(errorData.message);
+    throw new Error(errorData.responseMessage || errorData.message);
   }
-
-  return response.json();
+  
+  return response;
 };
 
 export const getApiUrl = (path: string) => `${API_BASE_URL}${path}`;
+
+export * from './user';
