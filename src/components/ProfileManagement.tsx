@@ -196,6 +196,23 @@ export function ProfileManagement() {
   const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      // Reset previous errors
+      setError(null);
+
+      // Validate file type
+      const allowedTypes = ["image/jpeg", "image/png"];
+      if (!allowedTypes.includes(file.type)) {
+        setError("Only JPEG and PNG images are allowed.");
+        return;
+      }
+
+      // Validate file size (250kb)
+      const maxSizeInBytes = 256000;
+      if (file.size > maxSizeInBytes) {
+        setError("File must be less than 250kb.");
+        return;
+      }
+
       setProfilePicture(file);
       const localUrl = URL.createObjectURL(file);
       setProfilePicturePreview(localUrl);
