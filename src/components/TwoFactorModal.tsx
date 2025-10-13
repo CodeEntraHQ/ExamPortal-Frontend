@@ -108,6 +108,12 @@ export function TwoFactorModal({
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
           <div className="space-y-2">
             <Label htmlFor="otp" className="text-center block">
               Authentication Code
@@ -116,7 +122,7 @@ export function TwoFactorModal({
               id="otp"
               type="text"
               inputMode="numeric"
-              placeholder="000000"
+              placeholder="Enter your 6-digit authentication code"
               value={otp}
               onChange={handleOtpChange}
               className="text-center text-2xl tracking-widest font-mono"
@@ -124,13 +130,6 @@ export function TwoFactorModal({
               autoFocus
             />
           </div>
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
 
           <DialogFooter className="flex-col sm:flex-col gap-2">
             <Button
@@ -161,16 +160,6 @@ export function TwoFactorModal({
                   : 'Resend Code'}
               </Button>
             )}
-
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={isLoading}
-              className="w-full"
-            >
-              Cancel
-            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

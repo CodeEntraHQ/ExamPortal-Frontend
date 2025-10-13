@@ -24,6 +24,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaKey, setCaptchaKey] = useState(Date.now());
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetEmailSent, setResetEmailSent] = useState(false);
@@ -79,6 +80,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
         setError('Invalid credentials.');
       }
       setCaptchaVerified(false); // Reset captcha on error
+      setCaptchaKey(Date.now()); // Force captcha to re-render
     } finally {
       setIsLoading(false);
     }
@@ -421,7 +423,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
             </div>
 
             {/* Captcha Component */}
-            <CaptchaComponent onVerify={setCaptchaVerified} />
+            <CaptchaComponent key={captchaKey} onVerify={setCaptchaVerified} />
 
             <Button 
               type="submit" 

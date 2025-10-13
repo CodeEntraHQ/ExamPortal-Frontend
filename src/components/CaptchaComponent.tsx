@@ -45,6 +45,12 @@ export function CaptchaComponent({ onVerify, variant = 'checkbox', className }: 
         transition={{ duration: 0.3 }}
         className={`space-y-2 ${className}`}
       >
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
         <div className="flex items-center space-x-2 p-4 border border-border rounded-lg bg-card">
           <Checkbox
             id="captcha"
@@ -66,13 +72,6 @@ export function CaptchaComponent({ onVerify, variant = 'checkbox', className }: 
           </div>
           <div className="text-xs text-muted-foreground">reCAPTCHA</div>
         </div>
-        
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
       </motion.div>
     );
   }
