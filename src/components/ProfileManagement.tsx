@@ -6,12 +6,11 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Switch } from './ui/switch';
+import { TwoFactorSettings } from './TwoFactorSettings';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
 import { 
@@ -487,12 +486,12 @@ export function ProfileManagement() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-primary" />
-                Security Settings
+                Password Management
               </CardTitle>
-                <CardDescription>
-                  Manage your account security and authentication preferences
-                </CardDescription>
-              </CardHeader>
+              <CardDescription>
+                Update your password to keep your account secure
+              </CardDescription>
+            </CardHeader>
               <CardContent className="space-y-6">
                 {passwordSuccessMessage && (
                   <Alert variant="constructive">
@@ -589,21 +588,11 @@ export function ProfileManagement() {
                     Update Password
                   </Button>
                 </div>
-
-                <Separator />
-
-              <div className="space-y-4">
-                <h4 className="font-medium">Two-Factor Authentication</h4>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Enable 2FA</p>
-                    <p className="text-xs text-muted-foreground">Add an extra layer of security to your account</p>
-                  </div>
-                  <Switch />
-                </div>
-              </div>
             </CardContent>
           </Card>
+
+          <TwoFactorSettings />
+
         </TabsContent>
 
         {/* <TabsContent value="notifications" className="space-y-6">

@@ -72,3 +72,5 @@ export const authenticatedFetch = async (url: string, options: RequestInit = {})
 export const getApiUrl = (path: string) => `${API_BASE_URL}${path}`;
 
 export * from './user';
+export * from './auth';
+export * from './twoFactorAuth';

@@ -1,4 +1,4 @@
-import { getApiUrl, storeToken } from './index';
+import { getApiUrl, storeToken, authenticatedFetch } from './index';
 
 /**
  * Logs in a user and stores the authentication token.
@@ -7,13 +7,18 @@ import { getApiUrl, storeToken } from './index';
  * @returns The user data from the payload.
  * @throws An error if the login fails.
  */
-export const login = async (email, password) => {
+export const login = async (email: string, password: string, authentication_code?: string): Promise<any> => {
+  const body: any = { email, password };
+  if (authentication_code) {
+    body.authentication_code = authentication_code;
+  }
+
   const response = await fetch(getApiUrl('/users/login'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -23,12 +28,17 @@ export const login = async (email, password) => {
 
   const data = await response.json();
 
-  if (data.status === 'SUCCESS' && data.payload && data.payload.token) {
-    storeToken(data.payload.token);
-    return data.payload.user;
-  } else {
-    throw new Error(data.responseCode || 'Login failed: Invalid response structure');
+  if (data.status === 'SUCCESS') {
+    if (data.payload && data.payload.token) {
+      storeToken(data.payload.token);
+      return { user: data.payload.user };
+    }
+    if (data.responseCode === 'AUTHENTICATION_CODE_REQUIRED') {
+      return { requires2FA: true };
+    }
   }
+
+  throw new Error(data.responseCode || 'Login failed: Invalid response structure');
 };
 
 /**
@@ -75,4 +85,21 @@ export const resetPassword = async (password: string, token: string) => {
   }
 
   return response.json();
+};
+
+export const resendOTP = async () => {
+    const response = await authenticatedFetch(getApiUrl('/users/resend-otp'), {
+        method: 'POST',
+    });
+    return response.json();
+}
+
+export const authAPI = {
+    login,
+    resendOTP,
+};
+
+export const passwordResetAPI = {
+    requestReset: forgotPassword,
+    reset: resetPassword,
 };
