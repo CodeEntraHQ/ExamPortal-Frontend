@@ -23,6 +23,7 @@ import {
   Menu
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { ImageWithFallback } from './ImageWithFallback';
 
 interface TopNavigationProps {
   currentView: string;
@@ -141,11 +142,12 @@ export function TopNavigation({ currentView, setCurrentView }: TopNavigationProp
                     className="nav-profile-btn relative w-auto px-3 hover:bg-accent transition-all duration-200"
                     aria-label="User menu"
                   >
-                    <Avatar className="h-8 w-8 flex-shrink-0">
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {user?.name?.charAt(0) || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
+                    <ImageWithFallback
+                      src={user?.profile_picture_link || null}
+                      fallback={user?.name?.charAt(0) || 'U'}
+                      alt="Profile"
+                      className="h-8 w-8 rounded-full object-cover"
+                    />
                     <div className="hidden lg:flex flex-col items-start ml-3 min-w-0 flex-1">
                       <span className="text-sm font-medium truncate max-w-[120px]">
                         {user?.name}

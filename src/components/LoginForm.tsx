@@ -7,9 +7,11 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Checkbox } from './ui/checkbox';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
-import { Moon, Sun, ArrowLeft, GraduationCap, AlertCircle, Eye, EyeOff, Loader2, Shield } from 'lucide-react';
+import { Moon, Sun, ArrowLeft, GraduationCap, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { CaptchaComponent } from './CaptchaComponent';
+import { authAPI, passwordResetAPI } from '../services/api';
 import { motion } from 'motion/react';
+import { toast } from 'sonner';
 
 interface LoginFormProps {
   onBackToHome?: () => void;
@@ -22,18 +24,17 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [captchaVerified, setCaptchaVerified] = useState(false);
+  const [captchaKey, setCaptchaKey] = useState(Date.now());
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   
   // 2FA states
-  const [show2FA, setShow2FA] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [resendCountdown, setResendCountdown] = useState(0);
-  const [tempLoginData, setTempLoginData] = useState<{email: string, password: string} | null>(null);
+  const [show2FAModal, setShow2FAModal] = useState(false);
+  const [otp, setOtp] = useState('');
   
-  const { login } = useAuth();
+  const { login, verify2FA } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   // Handle remember me on component mount
@@ -44,14 +45,6 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
       setRememberMe(true);
     }
   }, []);
-
-  // Countdown timer for resend OTP
-  useEffect(() => {
-    if (resendCountdown > 0) {
-      const timer = setTimeout(() => setResendCountdown(resendCountdown - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [resendCountdown]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,11 +58,6 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
     setIsLoading(true);
 
     try {
-      // Simulate random server errors for demo
-      if (Math.random() < 0.1) {
-        throw new Error('Server temporarily unavailable. Please try again later.');
-      }
-      
       // Handle remember me functionality
       if (rememberMe) {
         localStorage.setItem('rememberedEmail', email);
@@ -77,49 +65,52 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
         localStorage.removeItem('rememberedEmail');
       }
 
-      // Store temp login data and show 2FA
-      setTempLoginData({ email, password });
-      setShow2FA(true);
-      setResendCountdown(30); // 30 second countdown for resend
+      // Call login API
+      const result = await login(email, password);
+      
+      if (result.requires2FA) {
+        setShow2FAModal(true);
+      }
+      // If no 2FA required, login is complete and user will be redirected automatically
       
     } catch (err: any) {
       if (err.message.includes('Server')) {
         setError(err.message);
       } else {
-        setError('Invalid credentials. Try: superadmin@example.com, admin@school.com, or student@example.com');
+        setError('Invalid credentials.');
       }
       setCaptchaVerified(false); // Reset captcha on error
+      setCaptchaKey(Date.now()); // Force captcha to re-render
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handle2FASubmit = async (e: React.FormEvent) => {
+  const handle2FAVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
     try {
-      // Simulate OTP verification (in real app, this would be an API call)
-      if (otpCode !== '123456') {
-        throw new Error('Invalid OTP code. Use 123456 for demo.');
-      }
-
-      // Complete login with stored credentials
-      if (tempLoginData) {
-        await login(tempLoginData.email, tempLoginData.password);
-      }
-    } catch (err: any) {
-      setError(err.message);
+      await verify2FA(otp);
+      setShow2FAModal(false);
+      toast.success('Login successful!');
+    } catch (err: any)
+    {
+      setError(err.message || 'Invalid authentication code.');
+      toast.error(err.message || 'Invalid authentication code.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleResendOTP = async () => {
-    setResendCountdown(30);
-    // Simulate API call to resend OTP
-    // In real app, this would trigger backend to send new OTP
+  const handle2FAResend = async () => {
+    try {
+      await authAPI.resendOTP();
+      toast.success('A new code has been sent to your email');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to resend code');
+      throw err;
+    }
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -128,9 +119,9 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
     setError('');
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await passwordResetAPI.requestReset(forgotEmail);
       setResetEmailSent(true);
+      toast.success('Password reset email sent!');
     } catch (err) {
       setError('Failed to send reset email. Please try again.');
     } finally {
@@ -138,18 +129,13 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
     }
   };
 
-  // 2FA Screen
-  if (show2FA) {
+  if (show2FAModal) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="absolute top-4 left-4 right-4 flex justify-between">
           <Button
             variant="outline"
-            onClick={() => {
-              setShow2FA(false);
-              setOtpCode('');
-              setTempLoginData(null);
-            }}
+            onClick={() => setShow2FAModal(false)}
             className="border-border hover:bg-accent"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
@@ -164,6 +150,16 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
             {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
           </Button>
         </div>
+        {/* <div className="absolute top-4 right-4">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={toggleTheme}
+            className="border-border hover:bg-accent"
+          >
+            {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+          </Button>
+        </div> */}
         
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -174,62 +170,46 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
           <Card className="w-full max-w-md">
             <CardHeader className="text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
-                <Shield className="h-8 w-8 text-primary" />
+                <GraduationCap className="h-8 w-8 text-primary" />
+                <span className="text-xl font-semibold">ExamEntra</span>
               </div>
               <CardTitle>Two-Factor Authentication</CardTitle>
               <CardDescription>
-                Enter the 6-digit code sent to your email or authenticator app
+                Enter the 6-digit code from your authentication app.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handle2FASubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="otp">Authentication Code</Label>
-                  <Input
-                    id="otp"
-                    type="text"
-                    placeholder="Enter 6-digit code"
-                    value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value)}
-                    maxLength={6}
-                    className="text-center text-lg tracking-widest"
-                    required
-                  />
-                  <p className="text-sm text-muted-foreground text-center">
-                    Use <strong>123456</strong> for demo
-                  </p>
-                </div>
-                
+              <form onSubmit={handle2FAVerify} className="space-y-4">
                 {error && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
+                <div className="space-y-2">
+                  <Label htmlFor="otp">Authentication Code</Label>
+                  <Input
+                    id="otp"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="Enter your 6-digit authentication code"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    required
+                    maxLength={6}
+                  />
+                </div>
                 
-                <Button type="submit" className="w-full" disabled={isLoading || otpCode.length !== 6}>
+                <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Verifying...
                     </>
                   ) : (
-                    'Verify & Sign In'
+                    'Verify Code'
                   )}
                 </Button>
-                
-                <div className="text-center">
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    onClick={handleResendOTP}
-                    disabled={resendCountdown > 0}
-                    className="text-primary hover:text-primary/80"
-                  >
-                    {resendCountdown > 0 ? `Resend code in ${resendCountdown}s` : 'Resend Code'}
-                  </Button>
-                </div>
               </form>
             </CardContent>
           </Card>
@@ -302,6 +282,12 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
                 </div>
               ) : (
                 <form onSubmit={handleForgotPassword} className="space-y-4">
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="forgot-email">Email Address</Label>
                     <Input
@@ -313,13 +299,6 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
                       required
                     />
                   </div>
-                  
-                  {error && (
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  )}
                   
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? (
@@ -384,6 +363,12 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -430,7 +415,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
               <Checkbox 
                 id="remember-me" 
                 checked={rememberMe} 
-                onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                onCheckedChange={(checked: boolean) => setRememberMe(checked)}
               />
               <Label htmlFor="remember-me" className="text-sm">
                 Remember me
@@ -438,14 +423,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
             </div>
 
             {/* Captcha Component */}
-            <CaptchaComponent onVerify={setCaptchaVerified} />
-
-            {error && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+            <CaptchaComponent key={captchaKey} onVerify={setCaptchaVerified} />
 
             <Button 
               type="submit" 
@@ -474,13 +452,6 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
               </Button>
             </div>
           </form>
-
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Demo accounts:</p>
-            <p>• superadmin@example.com (Super Admin)</p>
-            <p>• admin@school.com (School Admin)</p>
-            <p>• student@example.com (Student)</p>
-          </div>
         </CardContent>
       </Card>
       </motion.div>

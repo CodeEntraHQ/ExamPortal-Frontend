@@ -5,25 +5,19 @@ import { Progress } from './ui/progress';
 import { Button } from './ui/button';
 import { 
   CheckCircle,
-  XCircle,
-  AlertTriangle,
   Clock,
   Target,
-  Award,
   TrendingUp,
   BarChart3,
-  Calendar,
   Download,
   Share,
-  RefreshCw,
-  Eye,
   Star,
   Users,
   BookOpen,
   ArrowLeft
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 
 interface StudentExamResultsProps {
   examId: string;

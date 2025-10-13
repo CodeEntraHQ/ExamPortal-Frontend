@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { updateUserProfile, changePassword } from '../services/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Separator } from './ui/separator';
-import { Switch } from './ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { TwoFactorSettings } from './TwoFactorSettings';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
 import { 
@@ -25,35 +27,196 @@ import {
   Activity,
   Award,
   Clock,
-  TrendingUp
+  TrendingUp,
+  AlertCircle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { ImageWithFallback } from './ImageWithFallback';
 
 export function ProfileManagement() {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const { theme } = useTheme();
   const [isEditing, setIsEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [profilePicture, setProfilePicture] = useState<File | null>(null);
+  const [profilePicturePreview, setProfilePicturePreview] = useState(user?.profile_picture_link || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [profileData, setProfileData] = useState({
     name: user?.name || '',
     email: user?.email || '',
-    phone: '+1 (555) 123-4567',
-    address: '123 Education St, Learning City, LC 12345',
-    bio: 'Dedicated educator passionate about transforming learning experiences through innovative assessment methods.',
-    department: user?.role === 'STUDENT' ? 'Computer Science' : 'Administration',
-    joinDate: '2023-01-15',
+    phone: user?.phone_number || '',
+    bio: user?.bio || '',
+    address: user?.address || '',
+    gender: user?.gender || '',
+    roll_number: user?.roll_number || '',
+    created_at: user?.created_at ? new Date(user.created_at).toISOString().split('T')[0] : '2023-01-15',
+    last_login_at: user?.last_login_at ? new Date(user.last_login_at).toISOString().split('T')[0] : '2023-01-15',
+  });
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccessMessage, setPasswordSuccessMessage] = useState<string | null>(null);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [initialProfileData, setInitialProfileData] = useState({
+    name: user?.name || '',
+    phone: user?.phone_number || '',
+    bio: user?.bio || '',
+    address: user?.address || '',
+    gender: user?.gender || '',
+    roll_number: user?.roll_number || '',
   });
 
-  const [notifications, setNotifications] = useState({
-    emailNotifications: true,
-    examReminders: true,
-    resultNotifications: true,
-    systemUpdates: false,
-  });
+  useEffect(() => {
+    setProfilePicturePreview(user?.profile_picture_link || null);
+    if (user) {
+      const initialData = {
+        name: user.name || '',
+        phone: user.phone_number || '',
+        bio: user.bio || '',
+        address: user.address || '',
+        gender: user.gender || '',
+        roll_number: user.roll_number || '',
+      };
+      setInitialProfileData(initialData);
+      setProfileData(prev => ({
+        ...prev,
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone_number || '',
+        bio: user.bio || '',
+        address: user.address || '',
+        gender: user.gender || '',
+        roll_number: user.roll_number || '',
+        created_at: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : '2023-01-15',
+        last_login_at: user.last_login_at ? new Date(user.last_login_at).toISOString().split('T')[0] : '2023-01-15',
+      }));
+    }
+  }, [user]);
 
-  const handleSave = () => {
-    setIsEditing(false);
-    // Here you would typically save to backend
-    console.log('Saving profile data:', profileData);
+
+  // const [notifications, setNotifications] = useState({
+  //   emailNotifications: true,
+  //   examReminders: true,
+  //   resultNotifications: true,
+  //   systemUpdates: false,
+  // });
+
+  const calculateProfileCompletion = () => {
+    const fields = [profileData.name, profileData.phone, profileData.bio, profileData.address];
+    const filledFields = fields.filter(field => field && field.trim() !== '').length;
+    const totalFields = fields.length;
+    if (totalFields === 0) return 100;
+    return Math.round((filledFields / totalFields) * 100);
+  };
+
+  const handleSave = async () => {
+    const formData = new FormData();
+
+    if (profileData.name !== initialProfileData.name) {
+      formData.append('name', profileData.name);
+    }
+    if (profileData.bio !== initialProfileData.bio) {
+      formData.append('bio', profileData.bio);
+    }
+    if (profileData.phone !== initialProfileData.phone) {
+      formData.append('phone_number', profileData.phone);
+    }
+    if (profileData.address !== initialProfileData.address) {
+      formData.append('address', profileData.address);
+    }
+    if (profileData.gender !== initialProfileData.gender) {
+      formData.append('gender', profileData.gender);
+    }
+    if (user?.role === 'STUDENT' && profileData.roll_number !== initialProfileData.roll_number) {
+      formData.append('roll_number', profileData.roll_number);
+    }
+    if (profilePicture) {
+      formData.append('profile_picture', profilePicture);
+    }
+
+    const hasChanges = formData.has('name') || formData.has('bio') || formData.has('phone_number') || formData.has('address') || formData.has('gender') || formData.has('roll_number') || formData.has('profile_picture');
+
+    if (!hasChanges) {
+      console.log('No changes to save.');
+      setIsEditing(false);
+      return;
+    }
+
+    try {
+      const updatedUser = await updateUserProfile(formData);
+      setUser(updatedUser.payload);
+      setProfilePicturePreview(updatedUser.payload.profile_picture_link || null);
+      setInitialProfileData({
+        name: updatedUser.payload.name || '',
+        phone: updatedUser.payload.phone_number || '',
+        bio: updatedUser.payload.bio || '',
+        address: updatedUser.payload.address || '',
+        gender: updatedUser.payload.gender || '',
+        roll_number: updatedUser.payload.roll_number || '',
+      });
+      setSuccessMessage('Profile updated successfully!');
+      setIsEditing(false);
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred.');
+      setProfileData(prev => ({
+        ...prev,
+        ...initialProfileData
+      }));
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError("New passwords don't match.");
+      return;
+    }
+    if (passwordData.newPassword.length < 6) {
+      setPasswordError('Password must be at least 6 characters long.');
+      return;
+    }
+    setPasswordError(null);
+    setPasswordSuccessMessage(null);
+    try {
+      await changePassword(passwordData.currentPassword, passwordData.newPassword);
+      setPasswordSuccessMessage('Password updated successfully!');
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err: any) {
+      setPasswordError(err.message || 'An unexpected error occurred.');
+    }
+  };
+
+  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Reset previous errors
+      setError(null);
+
+      // Validate file type
+      const allowedTypes = ["image/jpeg", "image/png"];
+      if (!allowedTypes.includes(file.type)) {
+        setError("Only JPEG and PNG images are allowed.");
+        return;
+      }
+
+      // Validate file size (250kb)
+      const maxSizeInBytes = 256000;
+      if (file.size > maxSizeInBytes) {
+        setError("File must be less than 250kb.");
+        return;
+      }
+
+      setProfilePicture(file);
+      const localUrl = URL.createObjectURL(file);
+      setProfilePicturePreview(localUrl);
+    }
   };
 
   const getRoleBadgeColor = () => {
@@ -140,10 +303,10 @@ export function ProfileManagement() {
 
       {/* Main Profile Content */}
       <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          {/* <TabsTrigger value="notifications">Notifications</TabsTrigger> */}
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
         </TabsList>
 
@@ -161,6 +324,18 @@ export function ProfileManagement() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {successMessage && (
+                  <Alert variant="constructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{successMessage}</AlertDescription>
+                  </Alert>
+                )}
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Full Name</Label>
@@ -168,17 +343,6 @@ export function ProfileManagement() {
                       id="name"
                       value={profileData.name}
                       onChange={(e) => setProfileData({ ...profileData, name: e.target.value })}
-                      disabled={!isEditing}
-                      className="transition-all duration-200"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={profileData.email}
-                      onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
                       disabled={!isEditing}
                       className="transition-all duration-200"
                     />
@@ -193,24 +357,45 @@ export function ProfileManagement() {
                       className="transition-all duration-200"
                     />
                   </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="department">Department</Label>
-                    <Input
-                      id="department"
-                      value={profileData.department}
-                      onChange={(e) => setProfileData({ ...profileData, department: e.target.value })}
+                    <Label htmlFor="gender">Gender</Label>
+                    <Select
+                      value={profileData.gender}
+                      onValueChange={(value: string) => setProfileData({ ...profileData, gender: value })}
                       disabled={!isEditing}
-                      className="transition-all duration-200"
-                    />
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select gender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MALE">Male</SelectItem>
+                        <SelectItem value="FEMALE">Female</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+                  {user?.role === 'STUDENT' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="roll_number">Roll Number</Label>
+                      <Input
+                        id="roll_number"
+                        value={profileData.roll_number}
+                        onChange={(e) => setProfileData({ ...profileData, roll_number: e.target.value })}
+                        disabled={!isEditing}
+                        className="transition-all duration-200"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="address">Address</Label>
-                  <Input
+                  <Textarea
                     id="address"
                     value={profileData.address}
                     onChange={(e) => setProfileData({ ...profileData, address: e.target.value })}
                     disabled={!isEditing}
+                    rows={2}
                     className="transition-all duration-200"
                   />
                 </div>
@@ -221,7 +406,7 @@ export function ProfileManagement() {
                     value={profileData.bio}
                     onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
                     disabled={!isEditing}
-                    rows={4}
+                    rows={1}
                     className="transition-all duration-200"
                   />
                 </div>
@@ -245,16 +430,25 @@ export function ProfileManagement() {
               <CardContent className="space-y-6">
                 <div className="flex flex-col items-center text-center space-y-4">
                   <div className="relative">
-                    <Avatar className="h-24 w-24">
-                      <AvatarFallback className="bg-primary/10 text-primary text-2xl">
-                        {user?.name?.charAt(0) || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
+                    <ImageWithFallback
+                      src={profilePicturePreview}
+                      fallback={user?.name?.charAt(0) || 'E'}
+                      alt="Profile"
+                      className="h-24 w-24 rounded-full object-cover"
+                    />
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleProfilePictureChange}
+                      className="hidden"
+                      accept="image/*"
+                    />
                     <Button
                       size="icon"
                       variant="outline"
                       className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full"
                       disabled={!isEditing}
+                      onClick={() => fileInputRef.current?.click()}
                     >
                       <Upload className="h-3 w-3" />
                     </Button>
@@ -267,10 +461,6 @@ export function ProfileManagement() {
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Mail className="h-4 w-4" />
                       {profileData.email}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      Joined {new Date(profileData.joinDate).toLocaleDateString()}
                     </div>
                   </div>
                 </div>
@@ -285,11 +475,15 @@ export function ProfileManagement() {
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Profile Completion</span>
-                      <span className="font-medium">85%</span>
+                      <span className="font-medium">{calculateProfileCompletion()}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Joined on</span>
+                      <span className="font-medium">{new Date(profileData.created_at).toLocaleDateString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Last Login</span>
-                      <span className="font-medium">Today</span>
+                      <span className="font-medium">{new Date(profileData.last_login_at).toLocaleDateString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Account Status</span>
@@ -309,48 +503,116 @@ export function ProfileManagement() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-primary" />
-                Security Settings
+                Password Management
               </CardTitle>
               <CardDescription>
-                Manage your account security and authentication preferences
+                Update your password to keep your account secure
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="current-password">Current Password</Label>
-                  <Input id="current-password" type="password" placeholder="Enter current password" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">New Password</Label>
-                  <Input id="new-password" type="password" placeholder="Enter new password" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirm New Password</Label>
-                  <Input id="confirm-password" type="password" placeholder="Confirm new password" />
-                </div>
-                <Button className="w-full">
-                  Update Password
-                </Button>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-4">
-                <h4 className="font-medium">Two-Factor Authentication</h4>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Enable 2FA</p>
-                    <p className="text-xs text-muted-foreground">Add an extra layer of security to your account</p>
+              <CardContent className="space-y-6">
+                {passwordSuccessMessage && (
+                  <Alert variant="constructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{passwordSuccessMessage}</AlertDescription>
+                  </Alert>
+                )}
+                {passwordError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{passwordError}</AlertDescription>
+                  </Alert>
+                )}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="current-password">Current Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="current-password"
+                        type={showCurrentPassword ? 'text' : 'password'}
+                        placeholder="Enter current password"
+                        value={passwordData.currentPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                        aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showCurrentPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
                   </div>
-                  <Switch />
+                  <div className="space-y-2">
+                    <Label htmlFor="new-password">New Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="new-password"
+                        type={showNewPassword ? 'text' : 'password'}
+                        placeholder="Enter new password"
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showNewPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirm New Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirm-password"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Confirm new password"
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  <Button className="w-full" onClick={handlePasswordChange}>
+                    Update Password
+                  </Button>
                 </div>
-              </div>
             </CardContent>
           </Card>
+
+          <TwoFactorSettings />
+
         </TabsContent>
 
-        <TabsContent value="notifications" className="space-y-6">
+        {/* <TabsContent value="notifications" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -377,7 +639,7 @@ export function ProfileManagement() {
                   </div>
                   <Switch
                     checked={value}
-                    onCheckedChange={(checked) => 
+                    onCheckedChange={(checked: boolean) => 
                       setNotifications({ ...notifications, [key]: checked })
                     }
                   />
@@ -385,7 +647,7 @@ export function ProfileManagement() {
               ))}
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent> */}
 
         <TabsContent value="preferences" className="space-y-6">
           <Card>

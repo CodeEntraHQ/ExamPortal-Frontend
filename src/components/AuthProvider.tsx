@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
-import { login as apiLogin } from '../services/api/auth';
+import { login as apiLogin } from '../services/api';
 import { removeToken } from '../services/api';
 
 type UserRole = 'SUPERADMIN' | 'ADMIN' | 'STUDENT';
@@ -11,26 +11,63 @@ interface User {
   role: UserRole;
   entityId?: string;
   entityName?: string;
+  profile_picture_link?: string;
+  phone_number?: string;
+  address?: string;
+  bio?: string;
+  created_at?: string;
+  gender?: string;
+  roll_number?: string;
+  last_login_at?: string;
+  two_fa_enabled?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
+  updateUser: (updates: Partial<User>) => void;
+  login: (email: string, password: string) => Promise<{ requires2FA: boolean }>;
   logout: () => void;
   isAuthenticated: boolean;
+  verify2FA: (otp: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [loginCredentials, setLoginCredentials] = useState<{ email: string; password: string } | null>(null);
+
+  const updateUser = (updates: Partial<User>) => {
+    setUser(prevUser => (prevUser ? { ...prevUser, ...updates } : null));
+  };
 
   const login = async (email: string, password: string) => {
-    const userData = await apiLogin(email, password);
-    if (userData) {
-      setUser(userData);
+    const response = await apiLogin(email, password);
+    if (response.requires2FA) {
+      setLoginCredentials({ email, password });
+      return { requires2FA: true };
+    }
+    if (response.user) {
+      setUser(response.user);
+      setLoginCredentials(null);
+    }
+    return { requires2FA: false };
+  };
+
+  const verify2FA = async (otp: string) => {
+    if (!loginCredentials) {
+      throw new Error('Cannot verify 2FA without initial login credentials.');
+    }
+    const { email, password } = loginCredentials;
+    const response = await apiLogin(email, password, otp);
+    if (response.user) {
+      setUser(response.user);
+      setLoginCredentials(null);
     } else {
-      throw new Error('Login failed: No user data returned');
+      // The apiLogin function will throw an error for non-200 responses,
+      // which should cover cases like incorrect OTP.
+      throw new Error('2FA verification failed.');
     }
   };
 
@@ -42,9 +79,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user,
+      setUser,
+      updateUser,
       login,
       logout,
-      isAuthenticated: !!user
+      isAuthenticated: !!user,
+      verify2FA,
     }}>
       {children}
     </AuthContext.Provider>
