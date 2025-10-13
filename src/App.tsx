@@ -19,6 +19,7 @@ import { EntityListPage } from './components/EntityListPage';
 import { EntityDetailPage } from './components/EntityDetailPage';
 import { ExamDetailPage } from './components/ExamDetailPage';
 import { PasswordReset } from './components/PasswordReset';
+import { ResetPasswordConfirm } from './components/ResetPasswordConfirm';
 
 interface NavigationState {
   view: string;
@@ -34,6 +35,7 @@ function AppContent() {
   const [navigationState, setNavigationState] = useState<NavigationState>({ view: 'dashboard' });
   const [showLogin, setShowLogin] = useState(false);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [showResetPasswordConfirm, setShowResetPasswordConfirm] = useState(false);
   const [resetToken, setResetToken] = useState<string | undefined>(undefined);
   const [activeExam, setActiveExam] = useState<string | null>(null);
   const [showExamCreation, setShowExamCreation] = useState(false);
@@ -42,14 +44,27 @@ function AppContent() {
   // Check for password reset token in URL (in real app this would be handled by router)
   React.useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('reset_token');
+    const token = urlParams.get('token');
     if (token) {
       setResetToken(token);
-      setShowPasswordReset(true);
+      setShowResetPasswordConfirm(true);
     }
   }, []);
 
   if (!isAuthenticated) {
+    if (showResetPasswordConfirm) {
+      return (
+        <div className="min-h-screen flex flex-col">
+          <ResetPasswordConfirm
+            onPasswordResetSuccess={() => {
+              setShowResetPasswordConfirm(false);
+              setResetToken(undefined);
+              setShowLogin(true);
+            }}
+          />
+        </div>
+      );
+    }
     // Show password reset page if reset token is present
     if (showPasswordReset) {
       return (

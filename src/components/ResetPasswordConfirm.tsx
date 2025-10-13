@@ -5,13 +5,19 @@ import { resetPassword } from '../services/api/auth';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Alert, AlertDescription } from './ui/alert';
-import { AlertCircle, Loader2, GraduationCap, ArrowLeft, Moon, Sun } from 'lucide-react';
+import { AlertCircle, Loader2, GraduationCap, ArrowLeft, Moon, Sun, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTheme } from './ThemeProvider';
 
-export function ResetPasswordConfirm() {
+interface ResetPasswordConfirmProps {
+  onPasswordResetSuccess: () => void;
+}
+
+export function ResetPasswordConfirm({ onPasswordResetSuccess }: ResetPasswordConfirmProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -21,8 +27,6 @@ export function ResetPasswordConfirm() {
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = searchParams.get('token');
-    console.log(tokenFromUrl)
-    console.log(token)
     if (tokenFromUrl) {
       setToken(tokenFromUrl);
     }
@@ -45,8 +49,15 @@ export function ResetPasswordConfirm() {
     setIsLoading(true);
 
     try {
-      await resetPassword(password, token);
-      setSuccess(true);
+      const response = await resetPassword(password, token);
+      if (response.responseCode === 'RESET_PASSWORD_SUCCESSFUL') {
+        setSuccess(true);
+        setTimeout(() => {
+          onPasswordResetSuccess();
+        }, 2000);
+      } else {
+        setError(response.responseMessage || 'Failed to reset password. Please try again.');
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to reset password. Please try again.');
     } finally {
@@ -59,7 +70,7 @@ export function ResetPasswordConfirm() {
       <div className="absolute top-4 left-4 right-4 flex justify-between">
         <Button
           variant="outline"
-          onClick={() => window.location.href = '/login'}
+          onClick={onPasswordResetSuccess}
           className="border-border hover:bg-accent"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -101,39 +112,71 @@ export function ResetPasswordConfirm() {
                     Your password has been reset successfully. You can now log in with your new password.
                   </AlertDescription>
                 </Alert>
-                <Button onClick={() => window.location.href = '/login'} className="w-full">
+                <Button onClick={onPasswordResetSuccess} className="w-full">
                   Return to Login
                 </Button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="password">New Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirm Password</Label>
-                  <Input
-                    id="confirm-password"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required
-                  />
-                </div>
+              <div className="space-y-4">
                 {error && (
                   <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <div className="space-y-2">
+                  <Label htmlFor="password">New Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showNewPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showNewPassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm-password">Confirm Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="confirm-password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <Button onClick={handleSubmit} className="w-full" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -143,7 +186,7 @@ export function ResetPasswordConfirm() {
                     'Reset Password'
                   )}
                 </Button>
-              </form>
+              </div>
             )}
           </CardContent>
         </Card>

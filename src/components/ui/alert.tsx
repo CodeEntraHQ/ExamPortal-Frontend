@@ -1,7 +1,15 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority@0.7.1";
+import { Button } from './button';
+import { X } from "lucide-react";
 
 import { cn } from "./utils";
+
+interface AlertProps
+  extends React.ComponentProps<"div">,
+    VariantProps<typeof alertVariants> {
+  duration?: number; // in milliseconds
+}
 
 const alertVariants = cva(
   "relative w-full rounded-lg border px-4 py-3 text-sm grid has-[>svg]:grid-cols-[calc(var(--spacing)*4)_1fr] grid-cols-[0_1fr] has-[>svg]:gap-x-3 gap-y-0.5 items-start [&>svg]:size-4 [&>svg]:translate-y-0.5 [&>svg]:text-current",
@@ -11,6 +19,8 @@ const alertVariants = cva(
         default: "bg-card text-card-foreground",
         destructive:
           "text-destructive bg-card [&>svg]:text-current *:data-[slot=alert-description]:text-destructive/90",
+        constructive:
+          "text-green-600 bg-card border-green-400/50 [&>svg]:text-green-600 *:data-[slot=alert-description]:text-green-600/90",
       },
     },
     defaultVariants: {
@@ -22,15 +32,42 @@ const alertVariants = cva(
 function Alert({
   className,
   variant,
+  duration = 7000,
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof alertVariants>) {
+  const [visible, setVisible] = React.useState(true);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setVisible(false), duration);
+    return () => clearTimeout(timer);
+  }, [duration]);
+
+  if (!visible) return null;
+
   return (
     <div
       data-slot="alert"
       role="alert"
-      className={cn(alertVariants({ variant }), className)}
+      className={cn(
+        alertVariants({ variant }),
+        "relative pr-10", // space for the close button
+        className
+      )}
       {...props}
-    />
+    >
+      {props.children}
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+        onClick={() => setVisible(false)}
+        aria-label="Close alert"
+      >
+        <X className="h-4 w-4 text-muted-foreground" />
+      </Button>
+    </div>
   );
 }
 

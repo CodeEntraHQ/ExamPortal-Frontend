@@ -6,13 +6,8 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { 
-  Users, 
-  BookOpen, 
-  TrendingUp, 
-  Calendar,
-  Clock,
-  Award,
-  Target,
+  Users,
+  TrendingUp,
   Activity,
   FileText,
   CheckCircle,
@@ -21,30 +16,18 @@ import {
   Plus,
   Building,
   BarChart3,
-  LineChart,
   Zap,
   Shield,
   Globe,
-  Rocket,
-  Brain,
-  Heart,
-  Star,
   ArrowUp,
   ArrowDown,
   Eye,
-  Search,
-  Filter,
   Download,
-  Upload,
-  Edit,
-  MoreVertical,
-  ChevronRight,
-  Layers,
   Database,
   Monitor
 } from 'lucide-react';
 import { useAuth } from './AuthProvider';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { motion } from 'motion/react';
 
 interface InnovativeAdminDashboardProps {

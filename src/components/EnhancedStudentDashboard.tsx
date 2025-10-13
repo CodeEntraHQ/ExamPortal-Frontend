@@ -15,16 +15,11 @@ import {
   Award,
   Target,
   Activity,
-  FileText,
   CheckCircle,
   AlertCircle,
   Search,
-  Filter,
-  Download,
   Eye,
   Play,
-  BarChart3,
-  TrendingDown,
   Star
 } from 'lucide-react';
 import { useAuth } from './AuthProvider';
