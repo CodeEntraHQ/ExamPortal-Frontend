@@ -63,7 +63,9 @@ interface Question {
   correctAnswer?: string | string[] | number;
   metadata?: any;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
-  tags?: string[];
+  tags: string[];
+  createdAt: string;
+  lastModified: string;
 }
 
 interface Exam {
@@ -108,12 +110,11 @@ export function RoleAwareExamManagement({
   onEditExamDetails 
 }: RoleAwareExamManagementProps) {
   const { user } = useAuth();
-  const { showNotification } = useNotifications();
+  const { success, error, info } = useNotifications();
   
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterEntity, setFilterEntity] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -236,11 +237,10 @@ export function RoleAwareExamManagement({
       const matchesSearch = exam.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            exam.description.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesEntity = filterEntity === 'all' || exam.entityId === filterEntity;
-      const matchesStatus = filterStatus === 'all' || exam.status === filterStatus;
       const matchesType = filterType === 'all' || exam.type === filterType;
       const matchesTab = activeTab === 'all' || exam.status.toLowerCase() === activeTab;
       
-      return matchesSearch && matchesEntity && matchesStatus && matchesType && matchesTab;
+      return matchesSearch && matchesEntity && matchesType && matchesTab;
     });
   };
 
@@ -274,7 +274,7 @@ export function RoleAwareExamManagement({
         }
         break;
       case 'edit':
-        showNotification(`Editing exam: ${exam.title}`, 'info');
+        info(`Editing exam: ${exam.title}`);
         break;
       case 'questions':
         setSelectedExam(exam);
@@ -285,19 +285,19 @@ export function RoleAwareExamManagement({
         setShowInviteModal(true);
         break;
       case 'monitor':
-        showNotification(`Opening monitoring for: ${exam.title}`, 'info');
+        info(`Opening monitoring for: ${exam.title}`);
         break;
       case 'activate':
         setExams(exams.map(e => 
           e.id === exam.id ? { ...e, status: 'ACTIVE' as const, active: true } : e
         ));
-        showNotification(`${exam.title} activated successfully`, 'success');
+        success(`${exam.title} activated successfully`);
         break;
       case 'deactivate':
         setExams(exams.map(e => 
           e.id === exam.id ? { ...e, status: 'DRAFT' as const, active: false } : e
         ));
-        showNotification(`${exam.title} deactivated successfully`, 'info');
+        info(`${exam.title} deactivated successfully`);
         break;
       case 'duplicate':
         const duplicatedExam = {
@@ -310,18 +310,18 @@ export function RoleAwareExamManagement({
           createdAt: new Date().toISOString()
         };
         setExams([...exams, duplicatedExam]);
-        showNotification(`${exam.title} duplicated successfully`, 'success');
+        success(`${exam.title} duplicated successfully`);
         break;
       case 'archive':
         setExams(exams.map(e => 
           e.id === exam.id ? { ...e, status: 'ARCHIVED' as const } : e
         ));
-        showNotification(`${exam.title} archived successfully`, 'success');
+        success(`${exam.title} archived successfully`);
         break;
       case 'delete':
         if (confirm(`Are you sure you want to delete "${exam.title}"? This action cannot be undone.`)) {
           setExams(exams.filter(e => e.id !== exam.id));
-          showNotification(`${exam.title} deleted successfully`, 'success');
+          success(`${exam.title} deleted successfully`);
         }
         break;
     }
@@ -329,7 +329,7 @@ export function RoleAwareExamManagement({
 
   const handleInviteStudents = () => {
     if (!inviteEmails.trim()) {
-      showNotification('Please enter email addresses', 'error');
+      error('Please enter email addresses');
       return;
     }
 
@@ -341,7 +341,7 @@ export function RoleAwareExamManagement({
           ? { ...e, studentsInvited: e.studentsInvited + emails.length }
           : e
       ));
-      showNotification(`Invitations sent to ${emails.length} students for "${selectedExam.title}"`, 'success');
+      success(`Invitations sent to ${emails.length} students for "${selectedExam.title}"`);
     }
     setShowInviteModal(false);
     setInviteEmails('');
@@ -564,34 +564,6 @@ export function RoleAwareExamManagement({
               </div>
             </div>
             <div className="flex gap-2">
-              {canManageAllEntities && (
-                <Select value={filterEntity} onValueChange={setFilterEntity}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue placeholder="Entity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Entities</SelectItem>
-                    {mockEntities.map((entity) => (
-                      <SelectItem key={entity.id} value={entity.id}>
-                        {entity.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
-                  <SelectItem value="PUBLISHED">Published</SelectItem>
-                  <SelectItem value="ACTIVE">Active</SelectItem>
-                  <SelectItem value="COMPLETED">Completed</SelectItem>
-                  <SelectItem value="ARCHIVED">Archived</SelectItem>
-                </SelectContent>
-              </Select>
               <Select value={filterType} onValueChange={setFilterType}>
                 <SelectTrigger className="w-32">
                   <SelectValue placeholder="Type" />
@@ -611,15 +583,6 @@ export function RoleAwareExamManagement({
 
       {/* Exam Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="all">All ({getFilteredExams().length})</TabsTrigger>
-          <TabsTrigger value="draft">Draft ({getFilteredExams().filter(e => e.status === 'DRAFT').length})</TabsTrigger>
-          <TabsTrigger value="published">Published ({getFilteredExams().filter(e => e.status === 'PUBLISHED').length})</TabsTrigger>
-          <TabsTrigger value="active">Active ({getFilteredExams().filter(e => e.status === 'ACTIVE').length})</TabsTrigger>
-          <TabsTrigger value="completed">Completed ({getFilteredExams().filter(e => e.status === 'COMPLETED').length})</TabsTrigger>
-          <TabsTrigger value="archived">Archived ({getFilteredExams().filter(e => e.status === 'ARCHIVED').length})</TabsTrigger>
-        </TabsList>
-
         <TabsContent value={activeTab} className="space-y-6">
           {/* Exams Table */}
           <Card>
@@ -891,7 +854,7 @@ example: student1@email.com, student2@email.com"
                 if (onCreateExam) {
                   onCreateExam();
                 } else {
-                  showNotification('Please use the navigation to access the exam creation form', 'info');
+                  info('Please use the navigation to access the exam creation form');
                 }
               }} 
               className="bg-primary hover:bg-primary/90"
@@ -925,7 +888,7 @@ example: student1@email.com, student2@email.com"
                       ? { ...exam, questions: updatedQuestions, totalMarks: updatedQuestions.reduce((sum, q) => sum + q.points, 0) }
                       : exam
                   ));
-                  showNotification('Questions updated successfully', 'success');
+                  success('Questions updated successfully');
                 }}
                 onClose={() => setShowQuestionModal(false)}
               />
