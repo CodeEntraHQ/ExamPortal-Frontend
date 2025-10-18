@@ -1,235 +1,157 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Badge } from './ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Alert, AlertDescription } from './ui/alert';
-import { Separator } from './ui/separator';
+import { ImageWithFallback } from './ImageWithFallback';
 import { 
-  Building, 
-  Plus, 
-  Search, 
-  Filter, 
-  Edit, 
-  Trash2, 
-  MoreHorizontal,
-  MapPin,
-  Calendar,
+  Building,
   Users,
-  BookOpen,
-  AlertCircle,
-  CheckCircle,
-  Save,
-  X
+  Plus,
+  Search,
+  MoreVertical,
+  Edit,
+  Eye,
+  MapPin,
+  Activity,
+  Target,
+  BarChart3,
+  Shield,
+  Settings,
+  Upload,
 } from 'lucide-react';
-import { motion } from 'motion/react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from './AuthProvider';
+import { getEntities, createEntity, updateEntity, Entity as ApiEntity, CreateEntityPayload, UpdateEntityPayload, GetEntitiesResponse } from '../services/api';
+import { toast } from 'sonner';
+import { Separator } from './ui/separator';
 
-interface Entity {
+export interface Entity {
   id: string;
   name: string;
-  type: 'University' | 'School' | 'Institute' | 'Training Center' | 'Corporate';
-  address: string;
-  city: string;
-  state: string;
-  country: string;
-  zipCode: string;
-  phone: string;
+  type: string;
+  studentsCount: number;
+  examsCount: number;
+  status: string;
+  createdAt: string;
+  location: string;
   email: string;
-  website: string;
-  description: string;
-  status: 'Active' | 'Inactive' | 'Pending';
-  userCount: number;
-  examCount: number;
-  createdDate: string;
-  lastActive: string;
-  metadata: {
-    establishedYear?: string;
-    accreditation?: string;
-    capacity?: string;
-    specialization?: string;
-  };
+  phone: string;
+  lastActivity: string;
+  description?: string;
+  logo_link?: string;
 }
 
-export function EntityManagement() {
-  const [entities, setEntities] = useState<Entity[]>([
-    {
-      id: '1',
-      name: 'Stanford University',
-      type: 'University',
-      address: '450 Serra Mall',
-      city: 'Stanford',
-      state: 'California',
-      country: 'USA',
-      zipCode: '94305',
-      phone: '+1-650-723-2300',
-      email: 'info@stanford.edu',
-      website: 'https://stanford.edu',
-      description: 'Leading research university with excellence in education and innovation.',
-      status: 'Active',
-      userCount: 15420,
-      examCount: 1250,
-      createdDate: '2023-01-15',
-      lastActive: '2024-01-10',
-      metadata: {
-        establishedYear: '1885',
-        accreditation: 'WASC',
-        capacity: '17000',
-        specialization: 'Research & Technology'
-      }
-    },
-    {
-      id: '2',
-      name: 'Lincoln High School',
-      type: 'School',
-      address: '123 Education Ave',
-      city: 'Springfield',
-      state: 'Illinois',
-      country: 'USA',
-      zipCode: '62701',
-      phone: '+1-217-555-0123',
-      email: 'admin@lincolnhs.edu',
-      website: 'https://lincolnhs.edu',
-      description: 'Comprehensive high school serving grades 9-12 with academic excellence.',
-      status: 'Active',
-      userCount: 1200,
-      examCount: 850,
-      createdDate: '2023-03-20',
-      lastActive: '2024-01-09',
-      metadata: {
-        establishedYear: '1965',
-        accreditation: 'NCA',
-        capacity: '1500',
-        specialization: 'General Education'
-      }
-    },
-    {
-      id: '3',
-      name: 'TechCorp Training Institute',
-      type: 'Corporate',
-      address: '789 Business Park Dr',
-      city: 'Austin',
-      state: 'Texas',
-      country: 'USA',
-      zipCode: '73301',
-      phone: '+1-512-555-0456',
-      email: 'training@techcorp.com',
-      website: 'https://techcorp.com/training',
-      description: 'Corporate training institute specializing in technology certifications.',
-      status: 'Pending',
-      userCount: 350,
-      examCount: 125,
-      createdDate: '2023-12-01',
-      lastActive: '2024-01-08',
-      metadata: {
-        establishedYear: '2020',
-        accreditation: 'ISO 9001',
-        capacity: '500',
-        specialization: 'Technology Training'
-      }
-    }
-  ]);
+const mapApiEntityToUiEntity = (apiEntity: ApiEntity): Entity => ({
+  id: apiEntity.id,
+  name: apiEntity.name,
+  type: apiEntity.type,
+  studentsCount: apiEntity.total_students,
+  examsCount: apiEntity.total_exams,
+  status: apiEntity.status,
+  createdAt: new Date(apiEntity.created_at).toLocaleDateString(),
+  location: apiEntity.address,
+  email: apiEntity.email || '',
+  phone: apiEntity.phone_number || '',
+  lastActivity: new Date(apiEntity.created_at).toLocaleDateString(),
+  description: apiEntity.description || '',
+  logo_link: apiEntity.logo_link || '',
+});
 
+interface EntityManagementProps {
+  onBackToDashboard?: () => void;
+  onViewEntity?: (entity: Entity) => void;
+  onEditEntity?: (entity: Entity) => void;
+}
+
+export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity }: EntityManagementProps) {
+  const { user } = useAuth();
+  const [entities, setEntities] = useState<Entity[]>([]);
+  const [totalEntities, setTotalEntities] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<string>('all');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedType, setSelectedType] = useState('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEntity, setEditingEntity] = useState<Entity | null>(null);
-  const [formData, setFormData] = useState<Partial<Entity>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const entityTypes = ['University', 'School', 'Institute', 'Training Center', 'Corporate'];
-  const statuses = ['Active', 'Inactive', 'Pending'];
+  const fetchEntities = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response: GetEntitiesResponse = await getEntities();
+      setEntities(response.payload.entities.map(mapApiEntityToUiEntity));
+      setTotalEntities(response.payload.total);
+    } catch (err) {
+      setError('Failed to fetch entities.');
+      toast.error('Failed to fetch entities.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEntities();
+  }, [fetchEntities]);
 
   const filteredEntities = entities.filter(entity => {
+    if (user?.role === 'ADMIN') {
+      const isOwnEntity = entity.name === user?.entityName || 
+                         entity.id === user?.entityId ||
+                         entity.name.toLowerCase().includes(user?.entityName?.toLowerCase() || '');
+      if (!isOwnEntity) return false;
+    }
+
     const matchesSearch = entity.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         entity.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         entity.city.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'all' || entity.type === filterType;
-    const matchesStatus = filterStatus === 'all' || entity.status === filterStatus;
+                         entity.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         entity.type.toLowerCase().includes(searchTerm.toLowerCase());
     
-    return matchesSearch && matchesType && matchesStatus;
+    const matchesType = selectedType === 'all' || entity.type === selectedType;
+    
+    return matchesSearch && matchesType;
   });
 
-  const validateForm = (data: Partial<Entity>): Record<string, string> => {
-    const errors: Record<string, string> = {};
-    
-    if (!data.name?.trim()) errors.name = 'Name is required';
-    if (!data.type) errors.type = 'Type is required';
-    if (!data.email?.trim()) errors.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) errors.email = 'Invalid email format';
-    if (!data.address?.trim()) errors.address = 'Address is required';
-    if (!data.city?.trim()) errors.city = 'City is required';
-    if (!data.state?.trim()) errors.state = 'State is required';
-    if (!data.country?.trim()) errors.country = 'Country is required';
-    
-    return errors;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const validationErrors = validateForm(formData);
-    setErrors(validationErrors);
-    
-    if (Object.keys(validationErrors).length > 0) return;
-
-    if (editingEntity) {
-      // Update existing entity
-      setEntities(prev => prev.map(entity => 
-        entity.id === editingEntity.id 
-          ? { ...entity, ...formData } as Entity
-          : entity
-      ));
-    } else {
-      // Create new entity
-      const newEntity: Entity = {
-        id: Date.now().toString(),
-        ...formData,
-        status: 'Pending',
-        userCount: 0,
-        examCount: 0,
-        createdDate: new Date().toISOString().split('T')[0],
-        lastActive: new Date().toISOString().split('T')[0],
-        metadata: formData.metadata || {}
-      } as Entity;
-      
-      setEntities(prev => [...prev, newEntity]);
+  const handleCreateOrUpdate = async (formData: CreateEntityPayload | UpdateEntityPayload) => {
+    try {
+      if ('entity_id' in formData) {
+        await updateEntity(formData);
+        toast.success('Entity updated successfully!');
+      } else {
+        await createEntity(formData);
+        toast.success('Entity created successfully!');
+      }
+      setIsModalOpen(false);
+      setEditingEntity(null);
+      fetchEntities();
+    } catch (err) {
+      toast.error(`Failed to ${'entity_id' in formData ? 'update' : 'create'} entity.`);
     }
-    
-    handleCloseModal();
   };
 
-  const handleCloseModal = () => {
-    setIsCreateModalOpen(false);
+  const handleAddClick = () => {
     setEditingEntity(null);
-    setFormData({});
-    setErrors({});
+    setIsModalOpen(true);
   };
 
-  const handleEdit = (entity: Entity) => {
+  const handleEditClick = (entity: Entity) => {
     setEditingEntity(entity);
-    setFormData(entity);
-    setIsCreateModalOpen(true);
-  };
-
-  const handleDelete = (entityId: string) => {
-    if (confirm('Are you sure you want to delete this entity? This action cannot be undone.')) {
-      setEntities(prev => prev.filter(entity => entity.id !== entityId));
-    }
+    setIsModalOpen(true);
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'Active':
+      case 'ACTIVE':
         return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
-      case 'Inactive':
+      case 'INACTIVE':
         return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
-      case 'Pending':
+      case 'PENDING':
         return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
       default:
         return 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300';
@@ -237,369 +159,546 @@ export function EntityManagement() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Entity Management
-          </h1>
-          <p className="text-muted-foreground">
-            Manage educational institutions and organizations
-          </p>
-        </div>
-        <div>
-          <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Entity
-              </Button>
-            </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingEntity ? 'Edit Entity' : 'Create New Entity'}
-              </DialogTitle>
-            </DialogHeader>
-            
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Basic Information */}
-              <div className="space-y-4">
-                <h3 className="font-medium flex items-center gap-2">
-                  <Building className="h-4 w-4 text-primary" />
-                  Basic Information
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Entity Name *</Label>
-                    <Input
-                      id="name"
-                      value={formData.name || ''}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Enter entity name"
-                      className={errors.name ? 'border-destructive' : ''}
-                    />
-                    {errors.name && <p className="text-sm text-destructive">{errors.name}</p>}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="type">Type *</Label>
-                    <Select 
-                      value={formData.type || ''} 
-                      onValueChange={(value) => setFormData({ ...formData, type: value as Entity['type'] })}
-                    >
-                      <SelectTrigger className={errors.type ? 'border-destructive' : ''}>
-                        <SelectValue placeholder="Select entity type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {entityTypes.map(type => (
-                          <SelectItem key={type} value={type}>{type}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.type && <p className="text-sm text-destructive">{errors.type}</p>}
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={formData.description || ''}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Brief description of the entity"
-                    rows={3}
-                  />
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Contact Information */}
-              <div className="space-y-4">
-                <h3 className="font-medium flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  Contact Information
-                </h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email || ''}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="contact@entity.com"
-                      className={errors.email ? 'border-destructive' : ''}
-                    />
-                    {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone</Label>
-                    <Input
-                      id="phone"
-                      value={formData.phone || ''}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="+1-555-123-4567"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="website">Website</Label>
-                  <Input
-                    id="website"
-                    type="url"
-                    value={formData.website || ''}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    placeholder="https://www.entity.com"
-                  />
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Address Information */}
-              <div className="space-y-4">
-                <h3 className="font-medium">Address Information</h3>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="address">Street Address *</Label>
-                  <Input
-                    id="address"
-                    value={formData.address || ''}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="123 Main Street"
-                    className={errors.address ? 'border-destructive' : ''}
-                  />
-                  {errors.address && <p className="text-sm text-destructive">{errors.address}</p>}
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="city">City *</Label>
-                    <Input
-                      id="city"
-                      value={formData.city || ''}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                      placeholder="City"
-                      className={errors.city ? 'border-destructive' : ''}
-                    />
-                    {errors.city && <p className="text-sm text-destructive">{errors.city}</p>}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="state">State/Province *</Label>
-                    <Input
-                      id="state"
-                      value={formData.state || ''}
-                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                      placeholder="State"
-                      className={errors.state ? 'border-destructive' : ''}
-                    />
-                    {errors.state && <p className="text-sm text-destructive">{errors.state}</p>}
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label htmlFor="zipCode">ZIP/Postal Code</Label>
-                    <Input
-                      id="zipCode"
-                      value={formData.zipCode || ''}
-                      onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
-                      placeholder="12345"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="country">Country *</Label>
-                  <Input
-                    id="country"
-                    value={formData.country || ''}
-                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                    placeholder="Country"
-                    className={errors.country ? 'border-destructive' : ''}
-                  />
-                  {errors.country && <p className="text-sm text-destructive">{errors.country}</p>}
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <Button type="button" variant="outline" onClick={handleCloseModal}>
-                  <X className="h-4 w-4 mr-2" />
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  <Save className="h-4 w-4 mr-2" />
-                  {editingEntity ? 'Update Entity' : 'Create Entity'}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
-        </div>
-      </div>
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="space-y-6"
       >
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">
+              {user?.role === 'ADMIN' ? 'My Entity' : 'Entity Management'}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              {user?.role === 'ADMIN' 
+                ? `Manage your organization: ${user?.entityName || 'Your Entity'}` 
+                : 'Manage and monitor all educational institutions'}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={onBackToDashboard}>
+              Back to Dashboard
+            </Button>
+            {user?.role === 'SUPERADMIN' && (
+              <Button className="bg-primary hover:bg-primary/90" onClick={handleAddClick}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Entity
+              </Button>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Stats Overview */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="border-0 shadow-lg bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-blue-100 text-sm">Total Entities</p>
+                  <p className="text-3xl font-bold">{totalEntities}</p>
+                </div>
+                <Building className="h-8 w-8 text-blue-200" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-lg bg-gradient-to-br from-green-500 to-green-600 text-white">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-green-100 text-sm">Total Students</p>
+                  <p className="text-3xl font-bold">{entities.reduce((sum, e) => sum + e.studentsCount, 0).toLocaleString()}</p>
+                </div>
+                <Users className="h-8 w-8 text-green-200" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-500 to-purple-600 text-white">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-purple-100 text-sm">Total Exams</p>
+                  <p className="text-3xl font-bold">{entities.reduce((sum, e) => sum + e.examsCount, 0).toLocaleString()}</p>
+                </div>
+                <BarChart3 className="h-8 w-8 text-purple-200" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </motion.div>
 
       {/* Filters and Search */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search entities by name, email, or city..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-40">
-                  <Filter className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="All Types" />
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+      >
+        <Card className="border-0 shadow-lg">
+          <CardContent className="p-6">
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search entities by name, location, or type..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              <Select value={selectedType} onValueChange={setSelectedType}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
-                  {entityTypes.map(type => (
-                    <SelectItem key={type} value={type}>{type}</SelectItem>
-                  ))}
+                  <SelectItem value="COLLEGE">College</SelectItem>
+                  <SelectItem value="SCHOOL">School</SelectItem>
                 </SelectContent>
               </Select>
-              
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Status" />
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                >
+                  Grid
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                >
+                  List
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Entities Display */}
+      {loading ? (
+        <div className="text-center">Loading...</div>
+      ) : error ? (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : (
+        <AnimatePresence mode="wait">
+          {viewMode === 'grid' ? (
+            <motion.div
+              key="grid"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+            >
+              {filteredEntities.map((entity, index) => (
+                <motion.div
+                  key={entity.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                >
+                  <Card className="h-full hover:shadow-xl transition-all duration-300 border-0 shadow-lg overflow-hidden group">
+                    <div className="p-6 space-y-4">
+                      {/* Header */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-4">
+                          <ImageWithFallback
+                            src={entity.logo_link}
+                            fallback={<Building className="h-8 w-8 text-primary" />}
+                            alt={entity.name}
+                            className="w-12 h-12 rounded-lg object-cover"
+                          />
+                          <div className="space-y-1">
+                            <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">
+                              {entity.name}
+                            </h3>
+                          <div className="flex items-center gap-2">
+                            <Badge className={getStatusColor(entity.status)}>{entity.status}</Badge>
+                            <Badge variant="outline">{entity.type}</Badge>
+                          </div>
+                          </div>
+                        </div>
+                        {/* <Button variant="ghost" size="sm">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button> */}
+                      </div>
+
+                      {/* Metrics */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-3 bg-muted/50 rounded-lg">
+                          <div className="text-2xl font-bold text-primary">{entity.studentsCount}</div>
+                          <div className="text-xs text-muted-foreground">Students</div>
+                        </div>
+                        <div className="text-center p-3 bg-muted/50 rounded-lg">
+                          <div className="text-2xl font-bold text-primary">{entity.examsCount}</div>
+                          <div className="text-xs text-muted-foreground">Exams</div>
+                        </div>
+                      </div>
+
+                      {/* Details */}
+                      <div className="space-y-2 text-sm text-muted-foreground pt-4 border-t">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          <span>{entity.location}</span>
+                        </div>
+                        {/* <div className="flex items-center gap-2">
+                          <Activity className="h-4 w-4" />
+                          <span>Last active: {entity.lastActivity}</span>
+                        </div> */}
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-2 pt-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1"
+                          onClick={() => handleEditClick(entity)}
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="flex-1"
+                          onClick={() => onViewEntity?.(entity)}
+                        >
+                          <Settings className="h-4 w-4 mr-1" />
+                          Manage
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                </motion.div>
+              ))}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="list"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Card className="border-0 shadow-lg">
+                <CardContent className="p-0">
+                  <div className="space-y-0">
+                    {filteredEntities.map((entity, index) => (
+                      <motion.div
+                        key={entity.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        className="flex items-center justify-between p-6 border-b last:border-b-0 hover:bg-muted/20 transition-colors"
+                      >
+                        <div className="flex items-center gap-6 flex-1">
+                          <ImageWithFallback
+                            src={entity.logo_link}
+                            fallback={<Building className="h-6 w-6 text-primary" />}
+                            alt={entity.name}
+                            className="w-12 h-12 rounded-lg object-cover"
+                          />
+                          <div className="space-y-1">
+                            <h3 className="font-semibold">{entity.name}</h3>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              <span>{entity.type}</span>
+                              <span>•</span>
+                              <span>{entity.location}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-6">
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-primary">{entity.studentsCount}</div>
+                            <div className="text-xs text-muted-foreground">Students</div>
+                          </div>
+
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-primary">{entity.examsCount}</div>
+                            <div className="text-xs text-muted-foreground">Exams</div>
+                          </div>
+
+
+                        <div className="text-center">
+                          <Badge className={getStatusColor(entity.status)}>
+                            {entity.status}
+                          </Badge>
+                        </div>
+
+                          <div className="flex items-center gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleEditClick(entity)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => onViewEntity?.(entity)}
+                            >
+                              <Settings className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="sm">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
+
+      {/* Create/Edit Entity Dialog */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingEntity ? 'Edit Entity' : 'Create New Entity'}</DialogTitle>
+            <DialogDescription>
+              {editingEntity ? `Update the details for ${editingEntity.name}` : 'Add a new educational institution to the platform'}
+            </DialogDescription>
+          </DialogHeader>
+          <EntityForm 
+            entity={editingEntity} 
+            onSubmit={handleCreateOrUpdate} 
+            onCancel={() => setIsModalOpen(false)} 
+          />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// Unified Entity Form Component
+function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onSubmit: (data: CreateEntityPayload | UpdateEntityPayload) => void, onCancel: () => void }) {
+  const [formData, setFormData] = useState<{
+    name: string;
+    type: 'COLLEGE' | 'SCHOOL';
+    address: string;
+    description: string;
+    email: string;
+    phone: string;
+    logo: File | null;
+  }>({
+    name: '',
+    type: 'COLLEGE',
+    address: '',
+    description: '',
+    email: '',
+    phone: '',
+    logo: null,
+  });
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (entity) {
+      setFormData(prev => ({
+        ...prev,
+        name: entity.name,
+        type: entity.type as 'COLLEGE' | 'SCHOOL',
+        address: entity.location,
+        description: entity.description || '',
+        email: entity.email,
+        phone: entity.phone,
+      }));
+      setLogoPreview(entity.logo_link || null);
+    } else {
+      setFormData({
+        name: '',
+        type: 'COLLEGE',
+        address: '',
+        description: '',
+        email: '',
+        phone: '',
+        logo: null,
+      });
+      setLogoPreview(null);
+    }
+  }, [entity]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.address || !formData.type) {
+      toast.error('Please fill in all mandatory fields: Name, Address, and Type.');
+      return;
+    }
+    const payload: any = {
+      name: formData.name,
+      type: formData.type,
+      address: formData.address,
+    };
+
+    if (formData.description) {
+      payload.description = formData.description;
+    }
+    if (formData.email) {
+      payload.email = formData.email;
+    }
+    if (formData.phone) {
+      payload.phone_number = formData.phone;
+    }
+
+    if (formData.logo) {
+      payload.logo = formData.logo;
+    }
+
+    if (entity) {
+      payload.entity_id = entity.id;
+    }
+    
+    onSubmit(payload);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <Tabs defaultValue="basic" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="basic">Basic Info</TabsTrigger>
+          <TabsTrigger value="contact">Contact</TabsTrigger>
+          <TabsTrigger value="branding">Branding</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="basic" className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Institution Name <span className="text-destructive">*</span></Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="Enter institution name"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="type">Type <span className="text-destructive">*</span></Label>
+              <Select value={formData.type} onValueChange={(value: 'COLLEGE' | 'SCHOOL') => setFormData(prev => ({ ...prev, type: value }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  {statuses.map(status => (
-                    <SelectItem key={status} value={status}>{status}</SelectItem>
-                  ))}
+                  <SelectItem value="COLLEGE">College</SelectItem>
+                  <SelectItem value="SCHOOL">School</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Entities Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Entities ({filteredEntities.length})</CardTitle>
-          <CardDescription>
-            Manage and monitor all registered entities
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Users</TableHead>
-                  <TableHead>Exams</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Active</TableHead>
-                  <TableHead className="w-12">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredEntities.map((entity, index) => (
-                  <motion.tr
-                    key={entity.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                    className="group hover:bg-muted/50"
-                  >
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{entity.name}</div>
-                        <div className="text-sm text-muted-foreground">{entity.email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{entity.type}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-sm">
-                        <MapPin className="h-3 w-3 text-muted-foreground" />
-                        {entity.city}, {entity.state}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div>{entity.phone}</div>
-                        <div className="text-muted-foreground">{entity.website}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-3 w-3 text-muted-foreground" />
-                        {entity.userCount.toLocaleString()}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <BookOpen className="h-3 w-3 text-muted-foreground" />
-                        {entity.examCount.toLocaleString()}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(entity.status)}>
-                        {entity.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(entity.lastActive).toLocaleDateString()}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleEdit(entity)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            onClick={() => handleDelete(entity.id)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </motion.tr>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="space-y-2">
+            <Label htmlFor="address">Address <span className="text-destructive">*</span></Label>
+            <Input
+              id="address"
+              value={formData.address}
+              onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+              placeholder="City, State/Country"
+              required
+            />
           </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-    </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Brief description of the institution"
+              rows={3}
+            />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="contact" className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                placeholder="contact@institution.edu"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                value={formData.phone}
+                onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="+1-555-0123"
+              />
+            </div>
+          </div>
+
+        </TabsContent>
+
+        <TabsContent value="branding" className="space-y-4">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="relative">
+              <div className="w-32 h-32 rounded-full border-2 border-dashed flex items-center justify-center bg-muted/50">
+                {logoPreview? (
+                  <ImageWithFallback
+                    src={logoPreview}
+                    fallback={<Building className="h-6 w-6 text-primary" />}
+                    alt={entity?.name || "Logo"}
+                    className="w-full h-full rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="text-sm text-muted-foreground">Add logo</span>
+                )}
+              </div>
+              <Label htmlFor="logo" className="absolute -bottom-2 -right-2 cursor-pointer bg-primary text-primary-foreground p-2 rounded-full">
+                <Upload className="h-4 w-4" />
+              </Label>
+              <Input
+                id="logo"
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    const file = e.target.files[0];
+                    setFormData(prev => ({ ...prev, logo: file }));
+                    setLogoPreview(URL.createObjectURL(file));
+                  }
+                }}
+                accept="image/*"
+              />
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      <div className="flex justify-end gap-3 pt-4 border-t">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit">
+          {entity ? 'Update Entity' : 'Create Entity'}
+        </Button>
+      </div>
+    </form>
   );
 }

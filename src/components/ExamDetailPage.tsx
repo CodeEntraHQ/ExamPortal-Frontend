@@ -41,6 +41,7 @@ interface ExamDetailPageProps {
   examName: string;
   entityId: string;
   entityName: string;
+  editMode?: boolean;
   onBackToEntity: () => void;
   onBackToEntities: () => void;
   onBackToDashboard: () => void;
@@ -58,7 +59,7 @@ export function ExamDetailPage({
   const [activeTab, setActiveTab] = useState('overview');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmails, setInviteEmails] = useState('');
-  const { showNotification } = useNotifications();
+  const { info, success, error } = useNotifications();
   const { user } = useAuth();
 
   // Role-based access control
@@ -251,7 +252,7 @@ export function ExamDetailPage({
                   size="sm"
                   onClick={() => {
                     console.log('Editing exam:', examName);
-                    showNotification('Edit exam functionality would open here', 'info');
+                    info('Edit exam functionality would open here');
                   }}
                 >
                   <Edit className="h-4 w-4 mr-2" />
@@ -304,13 +305,13 @@ export function ExamDetailPage({
                       <Button onClick={() => {
                         const emails = inviteEmails.split(',').map(email => email.trim()).filter(email => email);
                         if (emails.length === 0) {
-                          showNotification('Please enter at least one email address', 'error');
+                          error('Please enter at least one email address');
                           return;
                         }
                         console.log('Sending invitations to:', emails);
                         setShowInviteModal(false);
                         setInviteEmails('');
-                        showNotification(`Invitations sent to ${emails.length} student(s)`, 'success');
+                        success(`Invitations sent to ${emails.length} student(s)`);
                       }} className="bg-primary hover:bg-primary/90">
                         <Mail className="h-4 w-4 mr-2" />
                         Send Invitations
@@ -323,7 +324,7 @@ export function ExamDetailPage({
                   className="bg-primary hover:bg-primary/90"
                   onClick={() => {
                     console.log('Monitoring exam:', examName);
-                    showNotification('Exam monitoring dashboard would open here', 'info');
+                    info('Exam monitoring dashboard would open here');
                   }}
                 >
                   <Monitor className="h-4 w-4 mr-2" />
@@ -473,11 +474,11 @@ export function ExamDetailPage({
                 questions={mockQuestions}
                 onQuestionsUpdate={(updatedQuestions) => {
                   console.log('Questions updated:', updatedQuestions);
-                  showNotification(`${updatedQuestions.length} questions updated successfully`, 'success');
+                  success(`${updatedQuestions.length} questions updated successfully`);
                 }}
                 onClose={() => {
                   // Questions tab doesn't close, just show notification
-                  showNotification('Questions management is integrated in this tab', 'info');
+                  info('Questions management is integrated in this tab');
                 }}
               />
             </TabsContent>
@@ -614,7 +615,7 @@ export function ExamDetailPage({
                     className="h-20 flex-col gap-2"
                     onClick={() => {
                       console.log('Downloading all responses for:', examName);
-                      showNotification('All responses CSV download started', 'success');
+                      success('All responses CSV download started');
                     }}
                   >
                     <Download className="h-6 w-6" />
@@ -628,7 +629,7 @@ export function ExamDetailPage({
                     className="h-20 flex-col gap-2"
                     onClick={() => {
                       console.log('Downloading detailed report for:', examName);
-                      showNotification('Detailed PDF report download started', 'success');
+                      success('Detailed PDF report download started');
                     }}
                   >
                     <FileText className="h-6 w-6" />
@@ -642,7 +643,7 @@ export function ExamDetailPage({
                     className="h-20 flex-col gap-2"
                     onClick={() => {
                       console.log('Downloading analytics report for:', examName);
-                      showNotification('Analytics Excel report download started', 'success');
+                      success('Analytics Excel report download started');
                     }}
                   >
                     <BarChart3 className="h-6 w-6" />
@@ -656,7 +657,7 @@ export function ExamDetailPage({
                     className="h-20 flex-col gap-2"
                     onClick={() => {
                       console.log('Downloading student list for:', examName);
-                      showNotification('Student list CSV download started', 'success');
+                      success('Student list CSV download started');
                     }}
                   >
                     <Users className="h-6 w-6" />

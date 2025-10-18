@@ -52,7 +52,7 @@ export interface Question {
   title: string;
   content: string;
   points: number;
-  difficulty: 'Easy' | 'Medium' | 'Hard';
+  difficulty?: 'Easy' | 'Medium' | 'Hard';
   tags: string[];
   timeLimit?: number;
   options?: { id: string; text: string; isCorrect?: boolean }[];
@@ -102,7 +102,7 @@ export function QuestionManagement({
   onQuestionsUpdate, 
   onClose 
 }: QuestionManagementProps) {
-  const { showNotification } = useNotifications();
+  const { success, error, info } = useNotifications();
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -181,7 +181,7 @@ export function QuestionManagement({
   const handleAddQuestion = () => {
     const errors = validateQuestion(newQuestion);
     if (errors.length > 0) {
-      showNotification(errors.join(', '), 'error');
+      error(errors.join(', '));
       return;
     }
 
@@ -222,7 +222,7 @@ export function QuestionManagement({
       ]
     });
     
-    showNotification('Question added successfully!', 'success');
+    success('Question added successfully!');
   };
 
   const handleEditQuestion = () => {
@@ -230,7 +230,7 @@ export function QuestionManagement({
     
     const errors = validateQuestion(selectedQuestion);
     if (errors.length > 0) {
-      showNotification(errors.join(', '), 'error');
+      error(errors.join(', '));
       return;
     }
 
@@ -244,7 +244,7 @@ export function QuestionManagement({
     onQuestionsUpdate(updatedQuestions);
     setShowEditModal(false);
     setSelectedQuestion(null);
-    showNotification('Question updated successfully!', 'success');
+    success('Question updated successfully!');
   };
 
   const handleDeleteQuestion = (questionId: string) => {
@@ -252,7 +252,7 @@ export function QuestionManagement({
       const updatedQuestions = questions.filter(q => q.id !== questionId);
       setQuestions(updatedQuestions);
       onQuestionsUpdate(updatedQuestions);
-      showNotification('Question deleted successfully!', 'success');
+      success('Question deleted successfully!');
     }
   };
 
@@ -268,7 +268,7 @@ export function QuestionManagement({
     const updatedQuestions = [...questions, duplicatedQuestion];
     setQuestions(updatedQuestions);
     onQuestionsUpdate(updatedQuestions);
-    showNotification('Question duplicated successfully!', 'success');
+    success('Question duplicated successfully!');
   };
 
   const moveQuestion = (questionId: string, direction: 'up' | 'down') => {
@@ -309,7 +309,7 @@ export function QuestionManagement({
                   <div key={option.id} className="flex items-center gap-2">
                     <Checkbox
                       checked={option.isCorrect}
-                      onCheckedChange={(checked) => {
+                      onCheckedChange={(checked: boolean) => {
                         const updatedOptions = currentQuestion.options?.map(opt => 
                           opt.id === option.id ? { ...opt, isCorrect: !!checked } : opt
                         ) || [];
@@ -387,7 +387,7 @@ export function QuestionManagement({
               <Label>Correct Answer</Label>
               <RadioGroup
                 value={currentQuestion.correctAnswer as string || ''}
-                onValueChange={(value) => updateQuestion({ correctAnswer: value })}
+                onValueChange={(value: string) => updateQuestion({ correctAnswer: value })}
               >
                 <div className="flex items-center space-x-2">
                   <RadioGroupItem value="true" id="true" />
@@ -497,7 +497,7 @@ export function QuestionManagement({
               <Label htmlFor="language">Programming Language</Label>
               <Select
                 value={currentQuestion.metadata?.language || 'javascript'}
-                onValueChange={(value) => updateQuestion({ 
+                onValueChange={(value: string) => updateQuestion({ 
                   metadata: { 
                     ...currentQuestion.metadata, 
                     language: value 
@@ -641,7 +641,7 @@ export function QuestionManagement({
                     {/* Question Type Selection */}
                     <div>
                       <Label>Question Type</Label>
-                      <Tabs value={newQuestion.type} onValueChange={(value) => {
+                      <Tabs value={newQuestion.type} onValueChange={(value: string) => {
                         const type = value as Question['type'];
                         setNewQuestion({ 
                           ...newQuestion, 
@@ -809,7 +809,7 @@ export function QuestionManagement({
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={getDifficultyColor(question.difficulty)}>
+                        <Badge variant="outline" className={getDifficultyColor(question.difficulty || '')}>
                           {question.difficulty}
                         </Badge>
                       </TableCell>
@@ -976,7 +976,7 @@ export function QuestionManagement({
           {selectedQuestion && (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className={getDifficultyColor(selectedQuestion.difficulty)}>
+                <Badge variant="outline" className={getDifficultyColor(selectedQuestion.difficulty || '')}>
                   {selectedQuestion.difficulty}
                 </Badge>
                 <Badge variant="outline">
