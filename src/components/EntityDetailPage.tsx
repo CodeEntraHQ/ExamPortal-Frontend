@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Entity } from './EntityManagement';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
@@ -25,10 +26,10 @@ import { Breadcrumb } from './Breadcrumb';
 import { RoleAwareExamManagement } from './RoleAwareExamManagement';
 import { UserManagement } from './UserManagement';
 import { AnalyticsDashboard } from './AnalyticsDashboard';
+import { ImageWithFallback } from './ImageWithFallback';
 
 interface EntityDetailPageProps {
-  entityId: string;
-  entityName: string;
+  entity: Entity;
   editMode?: boolean;
   onBackToEntities: () => void;
   onBackToDashboard: () => void;
@@ -36,87 +37,34 @@ interface EntityDetailPageProps {
   onEditExam?: (examId: string, examName: string) => void;
 }
 
-export function EntityDetailPage({ 
-  entityId, 
-  entityName, 
+export function EntityDetailPage({
+  entity,
   editMode,
-  onBackToEntities, 
+  onBackToEntities,
   onBackToDashboard,
   onExploreExam,
-  onEditExam 
+  onEditExam
 }: EntityDetailPageProps) {
   const [activeTab, setActiveTab] = useState(editMode ? 'settings' : 'exams');
   const [showSettingsModal, setShowSettingsModal] = useState(editMode || false);
   const [showInsightsModal, setShowInsightsModal] = useState(false);
+  const [entityDetails, setEntityDetails] = useState<Entity>(entity);
   const [entitySettings, setEntitySettings] = useState({
-    name: entityName,
-    type: 'College',
-    address: '123 Tech Street, Silicon Valley',
-    description: 'A leading educational institution focusing on technology and innovation.',
-    contactEmail: 'admin@college.edu',
-    contactPhone: '+1 (555) 123-4567'
+    name: entity.name,
+    type: entity.type,
+    address: entity.location,
+    description: entity.description || '',
+    contactEmail: entity.email || '',
+    contactPhone: entity.phone || '',
+    logoLink: entity.logo_link || ''
   });
-  const { showNotification } = useNotifications();
 
-  // Mock entity details - in real app this would come from API
-  const entityDetails = {
-    id: entityId,
-    name: entityName,
-    type: 'College',
-    address: '123 Tech Street, Silicon Valley',
-    createdAt: '2024-01-15',
-    status: 'active',
-    totalUsers: 1245,
-    totalExams: 89,
-    activeExams: 23,
-    completedExams: 66,
-    averageScore: 78.5,
-    completionRate: 89.2
-  };
+  const { success } = useNotifications();
 
   const breadcrumbItems = [
     { label: 'Dashboard', onClick: onBackToDashboard },
     { label: 'Administration', onClick: onBackToEntities },
-    { label: entityName, isActive: true }
-  ];
-
-  const stats = [
-    {
-      title: 'Total Users',
-      value: entityDetails.totalUsers.toLocaleString(),
-      icon: Users,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100 dark:bg-blue-900/30',
-      change: '+12%',
-      changeType: 'positive'
-    },
-    {
-      title: 'Total Exams',
-      value: entityDetails.totalExams.toString(),
-      icon: BookOpen,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100 dark:bg-green-900/30',
-      change: '+8%',
-      changeType: 'positive'
-    },
-    {
-      title: 'Average Score',
-      value: `${entityDetails.averageScore}%`,
-      icon: TrendingUp,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100 dark:bg-purple-900/30',
-      change: '+3.2%',
-      changeType: 'positive'
-    },
-    {
-      title: 'Completion Rate',
-      value: `${entityDetails.completionRate}%`,
-      icon: BarChart3,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100 dark:bg-orange-900/30',
-      change: '+1.5%',
-      changeType: 'positive'
-    }
+    { label: entityDetails.name, isActive: true }
   ];
 
   return (
@@ -134,9 +82,12 @@ export function EntityDetailPage({
           <CardContent className="p-6">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
               <div className="flex items-start gap-4">
-                <div className="p-3 rounded-lg bg-primary/10">
-                  <Building className="h-8 w-8 text-primary" />
-                </div>
+                <ImageWithFallback
+                  src={entityDetails.logo_link || null}
+                  fallback={<Building className="h-8 w-8 text-primary" />}
+                  alt={entityDetails.name}
+                  className="w-16 h-16 rounded-lg object-cover"
+                />
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
                     <h1 className="text-2xl font-semibold">{entityDetails.name}</h1>
@@ -156,7 +107,7 @@ export function EntityDetailPage({
                     </div>
                     <div className="flex items-center gap-1">
                       <MapPin className="h-4 w-4" />
-                      <span>{entityDetails.address}</span>
+                      <span>{entityDetails.location}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
@@ -232,23 +183,31 @@ export function EntityDetailPage({
                           />
                         </div>
                       </div>
-                    </div>
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setShowSettingsModal(false)}>
-                        Cancel
-                      </Button>
-                      <Button 
-                        onClick={() => {
-                          setShowSettingsModal(false);
-                          showNotification('Entity settings updated successfully', 'success');
-                        }}
-                        className="bg-primary hover:bg-primary/90"
-                      >
-                        Save Changes
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                        <div className="grid gap-2">
+                          <Label htmlFor="entity-logo">Logo</Label>
+                          <Input
+                            id="entity-logo"
+                            value={entitySettings.logoLink}
+                            onChange={(e) => setEntitySettings({ ...entitySettings, logoLink: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowSettingsModal(false)}>
+                          Cancel
+                        </Button>
+                        <Button 
+                          onClick={() => {
+                            setShowSettingsModal(false);
+                            success('Entity settings updated successfully');
+                          }}
+                          className="bg-primary hover:bg-primary/90"
+                        >
+                          Save Changes
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
                 
                 <Dialog open={showInsightsModal} onOpenChange={setShowInsightsModal}>
                   <DialogTrigger asChild>
@@ -261,7 +220,7 @@ export function EntityDetailPage({
                     <DialogHeader>
                       <DialogTitle>Entity Insights</DialogTitle>
                       <DialogDescription>
-                        AI-generated insights and recommendations for {entityName}
+                        AI-generated insights and recommendations for {entityDetails.name}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -296,7 +255,7 @@ export function EntityDetailPage({
                       </Button>
                       <Button onClick={() => {
                         setShowInsightsModal(false);
-                        showNotification('Insights exported successfully', 'success');
+                        success('Insights exported successfully');
                       }}>
                         Export Report
                       </Button>
@@ -307,39 +266,6 @@ export function EntityDetailPage({
             </div>
           </CardContent>
         </Card>
-
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {stats.map((stat, index) => (
-            <motion.div
-              key={stat.title}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: index * 0.1 }}
-            >
-              <Card className="hover:shadow-lg transition-all duration-300">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">{stat.title}</p>
-                      <p className="text-2xl font-bold">{stat.value}</p>
-                      <p className="text-xs text-muted-foreground">
-                        <span className={`font-medium ${
-                          stat.changeType === 'positive' ? 'text-success' : 'text-destructive'
-                        }`}>
-                          {stat.change}
-                        </span> from last month
-                      </p>
-                    </div>
-                    <div className={`p-3 rounded-full ${stat.bgColor}`}>
-                      <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
 
         {/* Management Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -363,19 +289,11 @@ export function EntityDetailPage({
           </TabsList>
 
           <TabsContent value="exams" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-semibold">Exam Management</h2>
-                <p className="text-muted-foreground">
-                  Create and manage exams for {entityName}
-                </p>
-              </div>
-            </div>
             <RoleAwareExamManagement 
-              currentEntity={entityId} 
+              currentEntity={entityDetails.id} 
               onCreateExam={() => {
                 // Navigate to exam creation or trigger creation modal
-                console.log('Creating exam for entity:', entityId);
+                console.log('Creating exam for entity:', entityDetails.id);
               }}
               onViewExamDetails={onExploreExam}
               onEditExamDetails={onEditExam}
@@ -387,11 +305,11 @@ export function EntityDetailPage({
               <div>
                 <h2 className="text-xl font-semibold">User Management</h2>
                 <p className="text-muted-foreground">
-                  Manage users and roles for {entityName}
+                  Manage users and roles for {entityDetails.name}
                 </p>
               </div>
             </div>
-            <UserManagement currentEntity={entityId} />
+            <UserManagement currentEntity={entityDetails.id} />
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
@@ -399,11 +317,11 @@ export function EntityDetailPage({
               <div>
                 <h2 className="text-xl font-semibold">Monitoring & Analytics</h2>
                 <p className="text-muted-foreground">
-                  Real-time monitoring and performance insights for {entityName}
+                  Real-time monitoring and performance insights for {entityDetails.name}
                 </p>
               </div>
             </div>
-            <AnalyticsDashboard currentEntity={entityId} />
+            <AnalyticsDashboard currentEntity={entityDetails.id} />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">
@@ -411,7 +329,7 @@ export function EntityDetailPage({
               <div>
                 <h2 className="text-xl font-semibold">Entity Settings</h2>
                 <p className="text-muted-foreground">
-                  Configure settings and preferences for {entityName}
+                  Configure settings and preferences for {entityDetails.name}
                 </p>
               </div>
             </div>
