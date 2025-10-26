@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -15,6 +15,7 @@ import { useAuth } from './AuthProvider';
 import { useNotifications } from './NotificationProvider';
 import { QuestionManagement } from './QuestionManagement';
 import { motion, AnimatePresence } from 'motion/react';
+import { examApi, BackendExam } from '../services/api/exam';
 import { 
   Plus, 
   Search, 
@@ -110,7 +111,7 @@ export function RoleAwareExamManagement({
   onEditExamDetails 
 }: RoleAwareExamManagementProps) {
   const { user } = useAuth();
-  const { success, error, info } = useNotifications();
+  const { success, info } = useNotifications();
   
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -123,14 +124,8 @@ export function RoleAwareExamManagement({
   const [inviteEmails, setInviteEmails] = useState('');
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
 
-  // Mock entities for SUPERADMIN
-  const mockEntities = [
-    { id: 'entity-1', name: 'Springfield High School' },
-    { id: 'entity-2', name: 'Riverside College' },
-    { id: 'entity-3', name: 'Tech University' },
-  ];
-
   // Mock exam data based on user role
+  // Keep the original exams for reference (as requested)
   const [exams, setExams] = useState<Exam[]>([
     {
       id: 'exam-1',
@@ -214,6 +209,36 @@ export function RoleAwareExamManagement({
       lastModified: '2024-02-01'
     }
   ]);
+  
+  // New state for backend exams
+  const [backendExams, setBackendExams] = useState<BackendExam[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(10);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalExams, setTotalExams] = useState<number>(0);
+
+  // Fetch exams from backend
+  useEffect(() => {
+    const fetchExams = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await examApi.getExams(page, limit, user?.role === 'SUPERADMIN' ? currentEntity : undefined);
+        setBackendExams(response.payload.exams);
+        setTotalPages(response.payload.totalPages);
+        setTotalExams(response.payload.total);
+      } catch (err) {
+        setError('Failed to fetch exams. Please try again later.');
+        console.error('Error fetching exams:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchExams();
+  }, [page, limit, currentEntity, user?.role]);
 
   // Filter exams based on user role
   const getFilteredExams = () => {
@@ -243,6 +268,17 @@ export function RoleAwareExamManagement({
       return matchesSearch && matchesEntity && matchesType && matchesTab;
     });
   };
+  
+  // Filter backend exams
+  const getFilteredBackendExams = () => {
+    if (!backendExams.length) return [];
+    
+    return backendExams.filter(exam => {
+      const matchesSearch = exam.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType = filterType === 'all' || exam.type === filterType;
+      return matchesSearch && matchesType;
+    });
+  };
 
   const getStatusBadge = (status: Exam['status']) => {
     const variants = {
@@ -255,14 +291,24 @@ export function RoleAwareExamManagement({
     return variants[status];
   };
 
-  const getTypeBadge = (type: Exam['type']) => {
+  const getTypeBadge = (type: BackendExam['type'] | Exam['type']) => {
     const variants = {
       MCQ: { className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
       ONE_WORD: { className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
       DESCRIPTIVE: { className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
       HYBRID: { className: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' }
     };
-    return variants[type];
+    return variants[type] || { className: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300' };
+  };
+
+  const formatDuration = (durationSeconds: number | undefined) => {
+    if (!durationSeconds) return '—';
+    const hours = Math.floor(durationSeconds / 3600);
+    const minutes = Math.floor((durationSeconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
   };
 
   const handleExamAction = (action: string, exam: Exam) => {
@@ -329,7 +375,7 @@ export function RoleAwareExamManagement({
 
   const handleInviteStudents = () => {
     if (!inviteEmails.trim()) {
-      error('Please enter email addresses');
+      // error('Please enter email addresses');
       return;
     }
 
@@ -548,229 +594,121 @@ export function RoleAwareExamManagement({
         </CardContent>
       </Card>
 
-      {/* Filters and Search */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
-            <div className="flex-1 max-w-md">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search exams..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-32">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="MCQ">MCQ</SelectItem>
-                  <SelectItem value="ONE_WORD">One Word</SelectItem>
-                  <SelectItem value="DESCRIPTIVE">Descriptive</SelectItem>
-                  <SelectItem value="HYBRID">Hybrid</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Exam Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsContent value={activeTab} className="space-y-6">
           {/* Exams Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Exams</CardTitle>
-              <CardDescription>Manage your examination content and settings</CardDescription>
+              <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+                <div>
+                  <CardTitle>Exams</CardTitle>
+                  <CardDescription>Manage your examination content and settings</CardDescription>
+                </div>
+                <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search exams..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 w-[400px]"
+                    />
+                  </div>
+                  <Select value={filterType} onValueChange={setFilterType}>
+                    <SelectTrigger className="w-32">
+                      <SelectValue placeholder="Type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      <SelectItem value="MCQ">MCQ</SelectItem>
+                      <SelectItem value="ONE_WORD">One Word</SelectItem>
+                      <SelectItem value="DESCRIPTIVE">Descriptive</SelectItem>
+                      <SelectItem value="HYBRID">Hybrid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Exam Details</TableHead>
-                    {canManageAllEntities && <TableHead>Entity</TableHead>}
-                    <TableHead>Type & Status</TableHead>
-                    <TableHead>Schedule</TableHead>
-                    <TableHead>Students</TableHead>
-                    <TableHead>Performance</TableHead>
-                    <TableHead>Actions</TableHead>
+                    <TableHead>Exam Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created At</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <AnimatePresence>
-                    {getFilteredExams().map((exam) => (
-                      <motion.tr
-                        key={exam.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.2 }}
-                        className="border-b transition-colors hover:bg-muted/50"
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={canManageAllEntities ? 4 : 3} className="text-center py-10">
+                        <div className="flex flex-col items-center justify-center space-y-4">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                          <p className="text-sm text-muted-foreground">Loading exams...</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : error ? (
+                    <TableRow>
+                      <TableCell colSpan={canManageAllEntities ? 4 : 3} className="text-center py-10">
+                        <div className="flex flex-col items-center justify-center space-y-2">
+                          <AlertTriangle className="h-8 w-8 text-destructive" />
+                          <p className="text-sm text-destructive">{error}</p>
+                          <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+                            Retry
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : getFilteredBackendExams().length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={canManageAllEntities ? 4 : 3} className="text-center py-10">
+                        <div className="flex flex-col items-center justify-center space-y-2">
+                          <FileText className="h-8 w-8 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">No exams found</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    getFilteredBackendExams().map((exam) => (
+                      <TableRow 
+                        key={exam.id} 
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => {
+                          if (onViewExamDetails) {
+                            onViewExamDetails(exam.id, exam.title);
+                          }
+                        }}
                       >
                         <TableCell>
-                          <div className="space-y-2">
-                            <h4 className="font-medium">{exam.title}</h4>
-                            <p className="text-sm text-muted-foreground line-clamp-2">{exam.description}</p>
-                            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {exam.duration} min
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <Target className="h-3 w-3" />
-                                {exam.totalMarks} marks
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <FileText className="h-3 w-3" />
-                                {exam.questions.length} questions
-                              </span>
-                            </div>
-                          </div>
+                          <div className="font-medium">{exam.title}</div>
                         </TableCell>
-                        {canManageAllEntities && (
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {exam.entityName}
-                            </Badge>
-                          </TableCell>
-                        )}
                         <TableCell>
-                          <div className="space-y-2">
-                            <Badge 
-                              variant={getStatusBadge(exam.status).variant}
-                              className={getStatusBadge(exam.status).className}
-                            >
-                              {exam.status}
-                            </Badge>
-                            <Badge variant="outline" className={`text-xs ${getTypeBadge(exam.type).className}`}>
-                              {exam.type}
-                            </Badge>
+                          <Badge variant="outline" className={getTypeBadge(exam.type).className}>
+                            {exam.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm text-muted-foreground">
+                            {formatDuration(exam.duration_seconds)}
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1 text-sm">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3 text-muted-foreground" />
-                              <span>{new Date(exam.startDate).toLocaleDateString()}</span>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {new Date(exam.startDate).toLocaleTimeString()} - {new Date(exam.endDate).toLocaleTimeString()}
-                            </div>
-                          </div>
+                          <Badge className={exam.active ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'}>
+                            {exam.active ? 'ACTIVE' : 'INACTIVE'}
+                          </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1">
-                              <Users className="h-3 w-3 text-muted-foreground" />
-                              <span className="text-sm">{exam.studentsInvited} invited</span>
-                            </div>
-                            {exam.studentsCompleted > 0 && (
-                              <div className="text-xs text-muted-foreground">
-                                {exam.studentsCompleted} completed
-                              </div>
-                            )}
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(exam.created_at).toLocaleString()}
                           </div>
                         </TableCell>
-                        <TableCell>
-                          {exam.studentsCompleted > 0 ? (
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-1">
-                                <TrendingUp className="h-3 w-3 text-muted-foreground" />
-                                <span className="text-sm">{exam.averageScore}% avg</span>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {exam.passRate}% pass rate
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">No data</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleExamAction('view', exam)}
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              View
-                            </Button>
-                            {canManageQuestions && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleExamAction('questions', exam)}
-                              >
-                                <Layers className="h-3 w-3 mr-1" />
-                                Questions
-                              </Button>
-                            )}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                {canManageQuestions && (
-                                  <>
-                                    <DropdownMenuItem onClick={() => handleExamAction('edit', exam)}>
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Edit
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleExamAction('invite', exam)}>
-                                      <UserPlus className="h-4 w-4 mr-2" />
-                                      Invite Students
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => handleExamAction('monitor', exam)}>
-                                      <MonitorSpeaker className="h-4 w-4 mr-2" />
-                                      Monitor
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    {exam.status === 'DRAFT' ? (
-                                      <DropdownMenuItem onClick={() => handleExamAction('activate', exam)}>
-                                        <Play className="h-4 w-4 mr-2" />
-                                        Activate
-                                      </DropdownMenuItem>
-                                    ) : (
-                                      <DropdownMenuItem onClick={() => handleExamAction('deactivate', exam)}>
-                                        <Pause className="h-4 w-4 mr-2" />
-                                        Deactivate
-                                      </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem onClick={() => handleExamAction('duplicate', exam)}>
-                                      <Copy className="h-4 w-4 mr-2" />
-                                      Duplicate
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={() => handleExamAction('archive', exam)}>
-                                      <Archive className="h-4 w-4 mr-2" />
-                                      Archive
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem 
-                                      onClick={() => handleExamAction('delete', exam)}
-                                      className="text-destructive"
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
-                      </motion.tr>
-                    ))}
-                  </AnimatePresence>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
