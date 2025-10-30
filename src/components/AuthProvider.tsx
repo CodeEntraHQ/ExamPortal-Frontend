@@ -34,12 +34,38 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const loadUserFromStorage = (): User | null => {
+  try {
+    const storedUser = localStorage.getItem('user');
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch (error) {
+    console.error('Failed to load user from localStorage:', error);
+    return null;
+  }
+};
+
+const saveUserToStorage = (user: User | null) => {
+  try {
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('user');
+    }
+  } catch (error) {
+    console.error('Failed to save user to localStorage:', error);
+  }
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => loadUserFromStorage());
   const [loginCredentials, setLoginCredentials] = useState<{ email: string; password: string } | null>(null);
 
   const updateUser = (updates: Partial<User>) => {
-    setUser(prevUser => (prevUser ? { ...prevUser, ...updates } : null));
+    setUser(prevUser => {
+      const newUser = prevUser ? { ...prevUser, ...updates } : null;
+      saveUserToStorage(newUser);
+      return newUser;
+    });
   };
 
   const login = async (email: string, password: string) => {
@@ -50,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     if (response.user) {
       setUser(response.user);
+      saveUserToStorage(response.user);
       setLoginCredentials(null);
     }
     return { requires2FA: false };
@@ -63,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const response = await apiLogin(email, password, otp);
     if (response.user) {
       setUser(response.user);
+      saveUserToStorage(response.user);
       setLoginCredentials(null);
     } else {
       // The apiLogin function will throw an error for non-200 responses,
@@ -73,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     setUser(null);
+    saveUserToStorage(null);
     removeToken();
   };
 

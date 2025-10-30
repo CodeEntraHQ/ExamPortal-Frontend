@@ -44,7 +44,32 @@ export const getExamById = async (id: string): Promise<{status: string; response
   return response.json();
 };
 
+export interface CreateExamPayload {
+  title: string;
+  type: 'MCQ' | 'ONE_WORD' | 'DESCRIPTIVE' | 'HYBRID' | 'QUIZ' | 'OTHER';
+  duration_seconds: number;
+  metadata?: {
+    totalMarks: number;
+    passingMarks: number;
+    instructions: string;
+  };
+  entity_id?: string;
+}
+
+export const createExam = async (payload: CreateExamPayload): Promise<{status: string; responseCode: string; payload: BackendExam}> => {
+  console.log('Creating exam with payload:', payload);
+  const response = await authenticatedFetch(getApiUrl('/exams'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+};
+
 export const examApi = {
   getExams,
-  getExamById
+  getExamById,
+  createExam
 };
