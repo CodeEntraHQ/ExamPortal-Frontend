@@ -16,6 +16,7 @@ import { useNotifications } from './NotificationProvider';
 import { QuestionManagement } from './QuestionManagement';
 import { motion, AnimatePresence } from 'motion/react';
 import { examApi, BackendExam } from '../services/api/exam';
+import { CreateExamModal } from './CreateExamModal';
 import { 
   Plus, 
   Search, 
@@ -552,18 +553,34 @@ export function RoleAwareExamManagement({
               {canCreateExam && (
                 <>
                   <Button 
-                    onClick={() => {
-                      if (onCreateExam) {
-                        onCreateExam();
-                      } else {
-                        setShowCreateModal(true);
-                      }
-                    }} 
+                    onClick={() => setShowCreateModal(true)}
                     className="bg-primary hover:bg-primary/90"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Create Exam
                   </Button>
+                  <CreateExamModal
+                    open={showCreateModal}
+                    onClose={() => setShowCreateModal(false)}
+                    onSuccess={async () => {
+                      try {
+                        setLoading(true);
+                        setError(null);
+                        const response = await examApi.getExams(page, limit, user?.role === 'SUPERADMIN' ? currentEntity : undefined);
+                        setBackendExams(response.payload.exams);
+                        setTotalPages(response.payload.totalPages);
+                        setTotalExams(response.payload.total);
+                        setShowCreateModal(false);
+                        success('Exam created successfully!');
+                      } catch (err) {
+                        setError('Failed to refresh exam list. Please try again.');
+                        console.error('Error refreshing exams:', err);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    entityId={currentEntity}
+                  />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline">
@@ -765,44 +782,7 @@ example: student1@email.com, student2@email.com"
         </DialogContent>
       </Dialog>
 
-      {/* Create Exam Modal */}
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Create New Exam</DialogTitle>
-            <DialogDescription>
-              This will redirect you to the exam creation wizard
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <Alert>
-              <CheckCircle className="h-4 w-4" />
-              <AlertDescription>
-                You will be taken to the comprehensive exam creation form where you can set up your exam with questions, settings, and scheduling.
-              </AlertDescription>
-            </Alert>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreateModal(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={() => {
-                setShowCreateModal(false);
-                if (onCreateExam) {
-                  onCreateExam();
-                } else {
-                  info('Please use the navigation to access the exam creation form');
-                }
-              }} 
-              className="bg-primary hover:bg-primary/90"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Continue to Create Exam
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Create Exam Modal is now handled by CreateExamModal component */}
 
       {/* Question Management Modal */}
       <Dialog open={showQuestionModal} onOpenChange={setShowQuestionModal}>
