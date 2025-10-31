@@ -10,6 +10,7 @@ import {
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { Plus } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -19,6 +20,7 @@ import {
 } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { examApi, CreateExamPayload } from '../services/api/exam';
+import '../styles/scrollbar.css';
 
 interface CreateExamModalProps {
   open: boolean;
@@ -27,32 +29,66 @@ interface CreateExamModalProps {
   entityId?: string;
 }
 
+type MetadataFieldType = 'text' | 'number' | 'boolean';
+
+type MetadataKey = 'totalMarks' | 'passingMarks' | 'instructions';
+
+interface MetadataFieldDefinition {
+  key: MetadataKey;
+  label: string;
+  type: MetadataFieldType;
+  defaultValue: string | number | boolean;
+}
+
+interface MetadataField {
+  totalMarks?: number;
+  passingMarks?: number;
+  instructions?: string;
+}
+
 type ExamFormData = {
   title: string;
   type: CreateExamPayload['type'];
   duration_seconds: number;
-  metadata: {
-    totalMarks: number;
-    passingMarks: number;
-    instructions: string;
-  };
+  metadata: MetadataField;
   entity_id?: string;
 };
 
 export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateExamModalProps) => {
+  const availableMetadataFields: (MetadataFieldDefinition & { description: string })[] = [
+    { 
+      key: 'totalMarks', 
+      label: 'Total Marks', 
+      type: 'number', 
+      defaultValue: 100,
+      description: 'Maximum points possible in this exam'
+    },
+    { 
+      key: 'passingMarks', 
+      label: 'Passing Marks', 
+      type: 'number', 
+      defaultValue: 40,
+      description: 'Minimum points required to pass'
+    },
+    { 
+      key: 'instructions', 
+      label: 'Instructions', 
+      type: 'text', 
+      defaultValue: '',
+      description: 'Guidelines and rules for exam takers'
+    }
+  ];
+
   const initialFormState: ExamFormData = {
     title: '',
     type: 'MCQ',
     duration_seconds: 3600, // Default 1 hour
-    metadata: {
-      totalMarks: 100,
-      passingMarks: 40,
-      instructions: ''
-    },
+    metadata: {},
     entity_id: entityId
   };
 
   const [formData, setFormData] = useState<ExamFormData>(initialFormState);
+  const [activeMetadataFields, setActiveMetadataFields] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -111,8 +147,18 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
     try {
       setLoading(true);
       setError(null);
-      await examApi.createExam(formData);
+      // Ensure required metadata fields are present for the API
+      const submissionData: CreateExamPayload = {
+        ...formData,
+        metadata: {
+          totalMarks: formData.metadata.totalMarks ?? 100,
+          passingMarks: formData.metadata.passingMarks ?? 40,
+          instructions: formData.metadata.instructions ?? '',
+        }
+      };
+      await examApi.createExam(submissionData);
       setFormData(initialFormState);
+      setActiveMetadataFields([]);
       onSuccess();
       handleClose();
     } catch (err) {
@@ -124,7 +170,7 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Create New Exam</DialogTitle>
           <DialogDescription>
@@ -132,7 +178,7 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4">
+        <div className="grid gap-4 py-4 flex-1 overflow-y-auto pr-2 custom-scrollbar">
           <div className="grid gap-2">
             <Label htmlFor="title">Exam Title</Label>
             <Input
@@ -167,8 +213,6 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
             <Label htmlFor="duration">Duration (minutes)</Label>
             <Input
               id="duration"
-              type="number"
-              min={1}
               value={formData.duration_seconds / 60}
               onChange={(e) => handleNumberChange(e.target.value, 'duration_seconds')}
               required
@@ -176,38 +220,137 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="totalMarks">Total Marks</Label>
-            <Input
-              id="totalMarks"
-              type="number"
-              min={0}
-              value={formData.metadata.totalMarks}
-              onChange={(e) => handleNumberChange(e.target.value, 'metadata.totalMarks')}
-              required
-            />
+            <div className="relative w-[180px]">
+              <Select
+                onValueChange={(value: MetadataKey) => {
+                  if (!activeMetadataFields.includes(value)) {
+                    setActiveMetadataFields([...activeMetadataFields, value]);
+                    const field = availableMetadataFields.find(f => f.key === value);
+                    if (field) {
+                      setFormData(prev => ({
+                        ...prev,
+                        metadata: {
+                          ...prev.metadata,
+                          [value]: field.defaultValue
+                        }
+                      }));
+                    }
+                  }
+                }}
+                disabled={activeMetadataFields.length === availableMetadataFields.length}
+              >
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-8"
+                  asChild
+                >
+                  <SelectTrigger>
+                    <Plus className="h-3 w-3 mr-1" />
+                    <span className="text-sm">Add Field</span>
+                  </SelectTrigger>
+                </Button>
+                <SelectContent 
+                  className="w-[180px] overflow-hidden" 
+                  position="popper"
+                  sideOffset={4}
+                >
+                  <div className="max-h-[80px] overflow-y-auto custom-scrollbar">
+                    {availableMetadataFields
+                      .filter(field => !activeMetadataFields.includes(field.key))
+                      .map(field => (
+                        <SelectItem 
+                          key={field.key} 
+                          value={field.key} 
+                          className="border-b last:border-b-0 border-border/50 hover:bg-muted/50 focus:bg-muted/50 cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2 py-2 px-1">
+                            <span className="text-base">
+                              {field.type === 'text' 
+                                ? '📝' 
+                                : field.type === 'number'
+                                ? '🔢'
+                                : '⚡'}
+                            </span>
+                            <div className="flex flex-col gap-0.5 min-w-0">
+                              <div className="font-medium text-sm truncate">
+                                {field.label}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground truncate">
+                                {field.description}
+                              </div>
+                            </div>
+                          </div>
+                        </SelectItem>
+                      ))}
+                  </div>
+                </SelectContent>
+              </Select>
+            </div>
+            {activeMetadataFields.length === availableMetadataFields.length && (
+              <p className="text-sm text-muted-foreground text-center">
+                All available fields have been added
+              </p>
+            )}
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="passingMarks">Passing Marks</Label>
-            <Input
-              id="passingMarks"
-              type="number"
-              min={0}
-              value={formData.metadata.passingMarks}
-              onChange={(e) => handleNumberChange(e.target.value, 'metadata.passingMarks')}
-              required
-            />
-          </div>
+          {activeMetadataFields.map(fieldKey => {
+            const field = availableMetadataFields.find(f => f.key === fieldKey);
+            if (!field) return null;
 
-          <div className="grid gap-2">
-            <Label htmlFor="instructions">Instructions</Label>
-            <Textarea
-              id="instructions"
-              value={formData.metadata.instructions}
-              onChange={(e) => handleTextChange(e.target.value, 'metadata.instructions')}
-              rows={4}
-            />
-          </div>
+            const handleRemoveField = (key: string) => {
+              if (key === 'totalMarks' || key === 'passingMarks' || key === 'instructions') {
+                setActiveMetadataFields(activeMetadataFields.filter(k => k !== key));
+                setFormData(prev => {
+                  const { [key]: _, ...restMetadata } = prev.metadata;
+                  return { ...prev, metadata: restMetadata };
+                });
+              }
+            };
+
+            return (
+              <div key={fieldKey} className="grid gap-2 relative p-4 border rounded-lg bg-muted/30">
+                <div className="flex justify-between items-center">
+                  <div className="space-y-1">
+                    <Label htmlFor={fieldKey}>{field.label}</Label>
+                    <p className="text-xs text-muted-foreground">
+                      {field.type === 'text' ? 'Text input' : field.type === 'number' ? 'Numeric value' : 'Boolean choice'}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive rounded-full"
+                    onClick={() => handleRemoveField(fieldKey)}
+                  >
+                    ✕
+                  </Button>
+                </div>
+                {field.type === 'text' && fieldKey === 'instructions' && (
+                  <Textarea
+                    id={fieldKey}
+                    value={formData.metadata.instructions || ''}
+                    onChange={(e) => handleTextChange(e.target.value, `metadata.${fieldKey}`)}
+                    rows={4}
+                    placeholder="Enter exam instructions..."
+                    className="mt-2"
+                  />
+                )}
+                {field.type === 'number' && (fieldKey === 'totalMarks' || fieldKey === 'passingMarks') && (
+                  <Input
+                    id={fieldKey}
+                    type="number"
+                    min={0}
+                    value={formData.metadata[fieldKey] || 0}
+                    onChange={(e) => handleNumberChange(e.target.value, `metadata.${fieldKey}`)}
+                    placeholder={`Enter ${field.label.toLowerCase()}...`}
+                    className="mt-2"
+                  />
+                )}
+              </div>
+            );
+          })}
 
           {error && (
             <p className="text-sm text-red-500">

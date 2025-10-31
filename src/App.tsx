@@ -21,6 +21,7 @@ import { ExamDetailPage } from './components/ExamDetailPage';
 import { PasswordReset } from './components/PasswordReset';
 import { ResetPasswordConfirm } from './components/ResetPasswordConfirm';
 import { Toaster } from './components/ui/sonner';
+import { ExamContextProvider } from './components/ExamContextProvider';
 
 interface NavigationState {
   view: string;
@@ -311,8 +312,10 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <NotificationProvider>
-          <AppContent />
-          <Toaster />
+          <ExamContextProvider>
+            <AppContent />
+            <Toaster />
+          </ExamContextProvider>
         </NotificationProvider>
       </AuthProvider>
     </ThemeProvider>
