@@ -313,8 +313,8 @@ export default function App() {
       <AuthProvider>
         <NotificationProvider>
           <ExamContextProvider>
-            <AppContent />
-            <Toaster />
+          <AppContent />
+          <Toaster />
           </ExamContextProvider>
         </NotificationProvider>
       </AuthProvider>
