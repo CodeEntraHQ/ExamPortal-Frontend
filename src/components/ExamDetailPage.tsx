@@ -35,6 +35,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useNotifications } from './NotificationProvider';
 import { QuestionManagement } from './QuestionManagement';
 import { useAuth } from './AuthProvider';
+import { useExamContext } from './ExamContextProvider';
+import { EditExamModal } from './EditExamModal';
 
 interface ExamDetailPageProps {
   examId: string;
@@ -58,12 +60,27 @@ export function ExamDetailPage({
 }: ExamDetailPageProps) {
   const [activeTab, setActiveTab] = useState('overview');
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [inviteEmails, setInviteEmails] = useState('');
   const { info, success, error } = useNotifications();
   const { user } = useAuth();
+  const { currentExam, setCurrentExam } = useExamContext();
 
   // Role-based access control
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
+
+  // Helper function to format duration from seconds to minutes
+  const formatDurationFromSeconds = (seconds?: number): number => {
+    if (!seconds) return 0;
+    return Math.floor(seconds / 60);
+  };
+
+  // Helper function to get status from active boolean
+  const getStatusFromActive = (active?: boolean): string => {
+    if (active === undefined) return 'draft';
+    return active ? 'active' : 'draft';
+  };
+
 
   // Mock questions for the exam
   const mockQuestions = [
@@ -100,11 +117,29 @@ export function ExamDetailPage({
     }
   ];
 
-  // Mock exam details - in real app this would come from API
+  // Header data - ONLY use fields from BackendExam model (no metadata)
+  // BackendExam fields: id, title, type, active, created_at, duration_seconds, user_id, entity_id
+  const examHeaderData = currentExam ? {
+    id: currentExam.id,
+    name: currentExam.title,
+    type: currentExam.type,
+    duration: formatDurationFromSeconds(currentExam.duration_seconds),
+    status: getStatusFromActive(currentExam.active),
+    createdAt: currentExam.created_at,
+  } : {
+    id: examId,
+    name: examName,
+    type: 'Final Exam',
+    duration: 120,
+    status: 'active',
+    createdAt: '2024-01-15',
+  };
+
+  // Keep separate examDetails with mock data for other parts of the page (stats, analytics, etc.)
+  // This maintains backward compatibility with existing components
   const examDetails = {
     id: examId,
     name: examName,
-    description: 'Comprehensive final examination covering all topics from the semester',
     type: 'Final Exam',
     duration: 120,
     totalQuestions: 50,
@@ -199,6 +234,16 @@ export function ExamDetailPage({
     }
   };
 
+  const getTypeBadge = (type: string) => {
+    const variants: Record<string, { className: string }> = {
+      MCQ: { className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+      ONE_WORD: { className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
+      DESCRIPTIVE: { className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
+      HYBRID: { className: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' }
+    };
+    return variants[type] || { className: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300' };
+  };
+
   return (
     <div className="space-y-6">
       <Breadcrumb items={breadcrumbItems} />
@@ -219,45 +264,45 @@ export function ExamDetailPage({
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-semibold">{examDetails.name}</h1>
-                    <Badge className={getStatusColor(examDetails.status)}>
-                      {examDetails.status}
+                    <h1 className="text-2xl font-semibold">{examHeaderData.name}</h1>
+                    <Badge className={getStatusColor(examHeaderData.status)}>
+                      {examHeaderData.status}
                     </Badge>
                   </div>
-                  <p className="text-muted-foreground max-w-2xl">
-                    {examDetails.description}
-                  </p>
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
-                      <Badge variant="outline">{examDetails.type}</Badge>
+                      <Badge variant="outline" className={getTypeBadge(examHeaderData.type).className}>
+                        {examHeaderData.type}
+                      </Badge>
                     </div>
                     <div className="flex items-center gap-1">
                       <Clock className="h-4 w-4" />
-                      <span>{examDetails.duration} minutes</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <FileText className="h-4 w-4" />
-                      <span>{examDetails.totalQuestions} questions</span>
+                      <span>{examHeaderData.duration} minutes</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
-                      <span>{new Date(examDetails.startDate).toLocaleDateString()} - {new Date(examDetails.endDate).toLocaleDateString()}</span>
+                      <span>Created: {new Date(examHeaderData.createdAt).toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    console.log('Editing exam:', examName);
-                    info('Edit exam functionality would open here');
-                  }}
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit Exam
-                </Button>
+                {canManageQuestions && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      if (currentExam) {
+                        setShowEditModal(true);
+                      } else {
+                        error('Exam data not available. Please refresh the page.');
+                      }
+                    }}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Exam
+                  </Button>
+                )}
                 <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
                   <DialogTrigger asChild>
                     <Button variant="outline" size="sm">
@@ -276,10 +321,11 @@ export function ExamDetailPage({
                       <div className="p-4 bg-muted/50 rounded-lg">
                         <h4 className="font-medium mb-2">Exam Details</h4>
                         <div className="text-sm space-y-1">
-                          <p><span className="font-medium">Title:</span> {examDetails.name}</p>
-                          <p><span className="font-medium">Duration:</span> {examDetails.duration} minutes</p>
-                          <p><span className="font-medium">Questions:</span> {examDetails.totalQuestions}</p>
-                          <p><span className="font-medium">Start Date:</span> {new Date(examDetails.startDate).toLocaleDateString()}</p>
+                          <p><span className="font-medium">Title:</span> {examHeaderData.name}</p>
+                          <p><span className="font-medium">Type:</span> {examHeaderData.type}</p>
+                          <p><span className="font-medium">Duration:</span> {examHeaderData.duration} minutes</p>
+                          <p><span className="font-medium">Status:</span> {examHeaderData.status}</p>
+                          <p><span className="font-medium">Created:</span> {new Date(examHeaderData.createdAt).toLocaleDateString()}</p>
                         </div>
                       </div>
                       
@@ -671,7 +717,29 @@ export function ExamDetailPage({
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Edit Exam Modal */}
+        {currentExam && (
+          <EditExamModal
+            open={showEditModal}
+            onClose={() => setShowEditModal(false)}
+            onSuccess={(updatedExam) => {
+              try {
+                // Update context with the updated exam data
+                if (updatedExam) {
+                  setCurrentExam(updatedExam);
+                }
+                success('Exam updated successfully!');
+                setShowEditModal(false);
+              } catch (err) {
+                error('Failed to refresh exam data');
+              }
+            }}
+            exam={currentExam}
+          />
+        )}
       </motion.div>
     </div>
   );
 }
+``

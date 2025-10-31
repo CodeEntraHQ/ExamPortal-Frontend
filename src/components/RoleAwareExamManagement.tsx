@@ -17,6 +17,7 @@ import { QuestionManagement } from './QuestionManagement';
 import { motion, AnimatePresence } from 'motion/react';
 import { examApi, BackendExam } from '../services/api/exam';
 import { CreateExamModal } from './CreateExamModal';
+import { useExamContext } from './ExamContextProvider';
 import { 
   Plus, 
   Search, 
@@ -113,6 +114,7 @@ export function RoleAwareExamManagement({
 }: RoleAwareExamManagementProps) {
   const { user } = useAuth();
   const { success, info } = useNotifications();
+  const { setCurrentExam } = useExamContext();
   
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -695,6 +697,8 @@ export function RoleAwareExamManagement({
                         key={exam.id} 
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => {
+                          // Store exam in context before navigation
+                          setCurrentExam(exam);
                           if (onViewExamDetails) {
                             onViewExamDetails(exam.id, exam.title);
                           }
@@ -728,6 +732,22 @@ export function RoleAwareExamManagement({
                   )}
                 </TableBody>
               </Table>
+              {/* Pagination Controls */}
+              <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 ml-auto">
+                  <div className="text-sm text-muted-foreground">
+                    Page <span className="font-medium">{Math.max(page, 1)}</span> of <span className="font-medium">{Math.max(totalPages, 1)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || loading}>
+                      Previous
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages || loading}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -747,8 +767,7 @@ export function RoleAwareExamManagement({
               <Label htmlFor="emails">Student Email Addresses</Label>
               <textarea
                 id="emails"
-                placeholder="Enter email addresses separated by commas
-example: student1@email.com, student2@email.com"
+                placeholder="Enter email addresses separated by commas example: student1@email.com, student2@email.com"
                 value={inviteEmails}
                 onChange={(e) => setInviteEmails(e.target.value)}
                 rows={6}
