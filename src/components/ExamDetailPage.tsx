@@ -82,40 +82,7 @@ export function ExamDetailPage({
   };
 
 
-  // Mock questions for the exam
-  const mockQuestions = [
-    {
-      id: 'q1',
-      type: 'MCQ' as const,
-      title: 'JavaScript Fundamentals',
-      content: 'What is the correct way to declare a variable in JavaScript?',
-      points: 5,
-      options: [
-        { id: 'opt1', text: 'var myVar = 10;', isCorrect: false },
-        { id: 'opt2', text: 'let myVar = 10;', isCorrect: true },
-        { id: 'opt3', text: 'variable myVar = 10;', isCorrect: false },
-        { id: 'opt4', text: 'declare myVar = 10;', isCorrect: false }
-      ],
-      difficulty: 'Easy' as const,
-      tags: ['javascript', 'variables'],
-      createdAt: '2024-01-15',
-      lastModified: '2024-01-15'
-    },
-    {
-      id: 'q2',
-      type: 'DESCRIPTIVE' as const,
-      title: 'Algorithm Explanation',
-      content: 'Explain the concept of recursion in programming with an example.',
-      points: 10,
-      metadata: {
-        maxLength: 500
-      },
-      difficulty: 'Medium' as const,
-      tags: ['algorithms', 'recursion'],
-      createdAt: '2024-01-15',
-      lastModified: '2024-01-15'
-    }
-  ];
+  // Note: Questions are now fetched by QuestionManagement component from backend
 
   // Header data - ONLY use fields from BackendExam model (no metadata)
   // BackendExam fields: id, title, type, active, created_at, duration_seconds, user_id, entity_id
@@ -515,17 +482,8 @@ export function ExamDetailPage({
           {canManageQuestions && (
             <TabsContent value="questions" className="space-y-6">
               <QuestionManagement 
-                examId={examDetails.id}
-                examTitle={examDetails.name}
-                questions={mockQuestions}
-                onQuestionsUpdate={(updatedQuestions) => {
-                  console.log('Questions updated:', updatedQuestions);
-                  success(`${updatedQuestions.length} questions updated successfully`);
-                }}
-                onClose={() => {
-                  // Questions tab doesn't close, just show notification
-                  info('Questions management is integrated in this tab');
-                }}
+                examId={currentExam?.id || examId}
+                examTitle={currentExam?.title || examName}
               />
             </TabsContent>
           )}
