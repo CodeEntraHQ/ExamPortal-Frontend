@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getExamById, getQuestions, BackendExam } from '../services/api/exam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Progress } from './ui/progress';
@@ -95,141 +96,16 @@ interface ComprehensiveExamFlowProps {
 }
 
 export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: ComprehensiveExamFlowProps) {
-  // Mock exam configuration - in real app this would be fetched from backend
-  const [examConfig] = useState<ExamConfiguration>({
-    id: examId,
-    title: 'Advanced Mathematics Final Exam',
-    description: 'Comprehensive examination covering algebra, calculus, and geometry',
-    instructions: [
-      'This exam consists of 10 questions worth 100 points total',
-      'You have 90 minutes to complete the exam',
-      'Once started, you cannot pause the exam',
-      'Make sure you have a stable internet connection',
-      'Calculator is allowed for this exam',
-      'You can flag questions for review before submitting',
-      'Results will be shown immediately after submission'
-    ],
-    duration: 90,
-    totalQuestions: 10,
-    totalPoints: 100,
-    passingScore: 70,
-    allowCalculator: true,
-    allowBackNavigation: true,
-    showResultsImmediately: true,
-    proctoring: {
-      cameraRequired: true,
-      microphoneRequired: false,
-      screenLockRequired: true,
-      tabSwitchDetection: true
-    },
-    questions: [
-      {
-        id: '1',
-        type: 'mcq-single',
-        title: 'Derivative Calculation',
-        content: 'What is the derivative of f(x) = x² + 3x - 2?',
-        points: 10,
-        options: [
-          { id: 'a', text: '2x + 3' },
-          { id: 'b', text: 'x² + 3' },
-          { id: 'c', text: '2x - 2' },
-          { id: 'd', text: 'x + 3' }
-        ],
-        flagged: false
-      },
-      {
-        id: '2',
-        type: 'mcq-multiple',
-        title: 'Prime Numbers',
-        content: 'Which of the following are prime numbers?',
-        points: 15,
-        options: [
-          { id: 'a', text: '17' },
-          { id: 'b', text: '21' },
-          { id: 'c', text: '23' },
-          { id: 'd', text: '25' },
-          { id: 'e', text: '29' }
-        ],
-        flagged: false
-      },
-      {
-        id: '3',
-        type: 'true-false',
-        title: 'Mathematical Statement',
-        content: 'The sum of angles in any triangle is always 180 degrees.',
-        points: 5,
-        flagged: false
-      },
-      {
-        id: '4',
-        type: 'short-answer',
-        title: 'Area Calculation',
-        content: 'Calculate the area of a circle with radius 5 units. Round to 2 decimal places.',
-        points: 10,
-        flagged: false
-      },
-      {
-        id: '5',
-        type: 'numeric',
-        title: 'Equation Solution',
-        content: 'Solve for x: 3x + 7 = 22',
-        points: 8,
-        metadata: { tolerance: 0.1, unit: '' },
-        flagged: false
-      },
-      {
-        id: '6',
-        type: 'fill-blank',
-        title: 'Complete the Formula',
-        content: 'The quadratic formula is x = (-b ± √(b² - [blank1])) / [blank2]',
-        points: 12,
-        metadata: { blanks: 2 },
-        flagged: false
-      },
-      {
-        id: '7',
-        type: 'matching',
-        title: 'Mathematical Concepts',
-        content: 'Match the mathematical operation with its symbol:',
-        points: 10,
-        metadata: {
-          leftItems: ['Addition', 'Multiplication', 'Division', 'Square Root'],
-          rightItems: ['÷', '√', '+', '×']
-        },
-        flagged: false
-      },
-      {
-        id: '8',
-        type: 'ordering',
-        title: 'Steps in Order',
-        content: 'Arrange the steps to solve a quadratic equation in the correct order:',
-        points: 12,
-        metadata: {
-          items: [
-            'Identify coefficients a, b, and c',
-            'Apply the quadratic formula',
-            'Simplify the expression under the square root',
-            'Calculate the two possible solutions'
-          ]
-        },
-        flagged: false
-      },
-      {
-        id: '9',
-        type: 'long-answer',
-        title: 'Proof Problem',
-        content: 'Prove that the square root of 2 is irrational. Provide a complete mathematical proof.',
-        points: 18,
-        metadata: { minWords: 100, maxWords: 500 },
-        flagged: false
-      }
-    ]
-  });
-
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  const [examConfig, setExamConfig] = useState<ExamConfiguration | null>(null);
+  const [loadingExam, setLoadingExam] = useState(true);
+  const [examError, setExamError] = useState<string | null>(null);
+  
+  // Initialize examState with default values (will be updated when examConfig loads)
   const [examState, setExamState] = useState<ExamState>({
     phase: 'setup',
     currentQuestion: 0,
-    timeRemaining: examConfig.duration * 60, // Convert to seconds
+    timeRemaining: 3600, // Default 60 minutes, will be updated
     answers: {},
     flaggedQuestions: [],
     startTime: new Date()
@@ -249,6 +125,167 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [twoFactorEnabled] = useState(true); // Mock - in real app this would come from user profile
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Fetch exam data from backend
+  useEffect(() => {
+    const fetchExamData = async () => {
+      try {
+        setLoadingExam(true);
+        setExamError(null);
+        
+        // Fetch exam details
+        const examResponse = await getExamById(examId);
+        const exam: BackendExam = examResponse.payload;
+        
+        // Fetch questions
+        const questionsResponse = await getQuestions(examId, 1, 100); // Get all questions
+        const questions = questionsResponse.payload.questions;
+
+        // Transform backend data to ExamConfiguration format
+        const metadata = exam.metadata || {};
+        const instructions = Array.isArray(metadata.instructions) 
+          ? metadata.instructions 
+          : metadata.instructions 
+            ? [metadata.instructions] 
+            : ['Please read all instructions carefully before starting the exam.'];
+
+        // Transform questions to match Question interface
+        const transformedQuestions: Question[] = questions.map((q, index) => {
+          const qMetadata = q.metadata || {};
+          const options = qMetadata.options || [];
+          
+          return {
+            id: q.id,
+            type: q.type === 'MCQ' ? 'mcq-single' : 'short-answer',
+            title: `Question ${index + 1}`,
+            content: q.question_text,
+            points: qMetadata.points || 10,
+            timeLimit: qMetadata.timeLimit,
+            options: options.map((opt: any, optIndex: number) => ({
+              id: String.fromCharCode(97 + optIndex), // a, b, c, d, etc.
+              text: opt.text || opt.toString(),
+            })),
+            metadata: qMetadata,
+            answer: undefined,
+            flagged: false,
+          };
+        });
+
+        const config: ExamConfiguration = {
+          id: exam.id,
+          title: exam.title,
+          description: metadata.description || exam.title,
+          instructions: instructions,
+          duration: Math.floor(exam.duration_seconds / 60), // Convert to minutes
+          totalQuestions: transformedQuestions.length,
+          totalPoints: metadata.totalMarks || transformedQuestions.length * 10,
+          passingScore: metadata.passingMarks 
+            ? Math.round((metadata.passingMarks / (metadata.totalMarks || 100)) * 100)
+            : 70,
+          allowCalculator: metadata.allowCalculator !== false, // Default true
+          allowBackNavigation: metadata.allowBackNavigation !== false, // Default true
+          showResultsImmediately: metadata.showResultsImmediately !== false, // Default true
+          proctoring: {
+            cameraRequired: metadata.proctoring?.cameraRequired || false,
+            microphoneRequired: metadata.proctoring?.microphoneRequired || false,
+            screenLockRequired: metadata.proctoring?.screenLockRequired || false,
+            tabSwitchDetection: metadata.proctoring?.tabSwitchDetection || false,
+          },
+          questions: transformedQuestions,
+        };
+
+        setExamConfig(config);
+      } catch (error: any) {
+        console.error('Failed to fetch exam data:', error);
+        setExamError(error.message || 'Failed to load exam. Please try again.');
+      } finally {
+        setLoadingExam(false);
+      }
+    };
+
+    fetchExamData();
+  }, [examId]);
+
+  // Update examState when examConfig is loaded
+  useEffect(() => {
+    if (examConfig) {
+      setExamState(prev => ({
+        ...prev,
+        timeRemaining: examConfig.duration * 60,
+      }));
+    }
+  }, [examConfig]);
+
+  // Define handlers before useEffect that might use them
+  const handleTabSwitch = () => {
+    if (document.hidden && examState.phase === 'active') {
+      setWarningMessage('Tab switching detected. Please stay focused on the exam.');
+      setShowWarning(true);
+    }
+  };
+
+  const calculateScore = () => {
+    if (!examConfig) return 0;
+    
+    let totalScore = 0;
+    let maxScore = 0;
+
+    examConfig.questions.forEach(question => {
+      maxScore += question.points;
+      const answer = examState.answers[question.id];
+      
+      if (!answer) return;
+
+      // Simple scoring logic - in real app this would be more sophisticated
+      switch (question.type) {
+        case 'mcq-single':
+        case 'true-false':
+          if (answer === 'a' || answer === 'true') { // Mock correct answers
+            totalScore += question.points;
+          }
+          break;
+        case 'mcq-multiple':
+          if (Array.isArray(answer) && answer.includes('a')) { // Mock partial credit
+            totalScore += question.points * 0.8;
+          }
+          break;
+        case 'short-answer':
+        case 'long-answer':
+        case 'numeric':
+          if (answer && answer.length > 0) {
+            totalScore += question.points * 0.9; // Mock grading
+          }
+          break;
+        default:
+          if (answer) {
+            totalScore += question.points * 0.85; // Mock scoring
+          }
+      }
+    });
+
+    return maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+  };
+
+  const handleSubmitExam = () => {
+    if (!examConfig) return;
+    
+    const score = calculateScore();
+    const passed = score >= examConfig.passingScore;
+    
+    setExamState(prev => ({
+      ...prev,
+      phase: examConfig.showResultsImmediately ? 'results' : 'submitted',
+      endTime: new Date(),
+      score,
+      passed
+    }));
+
+    // Clean up proctoring
+    document.removeEventListener('visibilitychange', handleTabSwitch);
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    }
+  };
 
   // Timer effect - only active during exam
   useEffect(() => {
@@ -272,9 +309,12 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     if (examState.phase === 'submitted' && !examState.endTime) {
       handleSubmitExam();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examState.phase]);
 
   const performSystemChecks = async () => {
+    if (!examConfig) return;
+    
     // Check internet connection
     setSystemChecks(prev => ({ ...prev, connection: navigator.onLine }));
 
@@ -313,15 +353,13 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   };
 
   const startExam = () => {
-    // Check if 2FA is required
-    if (twoFactorEnabled) {
-      setExamState(prev => ({ ...prev, phase: '2fa' }));
-    } else {
-      beginActiveExam();
-    }
+    // Start exam directly without 2FA
+    beginActiveExam();
   };
 
   const beginActiveExam = () => {
+    if (!examConfig) return;
+    
     setExamState(prev => ({ 
       ...prev, 
       phase: 'active', 
@@ -337,27 +375,6 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
 
     if (examConfig.proctoring.tabSwitchDetection) {
       document.addEventListener('visibilitychange', handleTabSwitch);
-    }
-  };
-
-  const handleCancelExam = () => {
-    // Clean up any proctoring
-    document.removeEventListener('visibilitychange', handleTabSwitch);
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    }
-    
-    if (onCancel) {
-      onCancel();
-    } else {
-      onComplete();
-    }
-  };
-
-  const handleTabSwitch = () => {
-    if (document.hidden && examState.phase === 'active') {
-      setWarningMessage('Tab switching detected. Please stay focused on the exam.');
-      setShowWarning(true);
     }
   };
 
@@ -378,68 +395,24 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   };
 
   const navigateToQuestion = (index: number) => {
+    if (!examConfig) return;
     setExamState(prev => ({
       ...prev,
       currentQuestion: Math.max(0, Math.min(index, examConfig.totalQuestions - 1))
     }));
   };
 
-  const calculateScore = () => {
-    let totalScore = 0;
-    let maxScore = 0;
-
-    examConfig.questions.forEach(question => {
-      maxScore += question.points;
-      const answer = examState.answers[question.id];
-      
-      if (!answer) return;
-
-      // Simple scoring logic - in real app this would be more sophisticated
-      switch (question.type) {
-        case 'mcq-single':
-        case 'true-false':
-          if (answer === 'a' || answer === 'true') { // Mock correct answers
-            totalScore += question.points;
-          }
-          break;
-        case 'mcq-multiple':
-          if (Array.isArray(answer) && answer.includes('a')) { // Mock partial credit
-            totalScore += question.points * 0.8;
-          }
-          break;
-        case 'short-answer':
-        case 'long-answer':
-        case 'numeric':
-          if (answer && answer.length > 0) {
-            totalScore += question.points * 0.9; // Mock grading
-          }
-          break;
-        default:
-          if (answer) {
-            totalScore += question.points * 0.85; // Mock scoring
-          }
-      }
-    });
-
-    return (totalScore / maxScore) * 100;
-  };
-
-  const handleSubmitExam = () => {
-    const score = calculateScore();
-    const passed = score >= examConfig.passingScore;
-    
-    setExamState(prev => ({
-      ...prev,
-      phase: examConfig.showResultsImmediately ? 'results' : 'submitted',
-      endTime: new Date(),
-      score,
-      passed
-    }));
-
-    // Clean up proctoring
+  const handleCancelExam = () => {
+    // Clean up any proctoring
     document.removeEventListener('visibilitychange', handleTabSwitch);
     if (document.fullscreenElement) {
       document.exitFullscreen();
+    }
+    
+    if (onCancel) {
+      onCancel();
+    } else {
+      onComplete();
     }
   };
 
@@ -450,7 +423,49 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Render different phases
+  // Show loading state - AFTER all hooks
+  if (loadingExam) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              <RefreshCw className="h-8 w-8 text-primary animate-spin" />
+            </div>
+            <h2 className="text-xl font-semibold">Loading Exam...</h2>
+            <p className="text-muted-foreground">Please wait while we load the exam details.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show error state - AFTER all hooks
+  if (examError || !examConfig) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <Card className="max-w-md w-full">
+          <CardContent className="p-8 text-center space-y-4">
+            <div className="mx-auto w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-4">
+              <AlertTriangle className="h-8 w-8 text-destructive" />
+            </div>
+            <h2 className="text-xl font-semibold">Error Loading Exam</h2>
+            <p className="text-muted-foreground">{examError || 'Exam not found'}</p>
+            <div className="flex gap-3 justify-center mt-6">
+              <Button onClick={onCancel || onComplete} variant="outline">
+                Go Back
+              </Button>
+              <Button onClick={() => window.location.reload()}>
+                Retry
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Render different phases - examConfig is guaranteed to be non-null here
   if (examState.phase === 'setup') {
     return <ExamSetupPhase 
       examConfig={examConfig}
@@ -465,13 +480,6 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       examConfig={examConfig}
       onStartExam={startExam}
       onBackToSetup={() => setExamState(prev => ({ ...prev, phase: 'setup' }))}
-    />;
-  }
-
-  if (examState.phase === '2fa') {
-    return <TwoFactorAuthPhase 
-      onVerified={beginActiveExam}
-      onCancel={() => setExamState(prev => ({ ...prev, phase: 'instructions' }))}
     />;
   }
 
@@ -756,119 +764,80 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup }: any) 
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-6">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="max-w-3xl w-full"
+        className="max-w-2xl w-full"
       >
-        <Card>
-          <CardHeader className="text-center">
-            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-              <FileText className="h-8 w-8 text-primary" />
+        <Card className="border-2">
+          <CardHeader className="text-center pb-4">
+            <div className="mx-auto w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mb-3">
+              <FileText className="h-7 w-7 text-primary" />
             </div>
-            <CardTitle className="text-2xl">Exam Instructions</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-2xl mb-1">Exam Instructions</CardTitle>
+            <CardDescription className="text-base">
               Please read all instructions carefully before starting
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="text-center">
-              <h3 className="text-xl font-semibold mb-2">{examConfig.title}</h3>
-              <div className="flex items-center justify-center gap-6 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1">
+          <CardContent className="space-y-5">
+            {/* Exam Title */}
+            <div className="text-center pb-4 border-b">
+              <h3 className="text-xl font-semibold mb-3">{examConfig.title}</h3>
+              <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-1.5">
                   <Clock className="h-4 w-4" />
-                  {examConfig.duration} minutes
+                  <span className="font-medium">{examConfig.duration} minutes</span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <Target className="h-4 w-4" />
-                  {examConfig.totalQuestions} questions
+                  <span className="font-medium">{examConfig.totalQuestions} questions</span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                   <Award className="h-4 w-4" />
-                  {examConfig.totalPoints} points
+                  <span className="font-medium">{examConfig.totalPoints} points</span>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-4">
-              <h4 className="font-medium">Important Instructions:</h4>
-              <div className="space-y-3">
+            {/* Instructions List */}
+            <div className="space-y-3">
+              <h4 className="font-semibold text-base">Important Instructions:</h4>
+              <div className="space-y-2.5">
                 {examConfig.instructions.map((instruction: string, index: number) => (
-                  <div key={index} className="flex items-start gap-3 p-3 bg-muted rounded-lg">
-                    <div className="w-6 h-6 bg-primary rounded-full flex items-center justify-center text-primary-foreground text-sm font-medium flex-shrink-0 mt-0.5">
+                  <div key={index} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border border-border/50">
+                    <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center text-primary-foreground text-xs font-semibold flex-shrink-0 mt-0.5">
                       {index + 1}
                     </div>
-                    <p className="text-sm">{instruction}</p>
+                    <p className="text-sm leading-relaxed flex-1">{instruction}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Exam Features */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-3">
-                <h4 className="font-medium text-sm">Available Tools:</h4>
-                <div className="space-y-2">
-                  {examConfig.allowCalculator && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calculator className="h-4 w-4 text-primary" />
-                      Calculator allowed
-                    </div>
-                  )}
-                  {examConfig.allowBackNavigation && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <ChevronLeft className="h-4 w-4 text-primary" />
-                      Back navigation allowed
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-3">
-                <h4 className="font-medium text-sm">Proctoring:</h4>
-                <div className="space-y-2">
-                  {examConfig.proctoring.cameraRequired && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Camera className="h-4 w-4 text-orange-500" />
-                      Camera monitoring
-                    </div>
-                  )}
-                  {examConfig.proctoring.tabSwitchDetection && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Eye className="h-4 w-4 text-orange-500" />
-                      Tab switch detection
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                Once you start the exam, the timer will begin and cannot be paused. Make sure you're ready to begin.
-              </AlertDescription>
-            </Alert>
-
-            <div className="flex items-center space-x-2">
+            {/* Agreement Checkbox */}
+            <div className="flex items-start space-x-2 pt-2 pb-1">
               <Checkbox 
                 id="agree-terms" 
                 checked={agreedToTerms}
                 onCheckedChange={(checked) => setAgreedToTerms(checked as boolean)}
+                className="mt-1"
               />
-              <Label htmlFor="agree-terms" className="text-sm">
-                I have read and understood all the instructions and agree to the exam terms
+              <Label htmlFor="agree-terms" className="text-sm leading-relaxed cursor-pointer">
+                I have read and understood all the instructions and agree to the exam terms and conditions
               </Label>
             </div>
 
-            <div className="flex gap-3">
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-2">
               <Button onClick={onBackToSetup} variant="outline" className="flex-1">
-                Back to Setup
+                Back
               </Button>
               <Button 
                 onClick={onStartExam}
                 disabled={!agreedToTerms}
                 className="flex-1 bg-primary hover:bg-primary/90"
+                size="lg"
               >
                 <Play className="h-4 w-4 mr-2" />
                 Start Exam
