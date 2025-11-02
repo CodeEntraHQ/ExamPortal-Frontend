@@ -174,6 +174,23 @@ export const deleteQuestion = async (questionId: string): Promise<{status: strin
   return response.json();
 };
 
+export const inviteStudents = async (payload: { examId: string; entityId?: string; emails: string[] }) => {
+  console.log('Inviting students with payload:', payload);
+  // Backend expects snake_case keys: exam_id and entity_id
+  const cleanedExamId = (payload.examId || '').split(':')[0].trim();
+  const body = {
+    exam_id: cleanedExamId,
+    student_emails: payload.emails,
+  };
+
+  const response = await authenticatedFetch(getApiUrl('/exams/invite'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return response.json();
+};
+
 export const examApi = {
   getExams,
   createExam,
@@ -181,5 +198,6 @@ export const examApi = {
   getQuestions,
   createQuestion,
   updateQuestion,
-  deleteQuestion
+  deleteQuestion,
+  inviteStudents,
 };
