@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
@@ -23,6 +23,7 @@ import {
   Star
 } from 'lucide-react';
 import { useAuth } from './AuthProvider';
+import { getStudentEnrollments, StudentEnrollment } from '../services/api/exam';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { motion } from 'motion/react';
 
@@ -36,9 +37,55 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedSubject, setSelectedSubject] = useState('all');
+  const [enrollments, setEnrollments] = useState<StudentEnrollment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [enrollmentTab, setEnrollmentTab] = useState<'ongoing' | 'upcoming' | 'completed'>('ongoing');
 
-  // Enhanced mock data
-  const studentExams = [
+  // Fetch enrollments on component mount
+  useEffect(() => {
+    const fetchEnrollments = async () => {
+      try {
+        setLoading(true);
+        const response = await getStudentEnrollments();
+        if (response.payload && response.payload.all) {
+          setEnrollments(response.payload.all);
+        }
+      } catch (error) {
+        console.error('Failed to fetch enrollments:', error);
+        setEnrollments([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEnrollments();
+  }, []);
+
+  // Transform enrollment data to match existing exam structure
+  const transformEnrollmentToExam = (enrollment: StudentEnrollment) => {
+    const exam = enrollment.exam;
+    const metadata = exam.metadata || {};
+    const result = enrollment.result;
+    
+    return {
+      id: exam.id,
+      name: exam.title,
+      date: metadata.startDate || exam.created_at,
+      duration: Math.floor(exam.duration_seconds / 60),
+      status: enrollment.status.toLowerCase(),
+      subject: metadata.subject || 'General',
+      instructor: metadata.instructor || 'Instructor',
+      difficulty: metadata.difficulty || 'Medium',
+      totalQuestions: metadata.totalQuestions || 0,
+      passingScore: metadata.passingMarks ? Math.round((metadata.passingMarks / (metadata.totalMarks || 100)) * 100) : 70,
+      score: result ? (metadata.totalMarks ? Math.round((result.score / metadata.totalMarks) * 100) : result.score) : undefined,
+      timeSpent: result?.metadata?.timeSpent ? Math.floor(result.metadata.timeSpent / 60) : undefined,
+      correctAnswers: result?.metadata?.correctAnswers || undefined,
+    };
+  };
+
+  // Enhanced mock data (kept for backward compatibility with other tabs)
+  const mockStudentExams = [
     { 
       id: 1, 
       name: 'Mathematics Final Exam', 
@@ -125,9 +172,21 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
     }
   ];
 
-  const upcomingExams = studentExams.filter(exam => exam.status === 'upcoming');
-  const completedExams = studentExams.filter(exam => exam.status === 'completed');
-  const averageScore = completedExams.reduce((sum, exam) => sum + (exam.score || 0), 0) / completedExams.length;
+  // Use fetched enrollments for "My Exams" tab, mock data for other tabs
+  const studentExams = enrollments.map(transformEnrollmentToExam);
+  const ongoingExams = enrollments
+    .filter(e => e.status === 'ONGOING')
+    .map(transformEnrollmentToExam);
+  const upcomingExams = enrollments
+    .filter(e => e.status === 'UPCOMING')
+    .map(transformEnrollmentToExam);
+  const completedExams = enrollments
+    .filter(e => e.status === 'COMPLETED')
+    .map(transformEnrollmentToExam);
+  
+  const averageScore = completedExams.length > 0
+    ? completedExams.reduce((sum, exam) => sum + (exam.score || 0), 0) / completedExams.length
+    : 0;
 
   // Performance data for charts
   const performanceData = completedExams.map(exam => ({
@@ -161,7 +220,7 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
     { subject: 'English', A: 88, fullMark: 100 }
   ];
 
-  // Filter functions
+  // Filter functions for "My Exams" tab
   const filteredExams = studentExams.filter(exam => {
     const matchesSearch = exam.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          exam.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -173,8 +232,39 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
     return matchesSearch && matchesStatus && matchesSubject;
   });
 
-  const filteredUpcoming = filteredExams.filter(exam => exam.status === 'upcoming');
-  const filteredCompleted = filteredExams.filter(exam => exam.status === 'completed');
+  // Filter by enrollment tab
+  const getEnrollmentsByTab = () => {
+    switch (enrollmentTab) {
+      case 'ongoing':
+        return ongoingExams.filter(exam => {
+          const matchesSearch = exam.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                               exam.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                               exam.instructor.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesSubject = selectedSubject === 'all' || exam.subject === selectedSubject;
+          return matchesSearch && matchesSubject;
+        });
+      case 'upcoming':
+        return upcomingExams.filter(exam => {
+          const matchesSearch = exam.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                               exam.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                               exam.instructor.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesSubject = selectedSubject === 'all' || exam.subject === selectedSubject;
+          return matchesSearch && matchesSubject;
+        });
+      case 'completed':
+        return completedExams.filter(exam => {
+          const matchesSearch = exam.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                               exam.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                               exam.instructor.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesSubject = selectedSubject === 'all' || exam.subject === selectedSubject;
+          return matchesSearch && matchesSubject;
+        });
+      default:
+        return [];
+    }
+  };
+
+  const filteredByTab = getEnrollmentsByTab();
 
   const getDifficultyBadgeColor = (difficulty: string) => {
     switch (difficulty) {
@@ -395,16 +485,6 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                       />
                     </div>
                   </div>
-                  <Select value={filterStatus} onValueChange={setFilterStatus}>
-                    <SelectTrigger className="w-[150px]">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="upcoming">Upcoming</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                    </SelectContent>
-                  </Select>
                   <Select value={selectedSubject} onValueChange={setSelectedSubject}>
                     <SelectTrigger className="w-[150px]">
                       <SelectValue placeholder="Subject" />
@@ -417,152 +497,279 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                       <SelectItem value="Biology">Biology</SelectItem>
                       <SelectItem value="Computer Science">Computer Science</SelectItem>
                       <SelectItem value="English">English</SelectItem>
+                      <SelectItem value="General">General</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Upcoming Exams */}
-            {filteredUpcoming.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-primary" />
-                    Upcoming Exams ({filteredUpcoming.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {filteredUpcoming.map((exam) => (
-                      <motion.div 
-                        key={exam.id} 
-                        className="flex items-center justify-between p-4 border rounded-lg hover:shadow-md transition-all duration-200"
-                        whileHover={{ scale: 1.02 }}
-                      >
-                        <div className="space-y-2 flex-1">
-                          <div className="flex items-center gap-3">
-                            <h4 className="font-medium text-foreground">{exam.name}</h4>
-                            <Badge className={getDifficultyBadgeColor(exam.difficulty)}>
-                              {exam.difficulty}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-4 w-4" />
-                              {new Date(exam.date).toLocaleDateString()}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              {exam.duration} minutes
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <BookOpen className="h-4 w-4" />
-                              {exam.subject}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Users className="h-4 w-4" />
-                              {exam.instructor}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                            <span>{exam.totalQuestions} questions</span>
-                            <span>Passing: {exam.passingScore}%</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Badge variant="default" className="bg-primary text-primary-foreground">
-                            Upcoming
-                          </Badge>
-                          <Button 
-                            size="sm"
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                            onClick={() => onStartExam?.(exam.id.toString())}
-                          >
-                            <Play className="h-4 w-4 mr-1" />
-                            Start Exam
-                          </Button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Enrollment Tabs */}
+            <Tabs value={enrollmentTab} onValueChange={(v) => setEnrollmentTab(v as 'ongoing' | 'upcoming' | 'completed')} className="space-y-6">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="ongoing">Ongoing ({ongoingExams.length})</TabsTrigger>
+                <TabsTrigger value="upcoming">Upcoming ({upcomingExams.length})</TabsTrigger>
+                <TabsTrigger value="completed">Completed ({completedExams.length})</TabsTrigger>
+              </TabsList>
 
-            {/* Completed Exams */}
-            {filteredCompleted.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5 text-success" />
-                    Completed Exams ({filteredCompleted.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {filteredCompleted.map((exam) => (
-                      <motion.div 
-                        key={exam.id} 
-                        className="flex items-center justify-between p-4 border rounded-lg hover:shadow-md transition-all duration-200"
-                        whileHover={{ scale: 1.02 }}
-                      >
-                        <div className="space-y-2 flex-1">
-                          <div className="flex items-center gap-3">
-                            <h4 className="font-medium text-foreground">{exam.name}</h4>
-                            <Badge className={getDifficultyBadgeColor(exam.difficulty)}>
-                              {exam.difficulty}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-4 w-4" />
-                              {new Date(exam.date).toLocaleDateString()}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-4 w-4" />
-                              {exam.timeSpent || exam.duration} / {exam.duration} minutes
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <BookOpen className="h-4 w-4" />
-                              {exam.subject}
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Users className="h-4 w-4" />
-                              {exam.instructor}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                            <span>{exam.correctAnswers || 0}/{exam.totalQuestions} correct</span>
-                            <span>Passing: {exam.passingScore}%</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right">
-                            <div className="text-2xl font-bold text-foreground">{exam.score}%</div>
-                            <Badge className={getScoreBadgeColor(exam.score!)}>
-                              {exam.score! >= 90 ? 'Excellent' : 
-                               exam.score! >= 80 ? 'Good' :
-                               exam.score! >= 70 ? 'Average' : 'Poor'}
-                            </Badge>
-                          </div>
-                          <Button 
-                            size="sm"
-                            variant="outline"
-                            onClick={() => onViewResults?.(exam.id.toString())}
+              {/* Ongoing Exams */}
+              <TabsContent value="ongoing">
+                {loading ? (
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                      <p className="text-muted-foreground">Loading exams...</p>
+                    </CardContent>
+                  </Card>
+                ) : filteredByTab.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                        Ongoing Exams ({filteredByTab.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {filteredByTab.map((exam) => (
+                          <motion.div 
+                            key={exam.id} 
+                            className="flex items-center justify-between p-4 border rounded-lg hover:shadow-md transition-all duration-200"
+                            whileHover={{ scale: 1.02 }}
                           >
-                            <Eye className="h-4 w-4 mr-1" />
-                            View Results
-                          </Button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                            <div className="space-y-2 flex-1">
+                              <div className="flex items-center gap-3">
+                                <h4 className="font-medium text-foreground">{exam.name}</h4>
+                                <Badge className={getDifficultyBadgeColor(exam.difficulty)}>
+                                  {exam.difficulty}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-4 w-4" />
+                                  {new Date(exam.date).toLocaleDateString()}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4" />
+                                  {exam.duration} minutes
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <BookOpen className="h-4 w-4" />
+                                  {exam.subject}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Users className="h-4 w-4" />
+                                  {exam.instructor}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <span>{exam.totalQuestions} questions</span>
+                                <span>Passing: {exam.passingScore}%</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Badge variant="default" className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                                Ongoing
+                              </Badge>
+                              <Button 
+                                size="sm"
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                                onClick={() => onStartExam?.(exam.id.toString())}
+                              >
+                                <Play className="h-4 w-4 mr-1" />
+                                Continue Exam
+                              </Button>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                      <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="font-medium mb-2">No ongoing exams</h3>
+                      <p className="text-muted-foreground">You don't have any ongoing exams at the moment</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
 
-            {filteredExams.length === 0 && (
+              {/* Upcoming Exams */}
+              <TabsContent value="upcoming">
+                {loading ? (
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                      <p className="text-muted-foreground">Loading exams...</p>
+                    </CardContent>
+                  </Card>
+                ) : filteredByTab.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Calendar className="h-5 w-5 text-primary" />
+                        Upcoming Exams ({filteredByTab.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {filteredByTab.map((exam) => (
+                          <motion.div 
+                            key={exam.id} 
+                            className="flex items-center justify-between p-4 border rounded-lg hover:shadow-md transition-all duration-200"
+                            whileHover={{ scale: 1.02 }}
+                          >
+                            <div className="space-y-2 flex-1">
+                              <div className="flex items-center gap-3">
+                                <h4 className="font-medium text-foreground">{exam.name}</h4>
+                                <Badge className={getDifficultyBadgeColor(exam.difficulty)}>
+                                  {exam.difficulty}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-4 w-4" />
+                                  {new Date(exam.date).toLocaleDateString()}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4" />
+                                  {exam.duration} minutes
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <BookOpen className="h-4 w-4" />
+                                  {exam.subject}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Users className="h-4 w-4" />
+                                  {exam.instructor}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <span>{exam.totalQuestions} questions</span>
+                                <span>Passing: {exam.passingScore}%</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Badge variant="default" className="bg-primary text-primary-foreground">
+                                Upcoming
+                              </Badge>
+                              <Button 
+                                size="sm"
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                                onClick={() => onStartExam?.(exam.id.toString())}
+                              >
+                                <Play className="h-4 w-4 mr-1" />
+                                Start Exam
+                              </Button>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                    <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="font-medium mb-2">No upcoming exams</h3>
+                    <p className="text-muted-foreground">You don't have any upcoming exams</p>
+                  </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* Completed Exams */}
+              <TabsContent value="completed">
+                {loading ? (
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                      <p className="text-muted-foreground">Loading exams...</p>
+                    </CardContent>
+                  </Card>
+                ) : filteredByTab.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <CheckCircle className="h-5 w-5 text-success" />
+                        Completed Exams ({filteredByTab.length})
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {filteredByTab.map((exam) => (
+                          <motion.div 
+                            key={exam.id} 
+                            className="flex items-center justify-between p-4 border rounded-lg hover:shadow-md transition-all duration-200"
+                            whileHover={{ scale: 1.02 }}
+                          >
+                            <div className="space-y-2 flex-1">
+                              <div className="flex items-center gap-3">
+                                <h4 className="font-medium text-foreground">{exam.name}</h4>
+                                <Badge className={getDifficultyBadgeColor(exam.difficulty)}>
+                                  {exam.difficulty}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-4 w-4" />
+                                  {new Date(exam.date).toLocaleDateString()}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4" />
+                                  {exam.timeSpent || exam.duration} / {exam.duration} minutes
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <BookOpen className="h-4 w-4" />
+                                  {exam.subject}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Users className="h-4 w-4" />
+                                  {exam.instructor}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                <span>{exam.correctAnswers || 0}/{exam.totalQuestions} correct</span>
+                                <span>Passing: {exam.passingScore}%</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {exam.score !== undefined && (
+                                <div className="text-right">
+                                  <div className="text-2xl font-bold text-foreground">{exam.score}%</div>
+                                  <Badge className={getScoreBadgeColor(exam.score)}>
+                                    {exam.score >= 90 ? 'Excellent' : 
+                                     exam.score >= 80 ? 'Good' :
+                                     exam.score >= 70 ? 'Average' : 'Poor'}
+                                  </Badge>
+                                </div>
+                              )}
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onViewResults?.(exam.id.toString())}
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                View Results
+                              </Button>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                      <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="font-medium mb-2">No completed exams</h3>
+                      <p className="text-muted-foreground">You haven't completed any exams yet</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+            </Tabs>
+
+            {!loading && filteredExams.length === 0 && (
               <Card>
                 <CardContent className="p-8 text-center">
                   <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />

@@ -191,8 +191,57 @@ export const inviteStudents = async (payload: { examId: string; entityId?: strin
   return response.json();
 };
 
+export interface EnrollmentStatus {
+  UPCOMING: 'UPCOMING';
+  ONGOING: 'ONGOING';
+  COMPLETED: 'COMPLETED';
+}
+
+export interface StudentEnrollment {
+  id: string;
+  exam_id: string;
+  user_id: string;
+  status: 'UPCOMING' | 'ONGOING' | 'COMPLETED';
+  enrollment_created_at: string;
+  exam: BackendExam;
+  result: {
+    id: string;
+    score: number;
+    metadata: any;
+    created_at: string;
+  } | null;
+}
+
+export interface StudentEnrollmentsResponse {
+  status: string;
+  responseCode: string;
+  payload: {
+    total: number;
+    ongoing: StudentEnrollment[];
+    upcoming: StudentEnrollment[];
+    completed: StudentEnrollment[];
+    all: StudentEnrollment[];
+  };
+}
+
+export const getStudentEnrollments = async (): Promise<StudentEnrollmentsResponse> => {
+  const response = await authenticatedFetch(getApiUrl('/exams/enrollments'), {
+    method: 'GET',
+  });
+  return response.json();
+};
+
+export const getExamById = async (examId: string): Promise<{status: string; responseCode: string; payload: BackendExam}> => {
+  const cleanedExamId = examId.split(':')[0].trim();
+  const response = await authenticatedFetch(getApiUrl(`/exams/${cleanedExamId}`), {
+    method: 'GET',
+  });
+  return response.json();
+};
+
 export const examApi = {
   getExams,
+  getExamById,
   createExam,
   updateExam,
   getQuestions,
@@ -200,4 +249,5 @@ export const examApi = {
   updateQuestion,
   deleteQuestion,
   inviteStudents,
+  getStudentEnrollments,
 };
