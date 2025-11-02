@@ -37,6 +37,7 @@ import { QuestionManagement } from './QuestionManagement';
 import { useAuth } from './AuthProvider';
 import { useExamContext } from './ExamContextProvider';
 import { EditExamModal } from './EditExamModal';
+import { examApi } from '../services/api/exam';
 
 interface ExamDetailPageProps {
   examId: string;
@@ -211,6 +212,41 @@ export function ExamDetailPage({
     return variants[type] || { className: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300' };
   };
 
+  // Extracted send invitations logic into a separate function so it can be unit-tested
+  const sendInvitations = async () => {
+    const emails = inviteEmails.split(',').map(e => e.trim()).filter(e => e);
+    if (emails.length === 0) {
+      error('Please enter at least one email address');
+      return;
+    }
+
+    const payload = {
+      examId: (currentExam && (currentExam as any).id) || examId,
+      entityId: entityId,
+      emails,
+    };
+
+    try {
+      setShowInviteModal(false);
+      const res = await examApi.inviteStudents(payload as any);
+      const created = (res && (res.payload?.enrollments?.length || res.payload?.enrolledCount || res.enrolledCount || (res.payload && Array.isArray(res.payload) && res.payload.length))) || 0;
+
+      if (created && currentExam && setCurrentExam) {
+        try {
+          setCurrentExam({ ...(currentExam as any), studentsInvited: ((currentExam as any).studentsInvited || 0) + created });
+        } catch (err) {
+          // ignore context update errors
+        }
+      }
+
+      setInviteEmails('');
+      success(`Invitations sent to ${created || emails.length} student(s)`);
+    } catch (err) {
+      console.error('Failed to send invites', err);
+      error('Failed to send invitations. Please try again.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Breadcrumb items={breadcrumbItems} />
@@ -312,23 +348,13 @@ export function ExamDetailPage({
                     </div>
                     
                     <DialogFooter>
-                      <Button variant="outline" onClick={() => setShowInviteModal(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={() => {
-                        const emails = inviteEmails.split(',').map(email => email.trim()).filter(email => email);
-                        if (emails.length === 0) {
-                          error('Please enter at least one email address');
-                          return;
-                        }
-                        console.log('Sending invitations to:', emails);
-                        setShowInviteModal(false);
-                        setInviteEmails('');
-                        success(`Invitations sent to ${emails.length} student(s)`);
-                      }} className="bg-primary hover:bg-primary/90">
-                        <Mail className="h-4 w-4 mr-2" />
-                        Send Invitations
-                      </Button>
+                                      <Button variant="outline" onClick={() => setShowInviteModal(false)}>
+                                        Cancel
+                                      </Button>
+                                      <Button onClick={sendInvitations} className="bg-primary hover:bg-primary/90">
+                                        <Mail className="h-4 w-4 mr-2" />
+                                        Send Invitations
+                                      </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
