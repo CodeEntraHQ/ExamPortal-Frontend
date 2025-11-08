@@ -35,6 +35,7 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<BackendQuestion | null>(null);
+  const [isMultipleCorrect, setIsMultipleCorrect] = useState<boolean>(false);
   
   // Form state for add/edit
   const [formData, setFormData] = useState<CreateQuestionPayload>({
@@ -51,6 +52,21 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
       correct_answers: []
     }
   });
+
+  // Fetch exam data to get isMultipleCorrect
+  const fetchExamData = async () => {
+    try {
+      const cleanedExamId = examId.split(':')[0].trim();
+      const examResponse = await examApi.getExamById(cleanedExamId);
+      const exam = examResponse.payload;
+      const metadata = exam.metadata || {};
+      setIsMultipleCorrect(metadata.isMultipleCorrect || false);
+    } catch (err) {
+      console.error('Error fetching exam data:', err);
+      // Default to false if fetch fails
+      setIsMultipleCorrect(false);
+    }
+  };
 
   // Fetch questions from backend
   const fetchQuestions = async () => {
@@ -81,6 +97,7 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
   };
 
   useEffect(() => {
+    fetchExamData();
     fetchQuestions();
   }, [examId]);
 
@@ -238,7 +255,15 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
     if (field === 'text') {
       options[index] = { ...options[index], text: value as string };
     } else {
-      options[index] = { ...options[index], isCorrect: value as boolean };
+      // If single correct mode and this option is being marked as correct,
+      // unmark all other options
+      if (value === true && !isMultipleCorrect) {
+        options.forEach((opt, idx) => {
+          opt.isCorrect = idx === index;
+        });
+      } else {
+        options[index] = { ...options[index], isCorrect: value as boolean };
+      }
     }
 
     // Update correct_answers array based on isCorrect flags
@@ -494,9 +519,10 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                     <div className="flex items-center gap-2">
                       <Label className="text-sm">
                         <input
-                          type="checkbox"
+                          type={isMultipleCorrect ? "checkbox" : "radio"}
                           checked={option.isCorrect || false}
-                          onChange={(e) => handleOptionChange(index, 'isCorrect', e.target.checked)}
+                          onChange={(e) => handleOptionChange(index, 'isCorrect', isMultipleCorrect ? e.target.checked : true)}
+                          name={isMultipleCorrect ? undefined : `correct-answer-add`}
                           className="mr-1"
                         />
                         Correct
@@ -516,6 +542,8 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                 ))}
                 <p className="text-xs text-muted-foreground">
                   * At least 2 options required, and at least one must be marked as correct
+                  {!isMultipleCorrect && ' (Single correct answer mode - only one option can be correct)'}
+                  {isMultipleCorrect && ' (Multiple correct answers mode - multiple options can be correct)'}
                 </p>
               </div>
             )}
@@ -620,9 +648,10 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                     <div className="flex items-center gap-2">
                       <Label className="text-sm">
                         <input
-                          type="checkbox"
+                          type={isMultipleCorrect ? "checkbox" : "radio"}
                           checked={option.isCorrect || false}
-                          onChange={(e) => handleOptionChange(index, 'isCorrect', e.target.checked)}
+                          onChange={(e) => handleOptionChange(index, 'isCorrect', isMultipleCorrect ? e.target.checked : true)}
+                          name={isMultipleCorrect ? undefined : `correct-answer-edit-${selectedQuestion?.id}`}
                           className="mr-1"
                         />
                         Correct
@@ -642,6 +671,8 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                 ))}
                 <p className="text-xs text-muted-foreground">
                   * At least 2 options required, and at least one must be marked as correct
+                  {!isMultipleCorrect && ' (Single correct answer mode - only one option can be correct)'}
+                  {isMultipleCorrect && ' (Multiple correct answers mode - multiple options can be correct)'}
                 </p>
               </div>
             )}

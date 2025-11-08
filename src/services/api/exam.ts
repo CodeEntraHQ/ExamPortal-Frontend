@@ -45,6 +45,7 @@ export interface CreateExamPayload {
     totalMarks: number;
     passingMarks: number;
     instructions: string[];
+    isMultipleCorrect?: boolean;
   };
   entity_id?: string;
 }
@@ -69,6 +70,7 @@ export interface UpdateExamPayload {
     totalMarks?: number;
     passingMarks?: number;
     instructions?: string[];
+    isMultipleCorrect?: boolean;
     description?: string;
     startDate?: string;
     endDate?: string;
