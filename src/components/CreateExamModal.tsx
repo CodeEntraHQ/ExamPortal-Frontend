@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from './ui/select';
 import { Textarea } from './ui/textarea';
+import { Switch } from './ui/switch';
 import { examApi, CreateExamPayload } from '../services/api/exam';
 import '../styles/scrollbar.css';
 
@@ -31,7 +32,7 @@ interface CreateExamModalProps {
 
 type MetadataFieldType = 'text' | 'number' | 'boolean';
 
-type MetadataKey = 'totalMarks' | 'passingMarks' | 'instructions';
+type MetadataKey = 'totalMarks' | 'passingMarks' | 'instructions' | 'isMultipleCorrect';
 
 interface MetadataFieldDefinition {
   key: MetadataKey;
@@ -44,6 +45,7 @@ interface MetadataField {
   totalMarks?: number;
   passingMarks?: number;
   instructions?: string[];
+  isMultipleCorrect?: boolean;
 }
 
 type ExamFormData = {
@@ -81,7 +83,7 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
 
   const initialFormState: ExamFormData = {
     title: '',
-    type: 'MCQ',
+    type: 'QUIZ',
     duration_seconds: 3600, // Default 1 hour
     metadata: {},
     entity_id: entityId
@@ -139,8 +141,26 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
   const handleTypeChange = (value: ExamFormData['type']) => {
     setFormData(prev => ({
       ...prev,
-      type: value
+      type: value,
+      // Reset isMultipleCorrect when type changes (only relevant for QUIZ)
+      metadata: {
+        ...prev.metadata,
+        isMultipleCorrect: value === 'QUIZ' ? prev.metadata.isMultipleCorrect : undefined
+      }
     }));
+  };
+
+  const handleBooleanChange = (value: boolean, field: string) => {
+    if (field.startsWith('metadata.')) {
+      const metadataField = field.split('.')[1] as keyof ExamFormData['metadata'];
+      setFormData(prev => ({
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          [metadataField]: value
+        }
+      }));
+    }
   };
 
   const handleSubmit = async () => {
@@ -158,7 +178,11 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
         metadata: {
           totalMarks: formData.metadata.totalMarks ?? 100,
           passingMarks: formData.metadata.passingMarks ?? 40,
-          instructions: instructions.length > 0 ? instructions : undefined,
+          instructions: instructions.length > 0 ? instructions : [],
+          // Only include isMultipleCorrect for QUIZ type
+          ...(formData.type === 'QUIZ' && formData.metadata.isMultipleCorrect !== undefined
+            ? { isMultipleCorrect: formData.metadata.isMultipleCorrect }
+            : {}),
         }
       };
       await examApi.createExam(submissionData);
@@ -204,15 +228,34 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
                 <SelectValue placeholder="Select exam type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="MCQ">Multiple Choice Questions</SelectItem>
-                {/* <SelectItem value="ONE_WORD">One Word Answer</SelectItem>
+                <SelectItem value="QUIZ">Quiz</SelectItem>
+                {/* <SelectItem value="MCQ">Multiple Choice Questions</SelectItem>
+                <SelectItem value="ONE_WORD">One Word Answer</SelectItem>
                 <SelectItem value="DESCRIPTIVE">Descriptive</SelectItem>
                 <SelectItem value="HYBRID">Hybrid</SelectItem>
-                <SelectItem value="QUIZ">Quiz</SelectItem>
                 <SelectItem value="OTHER">Other</SelectItem> */}
               </SelectContent>
             </Select>
           </div>
+
+          {/* Show isMultipleCorrect toggle only for QUIZ type */}
+          {formData.type === 'QUIZ' && (
+            <div className="grid gap-2 p-4 border rounded-lg bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <Label htmlFor="isMultipleCorrect">Allow Multiple Correct Answers</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Enable this to allow questions with multiple correct answers
+                  </p>
+                </div>
+                <Switch
+                  id="isMultipleCorrect"
+                  checked={formData.metadata.isMultipleCorrect || false}
+                  onCheckedChange={(checked) => handleBooleanChange(checked, 'metadata.isMultipleCorrect')}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="duration">Duration (minutes)</Label>
