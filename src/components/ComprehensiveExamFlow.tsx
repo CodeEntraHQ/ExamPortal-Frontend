@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getExamById, getQuestions, BackendExam } from '../services/api/exam';
+import { getExamById, getQuestions, BackendExam, startExam, saveAnswer, submitExam, getSubmissions } from '../services/api/exam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Progress } from './ui/progress';
@@ -18,7 +18,6 @@ import {
   Flag,
   ChevronLeft,
   ChevronRight,
-  Save,
   Send,
   AlertTriangle,
   Camera,
@@ -82,7 +81,7 @@ interface ExamState {
   timeRemaining: number;
   answers: Record<string, any>;
   flaggedQuestions: string[];
-  startTime: Date;
+  startTime: Date | null; // Store the actual started_at from backend
   endTime?: Date;
   score?: number;
   passed?: boolean;
@@ -108,7 +107,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     timeRemaining: 3600, // Default 60 minutes, will be updated
     answers: {},
     flaggedQuestions: [],
-    startTime: new Date()
+    startTime: null // Will be set from backend when exam starts
   });
 
   const [systemChecks, setSystemChecks] = useState({
@@ -122,7 +121,6 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   const [showWarning, setShowWarning] = useState(false);
   const [warningMessage, setWarningMessage] = useState('');
   const [proctoringActive, setProctoringActive] = useState(false);
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [twoFactorEnabled] = useState(true); // Mock - in real app this would come from user profile
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -140,6 +138,28 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
         // Fetch questions
         const questionsResponse = await getQuestions(examId, 1, 100); // Get all questions
         const questions = questionsResponse.payload.questions;
+
+        // Check for existing submissions (session management)
+        let existingSubmissions: any = {};
+        let enrollmentStatus = 'UPCOMING';
+        let startedAt: Date | null = null;
+        
+        try {
+          const submissionsResponse = await getSubmissions(examId);
+          enrollmentStatus = submissionsResponse.payload.enrollment_status;
+          if (submissionsResponse.payload.started_at) {
+            startedAt = new Date(submissionsResponse.payload.started_at);
+          }
+          
+          // Restore answers from submissions
+          // Note: Answers are stored as text, we'll convert back to IDs for display after questions are transformed
+          submissionsResponse.payload.submissions.forEach((sub: any) => {
+            existingSubmissions[sub.question_id] = sub.answer;
+          });
+        } catch (err) {
+          // If no submissions exist, that's fine - exam hasn't started yet
+          console.log('No existing submissions found');
+        }
 
         // Transform backend data to ExamConfiguration format
         const metadata = exam.metadata || {};
@@ -196,6 +216,54 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
         };
 
         setExamConfig(config);
+        
+        // Convert saved answers (text) back to IDs for display
+        const restoredAnswers: Record<string, any> = {};
+        Object.keys(existingSubmissions).forEach(questionId => {
+          const question = config.questions.find(q => q.id === questionId);
+          if (question) {
+            const savedAnswer = existingSubmissions[questionId];
+            
+            // For MCQ questions, convert text back to ID for display
+            if (question.type === 'mcq-single') {
+              // Find option with matching text
+              const option = question.options?.find(opt => opt.text === savedAnswer);
+              restoredAnswers[questionId] = option?.id || savedAnswer;
+            } else if (question.type === 'mcq-multiple') {
+              // For multiple choice, convert array of texts to array of IDs
+              if (Array.isArray(savedAnswer)) {
+                const ids = savedAnswer.map(text => {
+                  const option = question.options?.find(opt => opt.text === text);
+                  return option?.id;
+                }).filter(id => id !== undefined);
+                restoredAnswers[questionId] = ids;
+              } else {
+                restoredAnswers[questionId] = savedAnswer;
+              }
+            } else {
+              // For other question types (short-answer, true-false, etc.), use as-is
+              restoredAnswers[questionId] = savedAnswer;
+            }
+          } else {
+            restoredAnswers[questionId] = existingSubmissions[questionId];
+          }
+        });
+        
+        // If exam is ongoing, restore state
+        if (enrollmentStatus === 'ONGOING' && startedAt) {
+          // Calculate remaining time dynamically from started_at and exam duration
+          const now = new Date();
+          const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+          const remainingTime = Math.max(0, config.duration * 60 - elapsedSeconds);
+          
+          setExamState(prev => ({
+            ...prev,
+            phase: remainingTime > 0 ? 'active' : 'results',
+            timeRemaining: remainingTime,
+            answers: restoredAnswers, // Use converted answers (IDs for display)
+            startTime: startedAt,
+          }));
+        }
       } catch (error: any) {
         console.error('Failed to fetch exam data:', error);
         setExamError(error.message || 'Failed to load exam. Please try again.');
@@ -206,16 +274,6 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
 
     fetchExamData();
   }, [examId]);
-
-  // Update examState when examConfig is loaded
-  useEffect(() => {
-    if (examConfig) {
-      setExamState(prev => ({
-        ...prev,
-        timeRemaining: examConfig.duration * 60,
-      }));
-    }
-  }, [examConfig]);
 
   // Define handlers before useEffect that might use them
   const handleTabSwitch = () => {
@@ -267,51 +325,68 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     return maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
   };
 
-  const handleSubmitExam = () => {
+  const handleSubmitExam = async () => {
     if (!examConfig) return;
     
-    const score = calculateScore();
-    const passed = score >= examConfig.passingScore;
-    
-    setExamState(prev => ({
-      ...prev,
-      phase: examConfig.showResultsImmediately ? 'results' : 'submitted',
-      endTime: new Date(),
-      score,
-      passed
-    }));
+    try {
+      // Submit exam to backend
+      const submitResponse = await submitExam(examId);
+      
+      const score = calculateScore();
+      const passed = score >= examConfig.passingScore;
+      
+      setExamState(prev => ({
+        ...prev,
+        phase: 'results',
+        endTime: new Date(),
+        score,
+        passed
+      }));
 
-    // Clean up proctoring
-    document.removeEventListener('visibilitychange', handleTabSwitch);
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
+      // Clean up proctoring
+      document.removeEventListener('visibilitychange', handleTabSwitch);
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+    } catch (error: any) {
+      console.error('Failed to submit exam:', error);
+      setWarningMessage(error.message || 'Failed to submit exam. Please try again.');
+      setShowWarning(true);
     }
   };
 
-  // Timer effect - only active during exam
+  // Timer effect - only active during exam, calculates remaining time from started_at
   useEffect(() => {
-    if (examState.phase !== 'active') return;
+    if (examState.phase !== 'active' || !examConfig || !examState.startTime) return;
 
     const timer = setInterval(() => {
-      setExamState(prev => {
-        if (prev.timeRemaining <= 0) {
-          clearInterval(timer);
-          return { ...prev, phase: 'submitted', endTime: new Date() };
-        }
-        return { ...prev, timeRemaining: prev.timeRemaining - 1 };
-      });
+      // Calculate remaining time dynamically from started_at (from enrollment metadata) and current time
+      const now = new Date();
+      const startedAt = examState.startTime!;
+      const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+      const remainingTime = Math.max(0, examConfig.duration * 60 - elapsedSeconds);
+      
+      if (remainingTime <= 0) {
+        clearInterval(timer);
+        // Auto-submit when time runs out
+        handleSubmitExam();
+        setExamState(prev => ({
+          ...prev,
+          phase: 'results',
+          endTime: new Date(),
+          timeRemaining: 0
+        }));
+      } else {
+        setExamState(prev => ({
+          ...prev,
+          timeRemaining: remainingTime
+        }));
+      }
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [examState.phase]);
-
-  // Auto-submit when time runs out
-  useEffect(() => {
-    if (examState.phase === 'submitted' && !examState.endTime) {
-      handleSubmitExam();
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examState.phase]);
+  }, [examState.phase, examState.startTime, examConfig]);
 
   const performSystemChecks = async () => {
     if (!examConfig) return;
@@ -353,18 +428,40 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     setSystemChecks(prev => ({ ...prev, screenLock: !!document.documentElement.requestFullscreen }));
   };
 
-  const startExam = () => {
-    // Start exam directly without 2FA
-    beginActiveExam();
+  const handleStartExam = async () => {
+    if (!examConfig) return;
+    
+    try {
+      // Call backend to start exam and update enrollment status
+      const startResponse = await startExam(examId);
+      
+      // Use the started_at from backend response
+      const startedAt = startResponse.payload.started_at 
+        ? new Date(startResponse.payload.started_at)
+        : new Date();
+      
+      // Start exam locally with the actual started_at from backend
+      beginActiveExam(startedAt);
+    } catch (error: any) {
+      console.error('Failed to start exam:', error);
+      setWarningMessage(error.message || 'Failed to start exam. Please try again.');
+      setShowWarning(true);
+    }
   };
 
-  const beginActiveExam = () => {
+  const beginActiveExam = (startedAt: Date) => {
     if (!examConfig) return;
+    
+    // Calculate initial remaining time based on started_at and current time
+    const now = new Date();
+    const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+    const initialRemainingTime = Math.max(0, examConfig.duration * 60 - elapsedSeconds);
     
     setExamState(prev => ({ 
       ...prev, 
-      phase: 'active', 
-      startTime: new Date() 
+      phase: initialRemainingTime > 0 ? 'active' : 'results',
+      startTime: startedAt,
+      timeRemaining: initialRemainingTime
     }));
 
     // Enable proctoring features
@@ -379,11 +476,73 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     }
   };
 
-  const handleAnswerChange = (questionId: string, answer: any) => {
+  // Helper function to convert option ID to option text
+  const getOptionTextById = (questionId: string, optionId: string): string | null => {
+    if (!examConfig) return null;
+    const question = examConfig.questions.find(q => q.id === questionId);
+    if (!question) return null;
+    const option = question.options?.find(opt => opt.id === optionId);
+    return option?.text || null;
+  };
+
+  // Helper function to convert option text to option ID (for display)
+  const getOptionIdByText = (questionId: string, optionText: string): string | null => {
+    if (!examConfig) return null;
+    const question = examConfig.questions.find(q => q.id === questionId);
+    if (!question) return null;
+    const option = question.options?.find(opt => opt.text === optionText);
+    return option?.id || null;
+  };
+
+  // Helper function to convert answer (ID or array of IDs) to text (or array of texts)
+  const convertAnswerToText = (questionId: string, answer: any): any => {
+    if (!answer) return answer;
+    
+    // For multiple choice (array of IDs)
+    if (Array.isArray(answer)) {
+      return answer.map(id => getOptionTextById(questionId, id)).filter(text => text !== null);
+    }
+    
+    // For single choice (single ID) or true/false
+    // For true/false, keep as is (it's already text)
+    if (answer === 'true' || answer === 'false') {
+      return answer;
+    }
+    
+    // For single choice MCQ, convert ID to text
+    const text = getOptionTextById(questionId, answer);
+    return text || answer; // Fallback to original if not found
+  };
+
+
+  const handleAnswerChange = async (questionId: string, answer: any) => {
+    // Find the question to determine its type
+    const question = examConfig?.questions.find(q => q.id === questionId);
+    if (!question) return;
+
+    // Convert answer from ID to text for saving
+    const answerToSave = convertAnswerToText(questionId, answer);
+    
+    // Update local state with the ID (for display purposes)
+    // We keep IDs in local state for UI, but save text to backend
     setExamState(prev => ({
       ...prev,
       answers: { ...prev.answers, [questionId]: answer }
     }));
+
+    // Auto-save to backend if exam is active (save as text)
+    if (examConfig && examState.phase === 'active') {
+      try {
+        await saveAnswer({
+          exam_id: examId,
+          question_id: questionId,
+          answer: answerToSave, // Save text instead of ID
+        });
+      } catch (error) {
+        console.error('Failed to save answer:', error);
+        // Don't show error to user for auto-save failures
+      }
+    }
   };
 
   const handleFlagQuestion = (questionId: string) => {
@@ -403,19 +562,6 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     }));
   };
 
-  const handleCancelExam = () => {
-    // Clean up any proctoring
-    document.removeEventListener('visibilitychange', handleTabSwitch);
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-    }
-    
-    if (onCancel) {
-      onCancel();
-    } else {
-      onComplete();
-    }
-  };
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -479,7 +625,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   if (examState.phase === 'instructions') {
     return <ExamInstructionsPhase 
       examConfig={examConfig}
-      onStartExam={startExam}
+      onStartExam={handleStartExam}
       onBackToSetup={() => setExamState(prev => ({ ...prev, phase: 'setup' }))}
     />;
   }
@@ -492,7 +638,6 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       onFlagQuestion={handleFlagQuestion}
       onNavigateToQuestion={navigateToQuestion}
       onSubmitExam={handleSubmitExam}
-      onCancelExam={() => setShowCancelDialog(true)}
       formatTime={formatTime}
       showCalculator={showCalculator}
       setShowCalculator={setShowCalculator}
@@ -501,9 +646,6 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       warningMessage={warningMessage}
       proctoringActive={proctoringActive}
       videoRef={videoRef}
-      showCancelDialog={showCancelDialog}
-      setShowCancelDialog={setShowCancelDialog}
-      onConfirmCancel={handleCancelExam}
     />;
   }
 
@@ -851,7 +993,7 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup }: any) 
   );
 }
 
-function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion, onNavigateToQuestion, onSubmitExam, onCancelExam, formatTime, showCalculator, setShowCalculator, showWarning, setShowWarning, warningMessage, proctoringActive, videoRef, showCancelDialog, setShowCancelDialog, onConfirmCancel }: any) {
+function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion, onNavigateToQuestion, onSubmitExam, formatTime, showCalculator, setShowCalculator, showWarning, setShowWarning, warningMessage, proctoringActive, videoRef }: any) {
   const currentQuestion = examConfig.questions[examState.currentQuestion];
 
   const renderQuestionContent = () => {
@@ -880,25 +1022,29 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
       case 'mcq-multiple':
         return (
           <div className="space-y-3">
-            {currentQuestion.options?.map((option: any) => (
-              <div key={option.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                <Checkbox
-                  id={option.id}
-                  checked={(answer || []).includes(option.id)}
-                  onCheckedChange={(checked) => {
-                    const newAnswer = answer || [];
-                    if (checked) {
-                      onAnswerChange(currentQuestion.id, [...newAnswer, option.id]);
-                    } else {
-                      onAnswerChange(currentQuestion.id, newAnswer.filter((id: string) => id !== option.id));
-                    }
-                  }}
-                />
-                <Label htmlFor={option.id} className="flex-1 cursor-pointer">
-                  {option.text}
-                </Label>
-              </div>
-            ))}
+            {currentQuestion.options?.map((option: any) => {
+              // Check if this option ID is in the answer array
+              const isChecked = Array.isArray(answer) && answer.includes(option.id);
+              return (
+                <div key={option.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                  <Checkbox
+                    id={option.id}
+                    checked={isChecked}
+                    onCheckedChange={(checked) => {
+                      const newAnswer = answer || [];
+                      if (checked) {
+                        onAnswerChange(currentQuestion.id, [...newAnswer, option.id]);
+                      } else {
+                        onAnswerChange(currentQuestion.id, newAnswer.filter((id: string) => id !== option.id));
+                      }
+                    }}
+                  />
+                  <Label htmlFor={option.id} className="flex-1 cursor-pointer">
+                    {option.text}
+                  </Label>
+                </div>
+              );
+            })}
           </div>
         );
 
@@ -1054,16 +1200,6 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
                   <Calculator className="h-4 w-4" />
                 </Button>
               )}
-              
-              {/* Cancel Button */}
-              <Button
-                onClick={onCancelExam}
-                variant="outline"
-                size="sm"
-                className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
-              >
-                Cancel Exam
-              </Button>
 
               {/* Submit Button */}
               <Button
@@ -1195,25 +1331,13 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
                 Previous
               </Button>
               
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    // Auto-save logic here
-                  }}
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  Save
-                </Button>
-                
-                <Button
-                  onClick={() => onNavigateToQuestion(examState.currentQuestion + 1)}
-                  disabled={examState.currentQuestion === examConfig.totalQuestions - 1}
-                >
-                  Next
-                  <ChevronRight className="h-4 w-4 ml-2" />
-                </Button>
-              </div>
+              <Button
+                onClick={() => onNavigateToQuestion(examState.currentQuestion + 1)}
+                disabled={examState.currentQuestion === examConfig.totalQuestions - 1}
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-2" />
+              </Button>
             </div>
           </div>
         </div>
@@ -1257,38 +1381,6 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
         )}
       </AnimatePresence>
 
-      {/* Cancel Confirmation Dialog */}
-      <AnimatePresence>
-        {showCancelDialog && (
-          <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-5 w-5" />
-                  Cancel Exam
-                </DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <p>Are you sure you want to cancel this exam?</p>
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Warning:</strong> Canceling will forfeit your exam attempt. Your current progress will not be saved and this attempt will be recorded as incomplete.
-                  </AlertDescription>
-                </Alert>
-                <div className="flex justify-end gap-3">
-                  <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
-                    Continue Exam
-                  </Button>
-                  <Button variant="destructive" onClick={onConfirmCancel}>
-                    Yes, Cancel Exam
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -1319,10 +1411,13 @@ function ExamSubmittedPhase({ onComplete }: any) {
 }
 
 function ExamResultsPhase({ examConfig, examState, onComplete }: any) {
-  const scorePercentage = examState.score || 0;
-  const gradeLevel = scorePercentage >= 90 ? 'Excellent' : 
-                    scorePercentage >= 80 ? 'Good' : 
-                    scorePercentage >= 70 ? 'Average' : 'Needs Improvement';
+  const attempted = Object.keys(examState.answers).length;
+  const skipped = examConfig.totalQuestions - attempted;
+  const timeTaken = examState.endTime && examState.startTime
+    ? Math.floor((examState.endTime.getTime() - examState.startTime.getTime()) / 1000)
+    : 0;
+  const timeTakenMinutes = Math.floor(timeTaken / 60);
+  const timeTakenSeconds = timeTaken % 60;
 
   return (
     <motion.div 
@@ -1330,156 +1425,60 @@ function ExamResultsPhase({ examConfig, examState, onComplete }: any) {
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen bg-background p-6"
     >
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-2xl mx-auto space-y-6">
         {/* Header */}
         <Card>
           <CardContent className="p-8 text-center">
-            <div className={`mx-auto w-20 h-20 rounded-full flex items-center justify-center mb-4 ${
-              examState.passed ? 'bg-success/10' : 'bg-destructive/10'
-            }`}>
-              {examState.passed ? (
-                <CheckCircle className="h-10 w-10 text-success" />
-              ) : (
-                <AlertTriangle className="h-10 w-10 text-destructive" />
-              )}
+            <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              <CheckCircle className="h-8 w-8 text-primary" />
             </div>
-            <h1 className="text-3xl font-bold mb-2">
-              {examState.passed ? 'Congratulations!' : 'Exam Complete'}
-            </h1>
+            <h1 className="text-2xl font-bold mb-2">Exam Submitted Successfully</h1>
             <p className="text-muted-foreground">
-              You have completed {examConfig.title}
+              {examConfig.title}
             </p>
           </CardContent>
         </Card>
 
-        {/* Score Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card>
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl font-bold text-primary mb-2">
-                {scorePercentage.toFixed(1)}%
-              </div>
-              <p className="text-sm text-muted-foreground">Overall Score</p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6 text-center">
-              <div className={`text-3xl font-bold mb-2 ${
-                examState.passed ? 'text-success' : 'text-destructive'
-              }`}>
-                {examState.passed ? 'PASSED' : 'FAILED'}
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Required: {examConfig.passingScore}%
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardContent className="p-6 text-center">
-              <div className="text-3xl font-bold text-primary mb-2">
-                {gradeLevel}
-              </div>
-              <p className="text-sm text-muted-foreground">Performance</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Detailed Results */}
+        {/* Summary Stats */}
         <Card>
           <CardHeader>
             <CardTitle>Exam Summary</CardTitle>
-            <CardDescription>
-              Review your performance on this exam
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Time Stats */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted rounded-lg">
-              <div className="text-center">
-                <div className="text-lg font-semibold">{examConfig.totalQuestions}</div>
-                <div className="text-sm text-muted-foreground">Total Questions</div>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-muted rounded-lg">
+                <div className="text-2xl font-bold text-primary">{examConfig.totalQuestions}</div>
+                <div className="text-sm text-muted-foreground mt-1">Total Questions</div>
               </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-green-600">
-                  {Object.keys(examState.answers).length}
-                </div>
-                <div className="text-sm text-muted-foreground">Attempted</div>
+              <div className="text-center p-4 bg-muted rounded-lg">
+                <div className="text-2xl font-bold text-green-600">{attempted}</div>
+                <div className="text-sm text-muted-foreground mt-1">Attempted</div>
               </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold text-orange-600">
-                  {examState.flaggedQuestions.length}
-                </div>
-                <div className="text-sm text-muted-foreground">Flagged</div>
+              <div className="text-center p-4 bg-muted rounded-lg">
+                <div className="text-2xl font-bold text-orange-600">{skipped}</div>
+                <div className="text-sm text-muted-foreground mt-1">Skipped</div>
               </div>
-              <div className="text-center">
-                <div className="text-lg font-semibold">
-                  {Math.floor((examConfig.duration * 60 - examState.timeRemaining) / 60)}m
-                </div>
-                <div className="text-sm text-muted-foreground">Time Used</div>
+              <div className="text-center p-4 bg-muted rounded-lg">
+                <div className="text-2xl font-bold text-blue-600">{examState.flaggedQuestions.length}</div>
+                <div className="text-sm text-muted-foreground mt-1">Marked</div>
               </div>
             </div>
-
-            {/* Performance Breakdown */}
-            <div className="space-y-4">
-              <h4 className="font-medium">Performance by Question Type</h4>
-              <div className="space-y-3">
-                {['mcq-single', 'mcq-multiple', 'short-answer', 'true-false'].map(type => {
-                  const questionsOfType = examConfig.questions.filter((q: Question) => q.type === type);
-                  const answeredOfType = questionsOfType.filter((q: Question) => examState.answers[q.id]);
-                  
-                  if (questionsOfType.length === 0) return null;
-                  
-                  return (
-                    <div key={type} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <div className="font-medium capitalize">
-                          {type.replace('-', ' ').replace('mcq', 'Multiple Choice')}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {answeredOfType.length} of {questionsOfType.length} answered
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-semibold">
-                          {((answeredOfType.length / questionsOfType.length) * 100).toFixed(0)}%
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+            
+            <div className="mt-6 pt-6 border-t">
+              <div className="text-center">
+                <div className="text-lg font-semibold text-muted-foreground mb-2">Time Taken</div>
+                <div className="text-3xl font-bold">
+                  {timeTakenMinutes}m {timeTakenSeconds}s
+                </div>
               </div>
-            </div>
-
-            {/* Recommendations */}
-            <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
-              <h4 className="font-medium mb-2">Recommendations</h4>
-              <ul className="text-sm space-y-1 text-muted-foreground">
-                {scorePercentage < 70 && (
-                  <>
-                    <li>• Review the exam material and practice similar questions</li>
-                    <li>• Consider scheduling a study session with your instructor</li>
-                  </>
-                )}
-                {examState.flaggedQuestions.length > 0 && (
-                  <li>• You flagged {examState.flaggedQuestions.length} questions - review these topics</li>
-                )}
-                {scorePercentage >= 80 && (
-                  <li>• Great performance! Continue with your current study approach</li>
-                )}
-              </ul>
             </div>
           </CardContent>
         </Card>
 
-        {/* Actions */}
-        <div className="flex gap-4 justify-center">
-          <Button onClick={onComplete} size="lg">
+        {/* Action */}
+        <div className="flex justify-center">
+          <Button onClick={onComplete} size="lg" className="w-full md:w-auto">
             Return to Dashboard
-          </Button>
-          <Button variant="outline" size="lg">
-            Download Results
           </Button>
         </div>
       </div>
