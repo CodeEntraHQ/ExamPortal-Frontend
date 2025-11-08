@@ -174,14 +174,17 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
 
   // Use fetched enrollments for "My Exams" tab, mock data for other tabs
   const studentExams = enrollments.map(transformEnrollmentToExam);
+  
+  // Filter enrollments by status - ensure we use the actual enrollment status
+  // Only mark as COMPLETED if status is explicitly COMPLETED (not just if result exists)
   const ongoingExams = enrollments
-    .filter(e => e.status === 'ONGOING')
+    .filter(e => e.status && e.status.toUpperCase() === 'ONGOING')
     .map(transformEnrollmentToExam);
   const upcomingExams = enrollments
-    .filter(e => e.status === 'UPCOMING')
+    .filter(e => e.status && e.status.toUpperCase() === 'UPCOMING')
     .map(transformEnrollmentToExam);
   const completedExams = enrollments
-    .filter(e => e.status === 'COMPLETED')
+    .filter(e => e.status && e.status.toUpperCase() === 'COMPLETED')
     .map(transformEnrollmentToExam);
   
   const averageScore = completedExams.length > 0
