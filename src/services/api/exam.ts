@@ -44,7 +44,7 @@ export interface CreateExamPayload {
   metadata?: {
     totalMarks: number;
     passingMarks: number;
-    instructions: string;
+    instructions: string[];
   };
   entity_id?: string;
 }
@@ -68,7 +68,7 @@ export interface UpdateExamPayload {
   metadata?: {
     totalMarks?: number;
     passingMarks?: number;
-    instructions?: string;
+    instructions?: string[];
     description?: string;
     startDate?: string;
     endDate?: string;

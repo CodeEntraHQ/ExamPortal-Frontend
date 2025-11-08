@@ -19,6 +19,7 @@ import {
 } from './ui/select';
 import { Textarea } from './ui/textarea';
 import { examApi, UpdateExamPayload, BackendExam } from '../services/api/exam';
+import { Plus, X } from 'lucide-react';
 import '../styles/scrollbar.css';
 
 interface EditExamModalProps {
@@ -31,7 +32,7 @@ interface EditExamModalProps {
 interface MetadataField {
   totalMarks?: number;
   passingMarks?: number;
-  instructions?: string;
+  instructions?: string | string[];
   description?: string;
   startDate?: string;
   endDate?: string;
@@ -56,11 +57,19 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
 
   const getInitialFormState = (): ExamFormData => {
     if (exam) {
+      let metadata = {};
+      if (exam.metadata && typeof exam.metadata === 'object' && !Array.isArray(exam.metadata)) {
+        metadata = { ...exam.metadata };
+        // Convert instructions to array if it's a string (backward compatibility)
+        if (metadata.instructions && typeof metadata.instructions === 'string') {
+          metadata.instructions = [metadata.instructions];
+        }
+      }
       return {
         title: exam.title || '',
         type: exam.type || 'EXAM',
         duration_seconds: exam.duration_seconds || 3600,
-        metadata: (exam.metadata && typeof exam.metadata === 'object' && !Array.isArray(exam.metadata)) ? exam.metadata : {},
+        metadata,
         active: exam.active !== undefined ? exam.active : true,
       };
     }
@@ -151,12 +160,21 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
       setLoading(true);
       setError(null);
       
+      // Filter out empty instructions before submitting
+      const metadata = { ...formData.metadata };
+      if (metadata.instructions && Array.isArray(metadata.instructions)) {
+        const filteredInstructions = metadata.instructions
+          .map(inst => typeof inst === 'string' ? inst.trim() : String(inst).trim())
+          .filter(inst => inst.length > 0);
+        metadata.instructions = filteredInstructions.length > 0 ? filteredInstructions : undefined;
+      }
+      
       const submissionData: UpdateExamPayload = {
         title: formData.title,
         type: formData.type,
         duration_seconds: formData.duration_seconds,
         active: formData.active,
-        metadata: Object.keys(formData.metadata).length > 0 ? formData.metadata : undefined,
+        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       };
       
       const response = await examApi.updateExam(exam.id, submissionData);
@@ -181,7 +199,7 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
       console.log('EditExamModal - No valid metadata found:', exam?.metadata);
       return [];
     }
-    const available: Array<{ key: string; value: any; type: 'string' | 'number' | 'boolean' | 'date' }> = [];
+    const available: Array<{ key: string; value: any; type: 'string' | 'number' | 'boolean' | 'date' | 'array' }> = [];
     
     // Iterate through all keys in metadata object
     Object.keys(exam.metadata).forEach(key => {
@@ -192,8 +210,10 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
       }
       
       // Determine field type
-      let type: 'string' | 'number' | 'boolean' | 'date' = 'string';
-      if (typeof value === 'number') {
+      let type: 'string' | 'number' | 'boolean' | 'date' | 'array' = 'string';
+      if (Array.isArray(value)) {
+        type = 'array';
+      } else if (typeof value === 'number') {
         type = 'number';
       } else if (typeof value === 'boolean') {
         type = 'boolean';
@@ -347,6 +367,75 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
                             <SelectItem value="false">False</SelectItem>
                           </SelectContent>
                         </Select>
+                      </div>
+                    );
+                  } else if (field.type === 'array' && fieldKey === 'instructions') {
+                    // Special handling for instructions array
+                    const instructions = Array.isArray(fieldValue) ? fieldValue : (fieldValue ? [String(fieldValue)] : ['']);
+                    return (
+                      <div key={fieldKey} className="grid gap-2">
+                        <Label htmlFor={fieldKey}>{fieldKey.charAt(0).toUpperCase() + fieldKey.slice(1).replace(/([A-Z])/g, ' $1')}</Label>
+                        <div className="space-y-2">
+                          {instructions.map((instruction, index) => (
+                            <div key={index} className="flex gap-2 items-start">
+                              <Input
+                                value={instruction}
+                                onChange={(e) => {
+                                  const newInstructions = [...instructions];
+                                  newInstructions[index] = e.target.value;
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    metadata: {
+                                      ...prev.metadata,
+                                      [fieldKey]: newInstructions
+                                    }
+                                  }));
+                                }}
+                                placeholder={`Instruction ${index + 1}...`}
+                                className="flex-1"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
+                                onClick={() => {
+                                  const newInstructions = [...instructions];
+                                  newInstructions.splice(index, 1);
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    metadata: {
+                                      ...prev.metadata,
+                                      [fieldKey]: newInstructions.length > 0 ? newInstructions : ['']
+                                    }
+                                  }));
+                                }}
+                                disabled={instructions.length === 1}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full mt-2"
+                            onClick={() => {
+                              const currentInstructions = Array.isArray(fieldValue) ? fieldValue : (fieldValue ? [String(fieldValue)] : ['']);
+                              setFormData(prev => ({
+                                ...prev,
+                                metadata: {
+                                  ...prev.metadata,
+                                  [fieldKey]: [...currentInstructions, '']
+                                }
+                              }));
+                            }}
+                          >
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Instruction
+                          </Button>
+                        </div>
                       </div>
                     );
                   } else {
