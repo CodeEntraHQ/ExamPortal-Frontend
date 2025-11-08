@@ -10,7 +10,7 @@ import {
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Plus } from 'lucide-react';
+import { Plus, X, Trash2 } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -37,13 +37,13 @@ interface MetadataFieldDefinition {
   key: MetadataKey;
   label: string;
   type: MetadataFieldType;
-  defaultValue: string | number | boolean;
+  defaultValue: string | number | boolean | string[];
 }
 
 interface MetadataField {
   totalMarks?: number;
   passingMarks?: number;
-  instructions?: string;
+  instructions?: string[];
 }
 
 type ExamFormData = {
@@ -74,8 +74,8 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
       key: 'instructions', 
       label: 'Instructions', 
       type: 'text', 
-      defaultValue: '',
-      description: 'Guidelines and rules for exam takers'
+      defaultValue: [],
+      description: 'Guidelines and rules for exam takers (multiple instructions)'
     }
   ];
 
@@ -148,12 +148,17 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
       setLoading(true);
       setError(null);
       // Ensure required metadata fields are present for the API
+      // Filter out empty instructions before submitting
+      const instructions = (formData.metadata.instructions || [])
+        .map(inst => inst.trim())
+        .filter(inst => inst.length > 0);
+      
       const submissionData: CreateExamPayload = {
         ...formData,
         metadata: {
           totalMarks: formData.metadata.totalMarks ?? 100,
           passingMarks: formData.metadata.passingMarks ?? 40,
-          instructions: formData.metadata.instructions ?? '',
+          instructions: instructions.length > 0 ? instructions : undefined,
         }
       };
       await examApi.createExam(submissionData);
@@ -231,7 +236,7 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
                         ...prev,
                         metadata: {
                           ...prev.metadata,
-                          [value]: field.defaultValue
+                          [value]: value === 'instructions' ? [''] : field.defaultValue
                         }
                       }));
                     }
@@ -328,14 +333,67 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
                   </Button>
                 </div>
                 {field.type === 'text' && fieldKey === 'instructions' && (
-                  <Textarea
-                    id={fieldKey}
-                    value={formData.metadata.instructions || ''}
-                    onChange={(e) => handleTextChange(e.target.value, `metadata.${fieldKey}`)}
-                    rows={4}
-                    placeholder="Enter exam instructions..."
-                    className="mt-2"
-                  />
+                  <div className="mt-2 space-y-2">
+                    {(formData.metadata.instructions || ['']).map((instruction, index) => (
+                      <div key={index} className="flex gap-2 items-start">
+                        <Input
+                          value={instruction}
+                          onChange={(e) => {
+                            const newInstructions = [...(formData.metadata.instructions || [])];
+                            newInstructions[index] = e.target.value;
+                            setFormData(prev => ({
+                              ...prev,
+                              metadata: {
+                                ...prev.metadata,
+                                instructions: newInstructions
+                              }
+                            }));
+                          }}
+                          placeholder={`Instruction ${index + 1}...`}
+                          className="flex-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive"
+                          onClick={() => {
+                            const newInstructions = [...(formData.metadata.instructions || [])];
+                            newInstructions.splice(index, 1);
+                            setFormData(prev => ({
+                              ...prev,
+                              metadata: {
+                                ...prev.metadata,
+                                instructions: newInstructions.length > 0 ? newInstructions : ['']
+                              }
+                            }));
+                          }}
+                          disabled={(formData.metadata.instructions || []).length === 1}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-2"
+                      onClick={() => {
+                        const currentInstructions = formData.metadata.instructions || [''];
+                        setFormData(prev => ({
+                          ...prev,
+                          metadata: {
+                            ...prev.metadata,
+                            instructions: [...currentInstructions, '']
+                          }
+                        }));
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Instruction
+                    </Button>
+                  </div>
                 )}
                 {field.type === 'number' && (fieldKey === 'totalMarks' || fieldKey === 'passingMarks') && (
                   <Input
