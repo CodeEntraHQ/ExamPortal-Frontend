@@ -241,6 +241,112 @@ export const getExamById = async (examId: string): Promise<{status: string; resp
   return response.json();
 };
 
+// Submission APIs
+export interface StartExamResponse {
+  status: string;
+  responseCode: string;
+  payload: {
+    exam_id: string;
+    enrollment_id: string;
+    status: string;
+    started_at: string;
+  };
+}
+
+export const startExam = async (examId: string): Promise<StartExamResponse> => {
+  const cleanedExamId = examId.split(':')[0].trim();
+  const response = await authenticatedFetch(getApiUrl('/submissions/start'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ exam_id: cleanedExamId }),
+  });
+  return response.json();
+};
+
+export interface SaveAnswerPayload {
+  exam_id: string;
+  question_id: string;
+  answer: any; // Can be string, array, number, etc.
+}
+
+export interface SaveAnswerResponse {
+  status: string;
+  responseCode: string;
+  payload: {
+    submission_id: string;
+    exam_id: string;
+    question_id: string;
+    saved_at: string;
+  };
+}
+
+export const saveAnswer = async (payload: SaveAnswerPayload): Promise<SaveAnswerResponse> => {
+  const cleanedExamId = payload.exam_id.split(':')[0].trim();
+  const response = await authenticatedFetch(getApiUrl('/submissions/answer'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...payload,
+      exam_id: cleanedExamId,
+    }),
+  });
+  return response.json();
+};
+
+export interface SubmitExamResponse {
+  status: string;
+  responseCode: string;
+  payload: {
+    exam_id: string;
+    enrollment_id: string;
+    status: string;
+    submitted_at: string;
+    time_taken: number;
+    total_answers: number;
+  };
+}
+
+export const submitExam = async (examId: string): Promise<SubmitExamResponse> => {
+  const cleanedExamId = examId.split(':')[0].trim();
+  const response = await authenticatedFetch(getApiUrl('/submissions/submit'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ exam_id: cleanedExamId }),
+  });
+  return response.json();
+};
+
+export interface SubmissionData {
+  question_id: string;
+  answer: any;
+  last_updated: string;
+}
+
+export interface GetSubmissionsResponse {
+  status: string;
+  responseCode: string;
+  payload: {
+    exam_id: string;
+    enrollment_status: string;
+    started_at?: string;
+    submissions: SubmissionData[];
+  };
+}
+
+export const getSubmissions = async (examId: string): Promise<GetSubmissionsResponse> => {
+  const cleanedExamId = examId.split(':')[0].trim();
+  const response = await authenticatedFetch(getApiUrl(`/submissions?exam_id=${cleanedExamId}`), {
+    method: 'GET',
+  });
+  return response.json();
+};
+
 export const examApi = {
   getExams,
   getExamById,
@@ -252,4 +358,8 @@ export const examApi = {
   deleteQuestion,
   inviteStudents,
   getStudentEnrollments,
+  startExam,
+  saveAnswer,
+  submitExam,
+  getSubmissions,
 };
