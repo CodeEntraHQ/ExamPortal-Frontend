@@ -150,13 +150,14 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
             : ['Please read all instructions carefully before starting the exam.'];
 
         // Transform questions to match Question interface
+        const isMultipleCorrect = metadata.isMultipleCorrect || false;
         const transformedQuestions: Question[] = questions.map((q, index) => {
           const qMetadata = q.metadata || {};
           const options = qMetadata.options || [];
           
           return {
             id: q.id,
-            type: q.type === 'MCQ' ? 'mcq-single' : 'short-answer',
+            type: q.type === 'MCQ' ? (isMultipleCorrect ? 'mcq-multiple' : 'mcq-single') : 'short-answer',
             title: `Question ${index + 1}`,
             content: q.question_text,
             points: qMetadata.points || 10,

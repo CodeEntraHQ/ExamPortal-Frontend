@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from './ui/select';
 import { Textarea } from './ui/textarea';
+import { Switch } from './ui/switch';
 import { examApi, UpdateExamPayload, BackendExam } from '../services/api/exam';
 import { Plus, X } from 'lucide-react';
 import '../styles/scrollbar.css';
@@ -33,6 +34,7 @@ interface MetadataField {
   totalMarks?: number;
   passingMarks?: number;
   instructions?: string | string[];
+  isMultipleCorrect?: boolean;
   description?: string;
   startDate?: string;
   endDate?: string;
@@ -142,7 +144,12 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
   const handleTypeChange = (value: ExamFormData['type']) => {
     setFormData(prev => ({
       ...prev,
-      type: value
+      type: value,
+      // Reset isMultipleCorrect when type changes (only relevant for QUIZ)
+      metadata: {
+        ...prev.metadata,
+        isMultipleCorrect: value === 'QUIZ' ? prev.metadata.isMultipleCorrect : undefined
+      }
     }));
   };
 
@@ -167,6 +174,11 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
           .map(inst => typeof inst === 'string' ? inst.trim() : String(inst).trim())
           .filter(inst => inst.length > 0);
         metadata.instructions = filteredInstructions.length > 0 ? filteredInstructions : undefined;
+      }
+      
+      // Only include isMultipleCorrect for QUIZ type
+      if (formData.type !== 'QUIZ') {
+        delete metadata.isMultipleCorrect;
       }
       
       const submissionData: UpdateExamPayload = {
@@ -289,6 +301,33 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
                   required
                 />
               </div>
+
+              {/* Show isMultipleCorrect toggle only for QUIZ type */}
+              {formData.type === 'QUIZ' && (
+                <div className="grid gap-2 p-4 border rounded-lg bg-muted/30">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label htmlFor="isMultipleCorrect">Allow Multiple Correct Answers</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Enable this to allow questions with multiple correct answers
+                      </p>
+                    </div>
+                    <Switch
+                      id="isMultipleCorrect"
+                      checked={formData.metadata.isMultipleCorrect || false}
+                      onCheckedChange={(checked) => {
+                        setFormData(prev => ({
+                          ...prev,
+                          metadata: {
+                            ...prev.metadata,
+                            isMultipleCorrect: checked
+                          }
+                        }));
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="grid gap-2">
                 <Label htmlFor="active">Status</Label>
