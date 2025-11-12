@@ -30,7 +30,6 @@ import {
   Layers
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Breadcrumb } from '../../../shared/components/layout/Breadcrumb';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
 import { QuestionManagement } from './QuestionManagement';
@@ -125,13 +124,6 @@ export function ExamDetailPage({
     highestScore: 98,
     lowestScore: 45
   };
-
-  const breadcrumbItems = [
-    { label: 'Dashboard', onClick: onBackToDashboard },
-    { label: 'Administration', onClick: onBackToEntities },
-    { label: entityName, onClick: onBackToEntity },
-    { label: examName, isActive: true }
-  ];
 
   const stats = [
     {
@@ -268,8 +260,6 @@ export function ExamDetailPage({
 
   return (
     <div className="space-y-6">
-      <Breadcrumb items={breadcrumbItems} />
-      
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
