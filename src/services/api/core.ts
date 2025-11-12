@@ -71,6 +71,23 @@ export async function authenticatedFetch(
     let errorMessage = `Server error: ${response.status} ${response.statusText}`;
     let errorData: any = null;
     
+    // Log request details for debugging
+    let requestBody = null;
+    if (options.body) {
+      try {
+        requestBody = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+      } catch (e) {
+        requestBody = options.body;
+      }
+    }
+    
+    console.error('❌ API Error - Request Details:', {
+      url: typeof url === 'string' ? url : url.url,
+      method: options.method || 'GET',
+      requestBody: requestBody,
+      headers: Object.fromEntries(new Headers(options.headers).entries()),
+    });
+    
     try {
       errorData = await response.json();
       errorMessage = errorData.message || errorData.responseMessage || errorMessage;

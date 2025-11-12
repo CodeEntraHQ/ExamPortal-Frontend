@@ -242,7 +242,6 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
       available.push({ key, value, type });
     });
     
-    console.log('EditExamModal - Available metadata fields:', available);
     return available;
   };
 

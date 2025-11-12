@@ -220,28 +220,47 @@ export function ExamDetailPage({
       return;
     }
 
-    const payload = {
-      examId: (currentExam && (currentExam as any).id) || examId,
-      entityId: entityId,
-      emails,
-    };
+    const examIdToUse = (currentExam && (currentExam as any).id) || examId;
+    const entityIdToUse = (currentExam && (currentExam as any).entity_id) || entityId;
+
+    if (!entityIdToUse) {
+      error('Entity ID is required to invite students');
+      return;
+    }
+
+    setShowInviteModal(false);
+    setInviteEmails('');
 
     try {
-      setShowInviteModal(false);
-      const res = await examApi.inviteStudents(payload as any);
-      const created = (res && (res.payload?.enrollments?.length || res.payload?.enrolledCount || res.enrolledCount || (res.payload && Array.isArray(res.payload) && res.payload.length))) || 0;
+      // Bulk invite all students at once
+      const res = await examApi.inviteStudents({
+        examId: examIdToUse,
+        entityId: entityIdToUse,
+        emails, // All emails in one request
+      });
 
-      if (created && currentExam && setCurrentExam) {
+      const results = res?.payload?.results || [];
+      let totalInvited = 0;
+
+      // Show individual notification for each result
+      results.forEach((result: { email: string; success: boolean; reason: string }) => {
+        if (result.success) {
+          totalInvited++;
+          success(`✓ Invitation sent to ${result.email}`);
+        } else {
+          error(`✗ Failed to invite ${result.email} - ${result.reason}`);
+        }
+      });
+
+      // Update exam state with total invited count
+      if (totalInvited > 0 && currentExam && setCurrentExam) {
         try {
-          setCurrentExam({ ...(currentExam as any), studentsInvited: ((currentExam as any).studentsInvited || 0) + created });
+          setCurrentExam({ ...(currentExam as any), studentsInvited: ((currentExam as any).studentsInvited || 0) + totalInvited });
         } catch (err) {
           // ignore context update errors
         }
       }
-
-      setInviteEmails('');
-      success(`Invitations sent to ${created || emails.length} student(s)`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to send invites', err);
       error('Failed to send invitations. Please try again.');
     }
