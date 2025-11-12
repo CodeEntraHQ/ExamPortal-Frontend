@@ -20,17 +20,27 @@ import {
   LogOut,
   Moon,
   Sun,
-  Menu
+  Menu,
+  ArrowLeft,
+  ChevronRight
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ImageWithFallback } from '../common/ImageWithFallback';
 
+interface BreadcrumbItem {
+  label: string;
+  onClick?: () => void;
+  isActive?: boolean;
+}
+
 interface TopNavigationProps {
   currentView: string;
   setCurrentView: (view: string) => void;
+  breadcrumbItems?: BreadcrumbItem[];
+  onBack?: () => void;
 }
 
-export function TopNavigation({ currentView, setCurrentView }: TopNavigationProps) {
+export function TopNavigation({ currentView, setCurrentView, breadcrumbItems = [], onBack }: TopNavigationProps) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
@@ -70,8 +80,27 @@ export function TopNavigation({ currentView, setCurrentView }: TopNavigationProp
       transition={{ duration: 0.3 }}
       className="sticky top-0 z-50 w-full border-b border-border bg-nav/95 backdrop-blur supports-[backdrop-filter]:bg-nav/95"
     >
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-2">
         <div className="flex h-16 items-center">
+          {/* Back Button - Very Left */}
+          {onBack && (
+            <motion.div 
+              whileHover={{ scale: 1.05 }} 
+              whileTap={{ scale: 0.95 }}
+              className="mr-4"
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onBack}
+                className="hover:bg-accent transition-all duration-200"
+                aria-label="Go back"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </motion.div>
+          )}
+
           {/* Logo and Brand - Left */}
           <div className="flex items-center gap-2 mr-8">
             <motion.div 
@@ -86,32 +115,66 @@ export function TopNavigation({ currentView, setCurrentView }: TopNavigationProp
             </span>
           </div>
 
-          {/* Navigation Items - Center */}
+          {/* Navigation Items or Breadcrumbs - Center */}
           <div className="flex-1 flex justify-center">
-            <div className="hidden md:flex items-center gap-1 bg-accent/50 rounded-lg p-1">
-              {navigationItems.map((item) => (
-                <motion.div key={item.id} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-                  <Button
-                    variant={currentView === item.id || 
-                      (item.id === 'administration' && ['entities', 'entity-detail', 'exam-detail'].includes(currentView))
-                      ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setCurrentView(item.id)}
-                    className={`
-                      relative transition-all duration-200 h-9
-                      ${(currentView === item.id || 
-                        (item.id === 'administration' && ['entities', 'entity-detail', 'exam-detail'].includes(currentView)))
-                        ? 'bg-primary text-primary-foreground shadow-md' 
-                        : 'hover:bg-background/80'
-                      }
-                    `}
-                  >
-                    <item.icon className="h-4 w-4 mr-2" />
-                    {item.label}
-                  </Button>
-                </motion.div>
-              ))}
-            </div>
+            {breadcrumbItems.length > 0 ? (
+              <div className="hidden md:flex items-center gap-1 bg-accent/50 rounded-lg p-1">
+                {breadcrumbItems.map((item, index) => (
+                  <React.Fragment key={index}>
+                    {index > 0 && (
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60 mx-1" />
+                    )}
+                    {item.onClick && !item.isActive ? (
+                      <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={item.onClick}
+                          className="relative transition-all duration-200 h-9 hover:bg-background/80"
+                        >
+                          {item.label}
+                        </Button>
+                      </motion.div>
+                    ) : (
+                      <div className="px-3 py-1.5 h-9 flex items-center">
+                        <span className={`text-sm ${
+                          item.isActive
+                            ? 'text-foreground font-medium'
+                            : 'text-muted-foreground'
+                        }`}>
+                          {item.label}
+                        </span>
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            ) : (
+              <div className="hidden md:flex items-center gap-1 bg-accent/50 rounded-lg p-1">
+                {navigationItems.map((item) => (
+                  <motion.div key={item.id} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                    <Button
+                      variant={currentView === item.id || 
+                        (item.id === 'administration' && ['entities', 'entity-detail', 'exam-detail'].includes(currentView))
+                        ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setCurrentView(item.id)}
+                      className={`
+                        relative transition-all duration-200 h-9
+                        ${(currentView === item.id || 
+                          (item.id === 'administration' && ['entities', 'entity-detail', 'exam-detail'].includes(currentView)))
+                          ? 'bg-primary text-primary-foreground shadow-md' 
+                          : 'hover:bg-background/80'
+                        }
+                      `}
+                    >
+                      <item.icon className="h-4 w-4 mr-2" />
+                      {item.label}
+                    </Button>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Right Side Actions */}

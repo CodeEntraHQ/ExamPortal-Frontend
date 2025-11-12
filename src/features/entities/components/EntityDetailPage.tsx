@@ -21,7 +21,6 @@ import {
   Settings
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Breadcrumb } from '../../../shared/components/layout/Breadcrumb';
 import { RoleAwareExamManagement } from '../../../features/exams/components/RoleAwareExamManagement';
 import { UserManagement } from '../../../features/users/components/UserManagement';
 import { AnalyticsDashboard } from '../../../features/dashboard/components/AnalyticsDashboard';
@@ -60,16 +59,8 @@ export function EntityDetailPage({
 
   const { success, error } = useNotifications();
 
-  const breadcrumbItems = [
-    { label: 'Dashboard', onClick: onBackToDashboard },
-    { label: 'Administration', onClick: onBackToEntities },
-    { label: entityDetails.name, isActive: true }
-  ];
-
   return (
     <div className="space-y-6">
-      <Breadcrumb items={breadcrumbItems} />
-      
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
