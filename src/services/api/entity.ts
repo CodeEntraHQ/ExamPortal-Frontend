@@ -144,19 +144,23 @@ export async function updateEntity(payload: UpdateEntityPayload | FormData): Pro
       formData.append('entity_id', regularPayload.entity_id);
       console.log('✅ Added entity_id:', regularPayload.entity_id);
     }
+    // Name is required, always include if provided
     if (regularPayload.name !== undefined && regularPayload.name !== null && regularPayload.name !== '') {
       formData.append('name', String(regularPayload.name));
       console.log('✅ Added name:', regularPayload.name);
     }
-    if (regularPayload.address !== undefined && regularPayload.address !== null && regularPayload.address !== '') {
+    // Address is optional but can be empty
+    if (regularPayload.address !== undefined && regularPayload.address !== null) {
       formData.append('address', String(regularPayload.address));
       console.log('✅ Added address:', regularPayload.address);
     }
-    if (regularPayload.description !== undefined && regularPayload.description !== null && regularPayload.description !== '') {
+    // Description is optional and can be empty string
+    if (regularPayload.description !== undefined && regularPayload.description !== null) {
       formData.append('description', String(regularPayload.description));
       console.log('✅ Added description:', regularPayload.description);
     }
-    if (regularPayload.email !== undefined && regularPayload.email !== null && regularPayload.email !== '') {
+    // Email is optional and can be empty string
+    if (regularPayload.email !== undefined && regularPayload.email !== null) {
       formData.append('email', String(regularPayload.email));
       console.log('✅ Added email:', regularPayload.email);
     }
@@ -235,8 +239,16 @@ export async function updateEntity(payload: UpdateEntityPayload | FormData): Pro
       body: formData,
     });
 
+    // authenticatedFetch already throws if !response.ok, so we can safely parse JSON
     const data = await response.json();
     console.log('✅ updateEntity - Success response:', data);
+    
+    // Validate response structure
+    if (!data || !data.payload) {
+      console.warn('⚠️ updateEntity - Unexpected response structure:', data);
+      throw new Error('Invalid response format from server');
+    }
+    
     return data;
   } catch (error: any) {
     console.error('❌ updateEntity - Error:', error);
