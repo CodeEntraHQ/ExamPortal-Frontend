@@ -1,111 +1,198 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../shared/components/ui/card';
 import { Button } from '../../../shared/components/ui/button';
 import { Input } from '../../../shared/components/ui/input';
 import { Label } from '../../../shared/components/ui/label';
+import { Textarea } from '../../../shared/components/ui/textarea';
 import { Badge } from '../../../shared/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../../shared/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../shared/components/ui/select';
 import { Avatar, AvatarFallback } from '../../../shared/components/ui/avatar';
 import { 
-  Plus, 
   Search, 
   Edit, 
   Trash2, 
   Users, 
-  Mail,
   Shield,
   MoreHorizontal,
   UserPlus,
   Eye,
   UserCheck,
-  UserX
+  UserX,
+  Loader2,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../../shared/components/ui/dropdown-menu';
 import { Switch } from '../../../shared/components/ui/switch';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
+import { useAuth } from '../../../features/auth/providers/AuthProvider';
+import { getUsers, inviteUser, createUser, deregisterUser, activateUser, ApiUser } from '../../../services/api/user';
+import { getEntities, ApiEntity } from '../../../services/api/entity';
 
 interface User {
   id: string;
-  name: string;
+  name: string | null;
   email: string;
   role: 'SUPERADMIN' | 'ADMIN' | 'STUDENT';
   entityId?: string;
   entityName?: string;
-  status: 'active' | 'inactive' | 'pending';
+  status: 'active' | 'inactive';
   lastLogin?: string;
   createdAt: string;
+  phone_number?: string;
+  roll_number?: string;
 }
-
-// Mock data
-const mockUsers: User[] = [
-  {
-    id: '1',
-    name: 'John Smith',
-    email: 'john.smith@school.edu',
-    role: 'ADMIN',
-    entityId: 'school-1',
-    entityName: 'Springfield High School',
-    status: 'active',
-    lastLogin: '2024-02-10T14:30:00',
-    createdAt: '2024-01-15T09:00:00'
-  },
-  {
-    id: '2',
-    name: 'Sarah Johnson',
-    email: 'sarah.johnson@school.edu',
-    role: 'STUDENT',
-    entityId: 'school-1',
-    entityName: 'Springfield High School',
-    status: 'active',
-    lastLogin: '2024-02-11T10:15:00',
-    createdAt: '2024-01-20T11:30:00'
-  },
-  {
-    id: '3',
-    name: 'Mike Davis',
-    email: 'mike.davis@school.edu',
-    role: 'STUDENT',
-    entityId: 'school-1',
-    entityName: 'Springfield High School',
-    status: 'pending',
-    createdAt: '2024-02-05T16:45:00'
-  },
-  {
-    id: '4',
-    name: 'Emily Wilson',
-    email: 'emily.wilson@college.edu',
-    role: 'ADMIN',
-    entityId: 'college-1',
-    entityName: 'Metro College',
-    status: 'active',
-    lastLogin: '2024-02-09T13:20:00',
-    createdAt: '2024-01-10T08:15:00'
-  }
-];
 
 interface UserManagementProps {
   currentEntity?: string;
 }
 
+// Map backend status to frontend status (treat ACTIVATION_PENDING as inactive)
+const mapBackendStatus = (status: 'ACTIVE' | 'INACTIVE' | 'ACTIVATION_PENDING'): 'active' | 'inactive' => {
+  switch (status) {
+    case 'ACTIVE':
+      return 'active';
+    case 'INACTIVE':
+    case 'ACTIVATION_PENDING':
+      return 'inactive';
+    default:
+      return 'inactive';
+  }
+};
+
+// Map API user to UI user
+const mapApiUserToUiUser = (apiUser: ApiUser, entitiesMap: Map<string, ApiEntity>): User => {
+  return {
+    id: apiUser.id,
+    name: apiUser.name || 'N/A',
+    email: apiUser.email,
+    role: apiUser.role,
+    entityId: apiUser.entity_id,
+    entityName: apiUser.entity_id ? entitiesMap.get(apiUser.entity_id)?.name : undefined,
+    status: mapBackendStatus(apiUser.status),
+    lastLogin: apiUser.last_login_at || undefined,
+    createdAt: apiUser.created_at || new Date().toISOString(),
+    phone_number: apiUser.phone_number,
+    roll_number: apiUser.roll_number,
+  };
+};
+
 export function UserManagement({ currentEntity }: UserManagementProps) {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const { user: currentUser } = useAuth();
+  const { success, error: showError } = useNotifications();
+  const [users, setUsers] = useState<User[]>([]);
+  const [entities, setEntities] = useState<ApiEntity[]>([]);
+  const [entitiesMap, setEntitiesMap] = useState<Map<string, ApiEntity>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [showUserDetail, setShowUserDetail] = useState<User | null>(null);
-  const { success } = useNotifications();
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [isAdminCardExpanded, setIsAdminCardExpanded] = useState(true);
+  const [isStudentCardExpanded, setIsStudentCardExpanded] = useState(true);
+  const limit = 10; // Backend limit is max 10
+
+  // Fetch entities for mapping entity_id to entity name
+  const fetchEntities = useCallback(async () => {
+    try {
+      // Fetch entities with max limit (10) - if we need more, we can fetch multiple pages
+      // For now, just fetch the first page. If currentEntity is set, we might only need that one
+      const response = await getEntities(1, 10);
+      setEntities(response.payload.entities);
+      const map = new Map<string, ApiEntity>();
+      response.payload.entities.forEach(entity => {
+        map.set(entity.id, entity);
+      });
+      
+      // If we have more pages and need all entities, fetch them
+      if (response.payload.totalPages > 1 && currentUser?.role === 'SUPERADMIN') {
+        const allEntities = [...response.payload.entities];
+        for (let p = 2; p <= response.payload.totalPages; p++) {
+          try {
+            const nextResponse = await getEntities(p, 10);
+            allEntities.push(...nextResponse.payload.entities);
+            nextResponse.payload.entities.forEach(entity => {
+              map.set(entity.id, entity);
+            });
+          } catch (err) {
+            console.error(`Failed to fetch entities page ${p}:`, err);
+            break; // Stop fetching if we hit an error
+          }
+        }
+        setEntities(allEntities);
+      }
+      
+      setEntitiesMap(map);
+    } catch (err) {
+      console.error('Failed to fetch entities:', err);
+      // Don't show error for entities, just continue without entity names
+    }
+  }, [currentUser?.role]);
+
+  // Fetch users
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Backend validation requires both entity_id and role
+      // If user wants all roles, we need to fetch ADMIN and STUDENT separately
+      const entityId = currentEntity || currentUser?.entityId;
+      
+      if (!entityId) {
+        setError('Entity ID is required');
+        showError('Entity ID is required to fetch users');
+        setLoading(false);
+        return;
+      }
+
+      // Fetch both ADMIN and STUDENT users and combine
+      const [adminResponse, studentResponse] = await Promise.all([
+        getUsers({ entity_id: entityId, role: 'ADMIN', page, limit: 10 }),
+        getUsers({ entity_id: entityId, role: 'STUDENT', page, limit: 10 }),
+      ]);
+      
+      const allUsers = [...adminResponse.payload.users, ...studentResponse.payload.users];
+      const totalCount = adminResponse.payload.total + studentResponse.payload.total;
+      const maxPages = Math.max(adminResponse.payload.totalPages, studentResponse.payload.totalPages);
+
+      const mappedUsers = allUsers.map(apiUser => 
+        mapApiUserToUiUser(apiUser, entitiesMap)
+      );
+      setUsers(mappedUsers);
+      setTotal(totalCount);
+      setTotalPages(maxPages);
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to fetch users';
+      setError(errorMessage);
+      showError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentEntity, page, entitiesMap, showError, currentUser?.entityId]);
+
+  useEffect(() => {
+    fetchEntities();
+  }, [fetchEntities]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const matchesSearch = (user.name?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
     
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch;
   });
+
+  // Separate users by role
+  const adminUsers = filteredUsers.filter(user => user.role === 'ADMIN' || user.role === 'SUPERADMIN');
+  const studentUsers = filteredUsers.filter(user => user.role === 'STUDENT');
 
   const getRoleBadgeVariant = (role: User['role']) => {
     const variants = {
@@ -119,28 +206,59 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
   const getStatusBadgeVariant = (status: User['status']) => {
     const variants = {
       active: { variant: 'default' as const, className: 'bg-green-600 text-white dark:bg-green-500' },
-      inactive: { variant: 'secondary' as const, className: 'bg-muted text-muted-foreground' },
-      pending: { variant: 'outline' as const, className: 'border-yellow-500 text-yellow-600 dark:text-yellow-400' }
+      inactive: { variant: 'secondary' as const, className: 'bg-muted text-muted-foreground' }
     };
     return variants[status];
   };
 
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  const getInitials = (name: string | null) => {
+    if (!name) return 'N/A';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
-  const toggleUserStatus = (userId: string) => {
-    setUsers(prevUsers => 
-      prevUsers.map(user => 
-        user.id === userId 
-          ? { ...user, status: user.status === 'active' ? 'inactive' : 'active' as User['status'] }
-          : user
-      )
-    );
+  const handleToggleUserStatus = async (userId: string) => {
     const user = users.find(u => u.id === userId);
-    const newStatus = user?.status === 'active' ? 'inactive' : 'active';
-    success(`User ${newStatus === 'active' ? 'enabled' : 'disabled'} successfully`);
+    if (!user) return;
+
+    try {
+      // If user is active, deactivate them
+      if (user.status === 'active') {
+        await deregisterUser(userId);
+        success('User deactivated successfully');
+      } else {
+        // User is inactive - activate directly
+        await activateUser(userId);
+        success('User activated successfully');
+      }
+
+      // Refresh users list
+      await fetchUsers();
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to update user status';
+      showError(errorMessage);
+    }
   };
+
+  const handleDeleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await deregisterUser(userId);
+      success('User deleted successfully');
+      await fetchUsers();
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to delete user';
+      showError(errorMessage);
+    }
+  };
+
+  // Calculate stats from real data
+  const totalUsers = total;
+  const activeUsers = users.filter(u => u.status === 'active').length;
+  const inactiveUsers = users.filter(u => u.status === 'inactive').length;
+  const studentCount = users.filter(u => u.role === 'STUDENT').length;
 
   return (
     <div className="space-y-6">
@@ -152,11 +270,6 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
           </h1>
           <p className="text-muted-foreground">
             Manage users and their permissions
-            {currentEntity && (
-              <span className="ml-2 text-primary">
-                • {currentEntity}
-              </span>
-            )}
           </p>
         </div>
         <div>
@@ -167,238 +280,440 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                 Add User
               </Button>
             </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Add New User</DialogTitle>
-              <DialogDescription>
-                Create a new user account and assign appropriate permissions
-              </DialogDescription>
-            </DialogHeader>
-            <CreateUserForm onClose={() => setIsCreateDialogOpen(false)} />
-          </DialogContent>
-        </Dialog>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New User</DialogTitle>
+                <DialogDescription>
+                  Create a new user account and assign appropriate permissions
+                </DialogDescription>
+              </DialogHeader>
+              <CreateUserForm 
+                onClose={() => setIsCreateDialogOpen(false)}
+                onSuccess={async () => {
+                  setIsCreateDialogOpen(false);
+                  await fetchUsers();
+                }}
+                currentEntity={currentEntity}
+                entities={entities}
+                currentUser={currentUser}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{users.length}</div>
-            <p className="text-xs text-muted-foreground">
-              +12% from last month
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
-            <Shield className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter(u => u.status === 'active').length}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Currently online
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Students</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter(u => u.role === 'STUDENT').length}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Enrolled students
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Mail className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {users.filter(u => u.status === 'pending').length}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Awaiting activation
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Search and Filters */}
+      {/* Search and Stats */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search users..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+          <div className="space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Total Users</span>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold">{totalUsers}</div>
+                  <p className="text-xs text-muted-foreground">total</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Active Users</span>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold">{activeUsers}</div>
+                  <p className="text-xs text-muted-foreground">active</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
+                <div className="flex items-center gap-2">
+                  <UserX className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Inactive Users</span>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold">{inactiveUsers}</div>
+                  <p className="text-xs text-muted-foreground">inactive</p>
+                </div>
               </div>
             </div>
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="SUPERADMIN">Super Admin</SelectItem>
-                <SelectItem value="ADMIN">Admin</SelectItem>
-                <SelectItem value="STUDENT">Student</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Users Table */}
+      {/* Admins Table */}
       <Card>
         <CardHeader>
-          <CardTitle>All Users</CardTitle>
-          <CardDescription>Manage user accounts and permissions</CardDescription>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsAdminCardExpanded(!isAdminCardExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isAdminCardExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+              <div>
+                <CardTitle>Admins</CardTitle>
+                <CardDescription>Manage admin accounts</CardDescription>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-bold">{adminUsers.length}</div>
+              <p className="text-xs text-muted-foreground">total</p>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Entity</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Login</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">{user.name}</p>
-                        <p className="text-sm text-muted-foreground">{user.email}</p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge 
-                      variant={getRoleBadgeVariant(user.role).variant} 
-                      className={getRoleBadgeVariant(user.role).className}
-                    >
-                      {user.role}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      {user.entityName || 'No entity'}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Switch
-                        checked={user.status === 'active'}
-                        onCheckedChange={() => toggleUserStatus(user.id)}
-                        disabled={user.status === 'pending'}
-                      />
-                      <Badge 
-                        variant={getStatusBadgeVariant(user.status).variant}
-                        className={getStatusBadgeVariant(user.status).className}
-                      >
-                        {user.status.toUpperCase()}
-                      </Badge>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">
-                      {user.lastLogin 
-                        ? new Date(user.lastLogin).toLocaleDateString()
-                        : 'Never'
-                      }
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setShowUserDetail(user)}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          Explore User
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit User
-                        </DropdownMenuItem>
-                        <DropdownMenuItem>
-                          <Mail className="h-4 w-4 mr-2" />
-                          Send Invitation
-                        </DropdownMenuItem>
-                        <DropdownMenuItem 
-                          onClick={() => toggleUserStatus(user.id)}
-                          disabled={user.status === 'pending'}
-                        >
-                          {user.status === 'active' ? (
-                            <>
-                              <UserX className="h-4 w-4 mr-2" />
-                              Disable User
-                            </>
-                          ) : (
-                            <>
-                              <UserCheck className="h-4 w-4 mr-2" />
-                              Enable User
-                            </>
-                          )}
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete User
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
+        {isAdminCardExpanded && (
+          <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : error ? (
+            <div className="text-center py-12 text-destructive">
+              <p>{error}</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => fetchUsers()}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : adminUsers.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Shield className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No admins found</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Phone Number</TableHead>
+                  <TableHead>Created At</TableHead>
+                  <TableHead>Last Login</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
+              </TableHeader>
+              <TableBody>
+                {adminUsers.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{user.name || 'N/A'}</p>
+                            <p className="text-sm text-muted-foreground">{user.email}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {user.phone_number || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {user.createdAt 
+                            ? new Date(user.createdAt).toLocaleDateString()
+                            : 'N/A'
+                          }
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {user.lastLogin 
+                            ? new Date(user.lastLogin).toLocaleDateString()
+                            : 'Never'
+                          }
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={user.status === 'active'}
+                            onCheckedChange={() => handleToggleUserStatus(user.id)}
+                          />
+                          <Badge 
+                            variant={getStatusBadgeVariant(user.status).variant}
+                            className={getStatusBadgeVariant(user.status).className}
+                          >
+                            {user.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setShowUserDetail(user)}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit User
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleToggleUserStatus(user.id)}
+                            >
+                              {user.status === 'active' ? (
+                                <>
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Deactivate User
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Activate User
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDeleteUser(user.id)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete User
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          )}
+          </CardContent>
+        )}
       </Card>
+
+      {/* Students Table */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsStudentCardExpanded(!isStudentCardExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isStudentCardExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+              <div>
+                <CardTitle>Students</CardTitle>
+                <CardDescription>Manage student accounts</CardDescription>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-bold">{studentUsers.length}</div>
+              <p className="text-xs text-muted-foreground">total</p>
+            </div>
+          </div>
+        </CardHeader>
+        {isStudentCardExpanded && (
+          <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : error ? (
+            <div className="text-center py-12 text-destructive">
+              <p>{error}</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => fetchUsers()}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : studentUsers.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No students found</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Roll Number</TableHead>
+                  <TableHead>Phone Number</TableHead>
+                  <TableHead>Created At</TableHead>
+                  <TableHead>Last Login</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {studentUsers.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{user.name || 'N/A'}</p>
+                            <p className="text-sm text-muted-foreground">{user.email}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {user.roll_number || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {user.phone_number || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {user.createdAt 
+                            ? new Date(user.createdAt).toLocaleDateString()
+                            : 'N/A'
+                          }
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {user.lastLogin 
+                            ? new Date(user.lastLogin).toLocaleDateString()
+                            : 'Never'
+                          }
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={user.status === 'active'}
+                            onCheckedChange={() => handleToggleUserStatus(user.id)}
+                          />
+                          <Badge 
+                            variant={getStatusBadgeVariant(user.status).variant}
+                            className={getStatusBadgeVariant(user.status).className}
+                          >
+                            {user.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setShowUserDetail(user)}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit User
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleToggleUserStatus(user.id)}
+                            >
+                              {user.status === 'active' ? (
+                                <>
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Deactivate User
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Activate User
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDeleteUser(user.id)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete User
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Page {page} of {totalPages} ({total} total users)
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* User Detail Modal */}
       <Dialog open={!!showUserDetail} onOpenChange={(open) => !open && setShowUserDetail(null)}>
@@ -406,7 +721,7 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
           <DialogHeader>
             <DialogTitle>User Details</DialogTitle>
             <DialogDescription>
-              Detailed information and participation summary for {showUserDetail?.name}
+              Detailed information and participation summary for {showUserDetail?.name || 'User'}
             </DialogDescription>
           </DialogHeader>
           {showUserDetail && (
@@ -418,7 +733,7 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                   </AvatarFallback>
                 </Avatar>
                 <div className="space-y-1">
-                  <h3 className="text-lg font-semibold">{showUserDetail.name}</h3>
+                  <h3 className="text-lg font-semibold">{showUserDetail.name || 'N/A'}</h3>
                   <p className="text-muted-foreground">{showUserDetail.email}</p>
                   <div className="flex items-center gap-2">
                     <Badge 
@@ -445,7 +760,7 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                   <CardContent className="space-y-2">
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Entity:</span>
-                      <span className="text-sm">{showUserDetail.entityName || 'N/A'}</span>
+                      <span className="text-sm">{showUserDetail.entityName || showUserDetail.entityId || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Created:</span>
@@ -471,54 +786,24 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Exams Taken:</span>
                       <span className="text-sm font-semibold">
-                        {showUserDetail.role === 'STUDENT' ? '12' : 'N/A'}
+                        {showUserDetail.role === 'STUDENT' ? 'N/A' : 'N/A'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Average Score:</span>
                       <span className="text-sm font-semibold">
-                        {showUserDetail.role === 'STUDENT' ? '85.3%' : 'N/A'}
+                        {showUserDetail.role === 'STUDENT' ? 'N/A' : 'N/A'}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-muted-foreground">Completion Rate:</span>
                       <span className="text-sm font-semibold">
-                        {showUserDetail.role === 'STUDENT' ? '94.2%' : 'N/A'}
+                        {showUserDetail.role === 'STUDENT' ? 'N/A' : 'N/A'}
                       </span>
                     </div>
                   </CardContent>
                 </Card>
               </div>
-
-              {showUserDetail.role === 'STUDENT' && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-sm">Recent Exam History</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      {[
-                        { name: 'Advanced JavaScript', score: 92, date: '2024-02-10', status: 'Passed' },
-                        { name: 'Database Systems', score: 78, date: '2024-02-08', status: 'Passed' },
-                        { name: 'Web Development', score: 88, date: '2024-02-05', status: 'Passed' }
-                      ].map((exam, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                          <div>
-                            <p className="text-sm font-medium">{exam.name}</p>
-                            <p className="text-xs text-muted-foreground">{exam.date}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-semibold">{exam.score}%</p>
-                            <Badge variant={exam.status === 'Passed' ? 'default' : 'destructive'} className="text-xs">
-                              {exam.status}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </div>
           )}
         </DialogContent>
@@ -527,91 +812,258 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
   );
 }
 
-function CreateUserForm({ onClose }: { onClose: () => void }) {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    role: '',
-    entityId: '',
-    sendInvitation: true
-  });
+interface CreateUserFormProps {
+  onClose: () => void;
+  onSuccess: () => Promise<void>;
+  currentEntity?: string;
+  entities: ApiEntity[];
+  currentUser: any;
+}
 
-  const handleSubmit = (e: React.FormEvent) => {
+function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUser }: CreateUserFormProps) {
+  const [formData, setFormData] = useState({
+    email: '',
+    name: '',
+    role: '' as '' | 'ADMIN' | 'STUDENT',
+    entityId: currentEntity || '',
+    phone_number: '',
+    address: '',
+    bio: '',
+    gender: '' as '' | 'MALE' | 'FEMALE',
+    roll_number: '',
+  });
+  const [loading, setLoading] = useState(false);
+  const { success, error: showError } = useNotifications();
+
+  // Filter entities based on user role
+  const availableEntities = currentUser?.role === 'SUPERADMIN' 
+    ? entities 
+    : currentEntity 
+      ? entities.filter(e => e.id === currentEntity)
+      : [];
+
+  useEffect(() => {
+    if (currentEntity) {
+      setFormData(prev => ({ ...prev, entityId: currentEntity }));
+    } else if (currentUser?.entityId) {
+      setFormData(prev => ({ ...prev, entityId: currentUser.entityId }));
+    }
+  }, [currentEntity, currentUser]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Handle form submission
-    console.log('Creating user:', formData);
-    onClose();
+    
+    if (!formData.email || !formData.role) {
+      showError('Please fill in all required fields');
+      return;
+    }
+
+    if (!formData.entityId && currentUser?.role === 'SUPERADMIN') {
+      showError('Please select an entity');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload: any = {
+        email: formData.email,
+        role: formData.role,
+        entity_id: formData.entityId || undefined,
+      };
+
+      // Add optional fields only if they have values
+      if (formData.name) payload.name = formData.name;
+      if (formData.phone_number) {
+        // Convert phone number to integer (remove non-digits first)
+        const phoneDigits = formData.phone_number.replace(/\D/g, '');
+        if (phoneDigits.length > 0) {
+          const phoneNum = parseInt(phoneDigits, 10);
+          // Backend validation requires phone_number to be between 6000000000 and 9999999999
+          if (phoneNum >= 6000000000 && phoneNum <= 9999999999) {
+            payload.phone_number = phoneNum;
+          }
+        }
+      }
+      if (formData.address) payload.address = formData.address;
+      if (formData.bio) payload.bio = formData.bio;
+      if (formData.gender) payload.gender = formData.gender;
+      if (formData.roll_number) payload.roll_number = formData.roll_number;
+
+      const response = await createUser(payload);
+      success('User created successfully with random password. Password will be sent via email later.');
+      // Note: Password is in response.payload.password but we don't show it for security
+      console.log('Generated password for user:', response.payload.email, '- Password:', response.payload.password);
+      await onSuccess();
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to create user';
+      showError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      {/* Entity Information (if currentEntity is provided) */}
+      {currentEntity && (
+        <div className="space-y-3 p-4 bg-muted/50 rounded-md border">
+          <div>
+            <h3 className="text-sm font-semibold mb-2">Entity Details</h3>
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-primary" />
+              <span className="text-base font-semibold">
+                {entities.find(e => e.id === currentEntity)?.name || 'Current Entity'}
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            User will be created for this entity
+          </p>
+        </div>
+      )}
+
+      {/* Basic Information */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Full Name</Label>
+            <Input
+              id="name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Enter full name"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email Address *</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="Enter email address"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="phone_number">Phone Number</Label>
+            <Input
+              id="phone_number"
+              type="tel"
+              value={formData.phone_number}
+              onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+              placeholder="Enter phone number"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="gender">Gender</Label>
+            <Select 
+              value={formData.gender} 
+              onValueChange={(value) => setFormData({ ...formData, gender: value as 'MALE' | 'FEMALE' })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select gender" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="MALE">Male</SelectItem>
+                <SelectItem value="FEMALE">Female</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {formData.role === 'STUDENT' && (
+          <div className="space-y-2">
+            <Label htmlFor="roll_number">Roll Number</Label>
+            <Input
+              id="roll_number"
+              value={formData.roll_number}
+              onChange={(e) => setFormData({ ...formData, roll_number: e.target.value })}
+              placeholder="Enter roll number"
+            />
+          </div>
+        )}
+
         <div className="space-y-2">
-          <Label htmlFor="name">Full Name</Label>
+          <Label htmlFor="address">Address</Label>
           <Input
-            id="name"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="Enter full name"
-            required
+            id="address"
+            value={formData.address}
+            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+            placeholder="Enter address"
           />
         </div>
+
         <div className="space-y-2">
-          <Label htmlFor="email">Email Address</Label>
-          <Input
-            id="email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            placeholder="Enter email address"
-            required
+          <Label htmlFor="bio">Bio</Label>
+          <Textarea
+            id="bio"
+            value={formData.bio}
+            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+            placeholder="Enter bio"
+            rows={3}
           />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="role">Role</Label>
-          <Select value={formData.role} onValueChange={(value) => setFormData({ ...formData, role: value })}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select role" />
-            </SelectTrigger>
-            <SelectContent>
+      {/* Role Selection */}
+      <div className="space-y-2">
+        <Label htmlFor="role">Role *</Label>
+        <Select 
+          value={formData.role} 
+          onValueChange={(value) => setFormData({ ...formData, role: value as 'ADMIN' | 'STUDENT' })}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select role" />
+          </SelectTrigger>
+          <SelectContent>
+            {currentUser?.role === 'SUPERADMIN' && (
               <SelectItem value="ADMIN">Admin</SelectItem>
-              <SelectItem value="STUDENT">Student</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+            )}
+            <SelectItem value="STUDENT">Student</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Entity Selection (only for SUPERADMIN when no currentEntity) */}
+      {currentUser?.role === 'SUPERADMIN' && !currentEntity && (
         <div className="space-y-2">
-          <Label htmlFor="entity">Entity</Label>
-          <Select value={formData.entityId} onValueChange={(value) => setFormData({ ...formData, entityId: value })}>
+          <Label htmlFor="entity">Entity *</Label>
+          <Select 
+            value={formData.entityId} 
+            onValueChange={(value) => setFormData({ ...formData, entityId: value })}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Select entity" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="school-1">Springfield High School</SelectItem>
-              <SelectItem value="college-1">Metro College</SelectItem>
-              <SelectItem value="university-1">State University</SelectItem>
+              {availableEntities.map((entity) => (
+                <SelectItem key={entity.id} value={entity.id}>
+                  {entity.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <input
-          type="checkbox"
-          id="sendInvitation"
-          checked={formData.sendInvitation}
-          onChange={(e) => setFormData({ ...formData, sendInvitation: e.target.checked })}
-        />
-        <Label htmlFor="sendInvitation">Send invitation email to user</Label>
-      </div>
+      )}
 
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onClose}>
+        <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
           Cancel
         </Button>
-        <Button type="submit">Create User</Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            'Create User'
+          )}
+        </Button>
       </div>
     </form>
   );

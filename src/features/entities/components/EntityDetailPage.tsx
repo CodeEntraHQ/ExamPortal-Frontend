@@ -301,14 +301,6 @@ export function EntityDetailPage({
           </TabsContent>
 
           <TabsContent value="users" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-semibold">User Management</h2>
-                <p className="text-muted-foreground">
-                  Manage users and roles for {entityDetails.name}
-                </p>
-              </div>
-            </div>
             <UserManagement currentEntity={entityDetails.id} />
           </TabsContent>
 
