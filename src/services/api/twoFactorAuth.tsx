@@ -1,7 +1,7 @@
-import { authenticatedFetch, getApiUrl } from './index';
+import { authenticatedFetch, getApiUrl } from './core';
 
 const generate2FA = async () => {
-  const response = await authenticatedFetch(getApiUrl('/users/two-fa/generate'), {
+  const response = await authenticatedFetch(getApiUrl('/v1/users/two-fa/generate'), {
     method: 'GET',
   });
   return response.json();
@@ -13,7 +13,7 @@ const toggle2FA = async (mode: 'ENABLE' | 'DISABLE', code: string) => {
     authentication_code: code,
   };
 
-  const response = await authenticatedFetch(getApiUrl('/users/two-fa/toggle'), {
+  const response = await authenticatedFetch(getApiUrl('/v1/users/two-fa/toggle'), {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',

@@ -1,77 +1,53 @@
-const API_BASE_URL = 'http://localhost:8000/v1';
-
 /**
- * Stores the authentication token in localStorage.
- * @param token The JWT token to store.
+ * Main API service exports
+ * Central export point for all API services
  */
-export const storeToken = (token: string): void => {
-  try {
-    localStorage.setItem('authToken', token);
-  } catch (error) {
-    console.error('Failed to store token in localStorage:', error);
-  }
-};
 
-/**
- * Retrieves the authentication token from localStorage.
- * @returns The stored token or null if not found.
- */
-export const getToken = (): string | null => {
-  try {
-    return localStorage.getItem('authToken');
-  } catch (error) {
-    console.error('Failed to retrieve token from localStorage:', error);
-    return null;
-  }
-};
+// Core utilities
+export { authenticatedFetch, getApiUrl, getToken, setToken, removeToken } from './core';
 
-/**
- * Removes the authentication token from localStorage.
- */
-export const removeToken = (): void => {
-  try {
-    localStorage.removeItem('authToken');
-  } catch (error) {
-    console.error('Failed to remove token from localStorage:', error);
-  }
-};
+// Auth API
+export { login, forgotPassword, resetPassword, resendOTP, authAPI } from './auth';
+export type { LoginResponse } from './auth';
 
-/**
- * A wrapper around the fetch API to automatically include the Authorization header.
- * @param url The URL to fetch.
- * @param options The fetch options.
- * @returns The fetch response.
- */
-export const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
-  const token = getToken();
-  const headers = new Headers(options.headers || {});
+// Exam API
+export {
+  getExams,
+  getExamById,
+  getQuestions,
+  createQuestion,
+  updateQuestion,
+  deleteQuestion,
+  startExam,
+  saveAnswer,
+  submitExam,
+  getSubmissions,
+  getStudentEnrollments,
+  examApi,
+} from './exam';
+export type {
+  BackendExam,
+  BackendQuestion,
+  CreateQuestionPayload,
+  UpdateQuestionPayload,
+  GetExamsResponse,
+  GetQuestionsResponse,
+  GetExamResponse,
+  StudentEnrollment,
+} from './exam';
 
-  if (token) {
-    headers.append('Authorization', `Bearer ${token}`);
-  }
+// Entity API
+export { getEntities, createEntity, updateEntity } from './entity';
+export type {
+  ApiEntity as Entity,
+  CreateEntityPayload,
+  UpdateEntityPayload,
+  GetEntitiesResponse,
+} from './entity';
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+// User API
+export { updateUserProfile, changePassword } from './user';
+export type { UserProfile } from './user';
 
-  if (!response.ok) {
-    // Auto-logout on 401 Unauthorized
-    if (response.status === 401) {
-      removeToken();
-      // Optionally redirect to login page
-      window.location.href = '/login'; 
-    }
-    const errorData = await response.json().catch(() => ({ message: 'An error occurred' }));
-    throw new Error(errorData.responseMessage || errorData.message);
-  }
-  
-  return response;
-};
-
-export const getApiUrl = (path: string) => `${API_BASE_URL}${path}`;
-
-export * from './user';
-export * from './auth';
-export * from './twoFactorAuth';
-export * from './entities';
+// Two Factor Auth API
+export { twoFactorAPI } from './twoFactorAuth';

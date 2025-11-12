@@ -1,211 +1,128 @@
-import { authenticatedFetch, getApiUrl } from './index';
+/**
+ * Exam API service
+ * Handles all exam-related operations
+ */
 
-// Interface based on backend model
+import { authenticatedFetch, getApiUrl } from './core';
+
 export interface BackendExam {
   id: string;
   title: string;
-  type: 'EXAM' | 'QUIZ';
-  active: boolean;
-  created_at: string;
+  type?: string;
+  active?: boolean;
+  created_at?: string;
   duration_seconds: number;
   metadata?: any;
-  user_id?: string;
   entity_id: string;
+  description?: string;
+  start_date?: string;
+  end_date?: string;
+  total_marks?: number;
+  passing_marks?: number;
+  status?: string;
 }
 
-export interface ExamResponse {
-  status: string;
-  responseCode: string;
-  payload: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-    exams: BackendExam[];
-  };
-}
-
-export const getExams = async (page = 1, limit = 10, entityId?: string): Promise<ExamResponse> => {
-  let url = `/exams?page=${page}&limit=${limit}`;
-  if (entityId) {
-    url += `&entity_id=${entityId}`;
-  }
-  
-  const response = await authenticatedFetch(getApiUrl(url), {
-    method: 'GET',
-  });
-  return response.json();
-};
-
-export interface CreateExamPayload {
-  title: string;
-  type: 'EXAM' | 'QUIZ';
-  duration_seconds: number;
-  metadata?: {
-    totalMarks: number;
-    passingMarks: number;
-    instructions: string[];
-    isMultipleCorrect?: boolean;
-  };
-  entity_id?: string;
-}
-
-export const createExam = async (payload: CreateExamPayload): Promise<{status: string; responseCode: string; payload: BackendExam}> => {
-  console.log('Creating exam with payload:', payload);
-  const response = await authenticatedFetch(getApiUrl('/exams'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-  return response.json();
-};
-
-export interface UpdateExamPayload {
-  title?: string;
-  type?: 'EXAM' | 'QUIZ';
-  duration_seconds?: number;
-  metadata?: {
-    totalMarks?: number;
-    passingMarks?: number;
-    instructions?: string[];
-    isMultipleCorrect?: boolean;
-    description?: string;
-    startDate?: string;
-    endDate?: string;
-  };
-  active?: boolean;
-}
-
-export const updateExam = async (examId: string, payload: UpdateExamPayload): Promise<{status: string; responseCode: string; payload: BackendExam}> => {
-  console.log('Updating exam with payload:', payload);
-  // Clean the examId by removing any potential suffix like ":1" or other colon-separated values
-  const cleanedExamId = examId.split(':')[0].trim();
-  console.log('Updating exam with cleaned ID:', cleanedExamId);
-  const response = await authenticatedFetch(getApiUrl(`/exams/${cleanedExamId}`), {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-  return response.json();
-};
-
-// Backend Question interface based on backend model
 export interface BackendQuestion {
   id: string;
+  exam_id?: string;
   question_text: string;
-  type: 'MCQ' | 'OTHER';
+  type: 'MCQ' | 'MULTIPLE_CORRECT' | 'ONE_WORD' | 'SUBJECTIVE';
+  options?: string[];
+  correct_answer?: string | string[];
+  marks?: number;
+  negative_marks?: number;
   metadata?: any;
-  created_at: string;
-}
-
-export interface QuestionsResponse {
-  status: string;
-  responseCode: string;
-  payload: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-    questions: BackendQuestion[];
-  };
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CreateQuestionPayload {
   exam_id: string;
   question_text: string;
-  type: 'MCQ' | 'OTHER';
+  type: 'MCQ' | 'MULTIPLE_CORRECT' | 'ONE_WORD' | 'SUBJECTIVE';
+  options?: string[];
+  correct_answer?: string | string[];
+  marks?: number;
+  negative_marks?: number;
   metadata?: any;
 }
 
 export interface UpdateQuestionPayload {
+  question_id: string;
   question_text?: string;
-  type?: 'MCQ' | 'OTHER';
+  type?: 'MCQ' | 'MULTIPLE_CORRECT' | 'ONE_WORD' | 'SUBJECTIVE';
+  options?: string[];
+  correct_answer?: string | string[];
+  marks?: number;
+  negative_marks?: number;
   metadata?: any;
 }
 
-export const getQuestions = async (examId: string, page = 1, limit = 10): Promise<QuestionsResponse> => {
-  // Clean the examId by removing any potential suffix like ":1"
-  // Backend validation requires limit to be between 1 and 10
-  const validLimit = Math.min(Math.max(limit, 1), 10);
-  const cleanedExamId = examId.split(':')[0].trim();
-  const url = `/exams/question?exam_id=${cleanedExamId}&page=${page}&limit=${validLimit}`;
-  
-  const response = await authenticatedFetch(getApiUrl(url), {
-    method: 'GET',
-  });
-  return response.json();
-};
-
-export const createQuestion = async (payload: CreateQuestionPayload): Promise<{status: string; responseCode: string; payload: {id: string}}> => {
-  console.log('Creating question with payload:', payload);
-  const response = await authenticatedFetch(getApiUrl('/exams/question'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-  return response.json();
-};
-
-export const updateQuestion = async (questionId: string, payload: UpdateQuestionPayload): Promise<{status: string; responseCode: string; payload: BackendQuestion}> => {
-  console.log('Updating question with payload:', payload);
-  // Clean the questionId by removing any potential suffix
-  const cleanedQuestionId = questionId.split(':')[0].trim();
-  const response = await authenticatedFetch(getApiUrl(`/exams/question/${cleanedQuestionId}`), {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-  return response.json();
-};
-
-export const deleteQuestion = async (questionId: string): Promise<{status: string; responseCode: string; payload: {id: string}}> => {
-  console.log('Deleting question with ID:', questionId);
-  // Clean the questionId by removing any potential suffix
-  const cleanedQuestionId = questionId.split(':')[0].trim();
-  const response = await authenticatedFetch(getApiUrl(`/exams/question/${cleanedQuestionId}`), {
-    method: 'DELETE',
-  });
-  return response.json();
-};
-
-export const inviteStudents = async (payload: { examId: string; entityId?: string; emails: string[] }) => {
-  console.log('Inviting students with payload:', payload);
-  // Backend expects snake_case keys: exam_id and entity_id
-  const cleanedExamId = (payload.examId || '').split(':')[0].trim();
-  const body = {
-    exam_id: cleanedExamId,
-    student_emails: payload.emails,
+export interface CreateExamPayload {
+  title: string;
+  type: 'QUIZ' | 'MCQ' | 'ONE_WORD' | 'DESCRIPTIVE' | 'HYBRID' | 'OTHER';
+  duration_seconds: number;
+  metadata?: {
+    totalMarks?: number;
+    passingMarks?: number;
+    instructions?: string[];
+    isMultipleCorrect?: boolean;
+    [key: string]: any;
   };
+  entity_id?: string;
+}
 
-  const response = await authenticatedFetch(getApiUrl('/exams/invite'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  return response.json();
-};
+export interface UpdateExamPayload {
+  title?: string;
+  type?: 'QUIZ' | 'MCQ' | 'ONE_WORD' | 'DESCRIPTIVE' | 'HYBRID' | 'OTHER' | 'EXAM' | string;
+  duration_seconds?: number;
+  active?: boolean;
+  metadata?: {
+    totalMarks?: number;
+    passingMarks?: number;
+    instructions?: string | string[];
+    isMultipleCorrect?: boolean;
+    [key: string]: any;
+  };
+}
 
-export interface EnrollmentStatus {
-  UPCOMING: 'UPCOMING';
-  ONGOING: 'ONGOING';
-  COMPLETED: 'COMPLETED';
+export interface GetExamsResponse {
+  payload: {
+    exams: BackendExam[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface GetQuestionsResponse {
+  payload: {
+    questions: BackendQuestion[];
+    total: number;
+  };
+}
+
+export interface GetExamResponse {
+  payload: BackendExam;
 }
 
 export interface StudentEnrollment {
   id: string;
   exam_id: string;
   user_id: string;
-  status: 'UPCOMING' | 'ONGOING' | 'COMPLETED';
-  enrollment_created_at: string;
-  exam: BackendExam;
+  status: string;
+  enrollment_created_at?: string;
+  exam: {
+    id: string;
+    title: string;
+    type: string;
+    active: boolean;
+    created_at: string;
+    duration_seconds: number;
+    metadata: any;
+    entity_id: string;
+  };
   result: {
     id: string;
     score: number;
@@ -214,152 +131,260 @@ export interface StudentEnrollment {
   } | null;
 }
 
-export interface StudentEnrollmentsResponse {
-  status: string;
-  responseCode: string;
-  payload: {
-    total: number;
-    ongoing: StudentEnrollment[];
-    upcoming: StudentEnrollment[];
-    completed: StudentEnrollment[];
-    all: StudentEnrollment[];
-  };
-}
+/**
+ * Get exams with pagination
+ */
+export async function getExams(
+  page: number = 1,
+  limit: number = 10,
+  entityId?: string
+): Promise<GetExamsResponse> {
+  const params = new URLSearchParams({
+    page: page.toString(),
+    limit: limit.toString(),
+  });
 
-export const getStudentEnrollments = async (): Promise<StudentEnrollmentsResponse> => {
-  const response = await authenticatedFetch(getApiUrl('/exams/enrollments'), {
+  if (entityId) {
+    params.append('entity_id', entityId);
+  }
+
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams?${params.toString()}`), {
     method: 'GET',
   });
-  return response.json();
-};
 
-export const getExamById = async (examId: string): Promise<{status: string; responseCode: string; payload: BackendExam}> => {
-  const cleanedExamId = examId.split(':')[0].trim();
-  const response = await authenticatedFetch(getApiUrl(`/exams/${cleanedExamId}`), {
-    method: 'GET',
-  });
   return response.json();
-};
-
-// Submission APIs
-export interface StartExamResponse {
-  status: string;
-  responseCode: string;
-  payload: {
-    exam_id: string;
-    enrollment_id: string;
-    status: string;
-    started_at: string;
-  };
 }
 
-export const startExam = async (examId: string): Promise<StartExamResponse> => {
-  const cleanedExamId = examId.split(':')[0].trim();
-  const response = await authenticatedFetch(getApiUrl('/submissions/start'), {
+/**
+ * Get exam by ID
+ */
+export async function getExamById(examId: string): Promise<GetExamResponse> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}`), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
+ * Get questions for an exam
+ */
+export async function getQuestions(
+  examId: string,
+  page: number = 1,
+  limit: number = 10
+): Promise<GetQuestionsResponse> {
+  const params = new URLSearchParams({
+    exam_id: examId,
+    page: page.toString(),
+    limit: limit.toString(),
+  });
+
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/question?${params.toString()}`), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
+ * Create a question
+ */
+export async function createQuestion(payload: CreateQuestionPayload): Promise<{ payload: BackendQuestion }> {
+  const response = await authenticatedFetch(getApiUrl('/v1/exams/question'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ exam_id: cleanedExamId }),
+    body: JSON.stringify(payload),
   });
+
   return response.json();
-};
-
-export interface SaveAnswerPayload {
-  exam_id: string;
-  question_id: string;
-  answer: any; // Can be string, array, number, etc.
 }
 
-export interface SaveAnswerResponse {
-  status: string;
-  responseCode: string;
-  payload: {
-    submission_id: string;
-    exam_id: string;
-    question_id: string;
-    saved_at: string;
-  };
+/**
+ * Update a question
+ */
+export async function updateQuestion(payload: UpdateQuestionPayload): Promise<{ payload: BackendQuestion }> {
+  const { question_id, ...updateData } = payload;
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/question/${question_id}`), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(updateData),
+  });
+
+  return response.json();
 }
 
-export const saveAnswer = async (payload: SaveAnswerPayload): Promise<SaveAnswerResponse> => {
-  const cleanedExamId = payload.exam_id.split(':')[0].trim();
-  const response = await authenticatedFetch(getApiUrl('/submissions/answer'), {
+/**
+ * Delete a question
+ */
+export async function deleteQuestion(questionId: string): Promise<void> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/question/${questionId}`), {
+    method: 'DELETE',
+  });
+
+  await response.json();
+}
+
+/**
+ * Start an exam
+ */
+export async function startExam(examId: string): Promise<{ payload: { started_at: string } }> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/start`), {
+    method: 'POST',
+  });
+
+  return response.json();
+}
+
+/**
+ * Save an answer
+ */
+export async function saveAnswer(examId: string, questionId: string, answer: string): Promise<void> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/submission`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      ...payload,
-      exam_id: cleanedExamId,
+      question_id: questionId,
+      answer,
     }),
   });
-  return response.json();
-};
 
-export interface SubmitExamResponse {
-  status: string;
-  responseCode: string;
-  payload: {
-    exam_id: string;
-    enrollment_id: string;
-    status: string;
-    submitted_at: string;
-    time_taken: number;
-    total_answers: number;
-  };
+  await response.json();
 }
 
-export const submitExam = async (examId: string): Promise<SubmitExamResponse> => {
-  const cleanedExamId = examId.split(':')[0].trim();
-  const response = await authenticatedFetch(getApiUrl('/submissions/submit'), {
+/**
+ * Submit exam
+ */
+export async function submitExam(examId: string): Promise<{ payload: { completed_at: string } }> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/submit`), {
+    method: 'POST',
+  });
+
+  return response.json();
+}
+
+/**
+ * Get submissions for an exam
+ */
+export async function getSubmissions(examId: string): Promise<{
+  payload: {
+    enrollment_status: string;
+    started_at?: string;
+    submissions: Array<{
+      question_id: string;
+      answer: string;
+    }>;
+  };
+}> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/submission`), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
+ * Get student enrollments
+ */
+export async function getStudentEnrollments(): Promise<{ 
+  payload: { 
+    total: number;
+    ongoing: StudentEnrollment[];
+    upcoming: StudentEnrollment[];
+    completed: StudentEnrollment[];
+    all: StudentEnrollment[];
+  } 
+}> {
+  const response = await authenticatedFetch(getApiUrl('/v1/exams/enrollment'), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
+ * Create an exam
+ */
+export async function createExam(payload: CreateExamPayload): Promise<{ payload: BackendExam }> {
+  const response = await authenticatedFetch(getApiUrl('/v1/exams'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ exam_id: cleanedExamId }),
+    body: JSON.stringify(payload),
   });
-  return response.json();
-};
 
-export interface SubmissionData {
-  question_id: string;
-  answer: any;
-  last_updated: string;
+  return response.json();
 }
 
-export interface GetSubmissionsResponse {
-  status: string;
-  responseCode: string;
-  payload: {
-    exam_id: string;
-    enrollment_status: string;
-    started_at?: string;
-    submissions: SubmissionData[];
+/**
+ * Update an exam
+ */
+export async function updateExam(examId: string, payload: UpdateExamPayload): Promise<{ payload: BackendExam }> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}`), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return response.json();
+}
+
+/**
+ * Invite students to an exam
+ */
+export interface InviteStudentsPayload {
+  examId: string;
+  entityId: string;
+  emails: string[];
+}
+
+export async function inviteStudents(payload: InviteStudentsPayload): Promise<{
+  payload?: {
+    enrollments?: any[];
+    enrolledCount?: number;
   };
+  enrolledCount?: number;
+}> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${payload.examId}/invite`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      entity_id: payload.entityId,
+      emails: payload.emails,
+    }),
+  });
+
+  return response.json();
 }
 
-export const getSubmissions = async (examId: string): Promise<GetSubmissionsResponse> => {
-  const cleanedExamId = examId.split(':')[0].trim();
-  const response = await authenticatedFetch(getApiUrl(`/submissions?exam_id=${cleanedExamId}`), {
-    method: 'GET',
-  });
-  return response.json();
-};
-
+/**
+ * Exam API object for convenience
+ */
 export const examApi = {
   getExams,
   getExamById,
-  createExam,
-  updateExam,
   getQuestions,
   createQuestion,
   updateQuestion,
   deleteQuestion,
-  inviteStudents,
-  getStudentEnrollments,
   startExam,
   saveAnswer,
   submitExam,
   getSubmissions,
+  getStudentEnrollments,
+  createExam,
+  updateExam,
+  inviteStudents,
 };
+
