@@ -160,6 +160,54 @@ function AppContent() {
     });
   };
 
+  // Calculate breadcrumb items based on current navigation state
+  const getBreadcrumbItems = (): Array<{ label: string; onClick?: () => void; isActive?: boolean }> => {
+    const items: Array<{ label: string; onClick?: () => void; isActive?: boolean }> = [];
+    
+    switch (navigationState.view) {
+      case 'entities':
+        items.push({ label: 'Dashboard', onClick: handleBackToDashboard });
+        items.push({ label: 'Administration', isActive: true });
+        break;
+      case 'entity-detail':
+        items.push({ label: 'Dashboard', onClick: handleBackToDashboard });
+        items.push({ label: 'Administration', onClick: handleBackToEntities });
+        if (navigationState.entity) {
+          items.push({ label: navigationState.entity.name, isActive: true });
+        }
+        break;
+      case 'exam-detail':
+        items.push({ label: 'Dashboard', onClick: handleBackToDashboard });
+        items.push({ label: 'Administration', onClick: handleBackToEntities });
+        if (navigationState.entity) {
+          items.push({ label: navigationState.entity.name, onClick: handleBackToEntity });
+        }
+        if (navigationState.examName) {
+          items.push({ label: navigationState.examName, isActive: true });
+        }
+        break;
+      default:
+        // No breadcrumbs for dashboard and other views
+        break;
+    }
+    
+    return items;
+  };
+
+  // Determine back handler based on current view
+  const getBackHandler = (): (() => void) | undefined => {
+    switch (navigationState.view) {
+      case 'entities':
+        return handleBackToDashboard;
+      case 'entity-detail':
+        return handleBackToEntities;
+      case 'exam-detail':
+        return handleBackToEntity;
+      default:
+        return undefined;
+    }
+  };
+
   const renderContent = () => {
     // If student is taking an exam, show the comprehensive exam flow
     if (activeExam) {
@@ -298,6 +346,8 @@ function AppContent() {
       <TopNavigation 
         currentView={navigationState.view} 
         setCurrentView={handleNavigationChange}
+        breadcrumbItems={getBreadcrumbItems()}
+        onBack={getBackHandler()}
       />
       <main className="flex-1 p-6 overflow-auto">
         {renderContent()}
