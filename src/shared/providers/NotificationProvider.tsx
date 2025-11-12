@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
@@ -32,9 +32,11 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const notificationCounterRef = useRef(0);
 
   const addNotification = useCallback((notification: Omit<Notification, 'id'>) => {
-    const id = Date.now().toString();
+    // Use counter + timestamp to ensure unique keys even when notifications are added rapidly
+    const id = `${Date.now()}-${++notificationCounterRef.current}`;
     const newNotification = { ...notification, id };
     
     setNotifications(prev => [...prev, newNotification]);

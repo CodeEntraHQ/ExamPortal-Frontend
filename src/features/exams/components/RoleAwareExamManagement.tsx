@@ -113,7 +113,7 @@ export function RoleAwareExamManagement({
   onEditExamDetails 
 }: RoleAwareExamManagementProps) {
   const { user } = useAuth();
-  const { success, info } = useNotifications();
+  const { success, info, error } = useNotifications();
   const { setCurrentExam } = useExamContext();
   
   const [activeTab, setActiveTab] = useState('all');
@@ -216,7 +216,7 @@ export function RoleAwareExamManagement({
   // New state for backend exams
   const [backendExams, setBackendExams] = useState<BackendExam[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [page, setPage] = useState<number>(1);
   const [limit, setLimit] = useState<number>(10);
   const [totalPages, setTotalPages] = useState<number>(1);
@@ -227,13 +227,13 @@ export function RoleAwareExamManagement({
     const fetchExams = async () => {
       try {
         setLoading(true);
-        setError(null);
+        setFetchError(null);
         const response = await examApi.getExams(page, limit, user?.role === 'SUPERADMIN' ? currentEntity : undefined);
         setBackendExams(response.payload.exams);
         setTotalPages(response.payload.totalPages);
         setTotalExams(response.payload.total);
       } catch (err) {
-        setError('Failed to fetch exams. Please try again later.');
+        setFetchError('Failed to fetch exams. Please try again later.');
         console.error('Error fetching exams:', err);
       } finally {
         setLoading(false);
@@ -376,25 +376,65 @@ export function RoleAwareExamManagement({
     }
   };
 
-  const handleInviteStudents = () => {
+  const handleInviteStudents = async () => {
     if (!inviteEmails.trim()) {
-      // error('Please enter email addresses');
+      return;
+    }
+
+    if (!selectedExam) {
       return;
     }
 
     const emails = inviteEmails.split(',').map(email => email.trim()).filter(email => email);
-    if (selectedExam) {
-      // Update the exam with new invited count
-      setExams(exams.map(e => 
-        e.id === selectedExam.id 
-          ? { ...e, studentsInvited: e.studentsInvited + emails.length }
-          : e
-      ));
-      success(`Invitations sent to ${emails.length} students for "${selectedExam.title}"`);
+    if (emails.length === 0) {
+      return;
     }
+
+    const entityIdToUse = selectedExam.entityId;
+
+    if (!entityIdToUse) {
+      error('Entity ID is required to invite students');
+      return;
+    }
+
     setShowInviteModal(false);
     setInviteEmails('');
+    const examToUpdate = selectedExam;
     setSelectedExam(null);
+
+    try {
+      // Bulk invite all students at once
+      const res = await examApi.inviteStudents({
+        examId: examToUpdate.id,
+        entityId: entityIdToUse,
+        emails, // All emails in one request
+      });
+
+      const results = res?.payload?.results || [];
+      let totalInvited = 0;
+
+      // Show individual notification for each result
+      results.forEach((result: { email: string; success: boolean; reason: string }) => {
+        if (result.success) {
+          totalInvited++;
+          success(`✓ Invitation sent to ${result.email}`);
+        } else {
+          error(`✗ Failed to invite ${result.email} - ${result.reason}`);
+        }
+      });
+
+      // Update local exam state if needed
+      if (totalInvited > 0) {
+        setExams(exams.map(e => 
+          e.id === examToUpdate.id 
+            ? { ...e, studentsInvited: (e.studentsInvited || 0) + totalInvited }
+            : e
+        ));
+      }
+    } catch (err: any) {
+      console.error('Failed to send invites', err);
+      error('Failed to send invitations. Please try again.');
+    }
   };
 
   const examStats = [
@@ -567,7 +607,7 @@ export function RoleAwareExamManagement({
                     onSuccess={async () => {
                       try {
                         setLoading(true);
-                        setError(null);
+                        setFetchError(null);
                         const response = await examApi.getExams(page, limit, user?.role === 'SUPERADMIN' ? currentEntity : undefined);
                         setBackendExams(response.payload.exams);
                         setTotalPages(response.payload.totalPages);
@@ -575,7 +615,7 @@ export function RoleAwareExamManagement({
                         setShowCreateModal(false);
                         success('Exam created successfully!');
                       } catch (err) {
-                        setError('Failed to refresh exam list. Please try again.');
+                        setFetchError('Failed to refresh exam list. Please try again.');
                         console.error('Error refreshing exams:', err);
                       } finally {
                         setLoading(false);
@@ -670,12 +710,12 @@ export function RoleAwareExamManagement({
                         </div>
                       </TableCell>
                     </TableRow>
-                  ) : error ? (
+                  ) : fetchError ? (
                     <TableRow>
                       <TableCell colSpan={canManageAllEntities ? 4 : 3} className="text-center py-10">
                         <div className="flex flex-col items-center justify-center space-y-2">
                           <AlertTriangle className="h-8 w-8 text-destructive" />
-                          <p className="text-sm text-destructive">{error}</p>
+                          <p className="text-sm text-destructive">{fetchError}</p>
                           <Button variant="outline" size="sm" onClick={() => window.location.reload()}>
                             Retry
                           </Button>

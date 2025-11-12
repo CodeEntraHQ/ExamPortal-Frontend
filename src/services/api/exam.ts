@@ -347,25 +347,45 @@ export interface InviteStudentsPayload {
   emails: string[];
 }
 
+export interface InviteStudentResult {
+  email: string;
+  success: boolean;
+  reason: string;
+}
+
 export async function inviteStudents(payload: InviteStudentsPayload): Promise<{
   payload?: {
-    enrollments?: any[];
-    enrolledCount?: number;
+    results?: InviteStudentResult[];
+    totalInvited?: number;
+    totalFailed?: number;
   };
-  enrolledCount?: number;
 }> {
+  const requestBody = {
+    entity_id: payload.entityId,
+    student_emails: payload.emails,
+  };
+
+  console.log('📧 [inviteStudents] Request Details:', {
+    url: getApiUrl(`/v1/exams/${payload.examId}/invite`),
+    method: 'POST',
+    requestBody: requestBody,
+    examId: payload.examId,
+    entityId: payload.entityId,
+    emails: payload.emails,
+    emailCount: payload.emails?.length || 0,
+  });
+
   const response = await authenticatedFetch(getApiUrl(`/v1/exams/${payload.examId}/invite`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      entity_id: payload.entityId,
-      emails: payload.emails,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
-  return response.json();
+  const responseData = await response.json();
+  console.log('✅ [inviteStudents] Response:', responseData);
+  return responseData;
 }
 
 /**
