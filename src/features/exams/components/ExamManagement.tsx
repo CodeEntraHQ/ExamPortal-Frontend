@@ -13,6 +13,7 @@ import { Textarea } from '../../../shared/components/ui/textarea';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '../../../shared/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
+import { examApi } from '../../../services/api/exam';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Plus, 
@@ -229,17 +230,70 @@ export function ExamManagement({ currentEntity, onCreateExam, onExploreExam }: E
     setShowInviteModal({ exam, show: true });
   };
 
-  const sendInvitations = () => {
+  const sendInvitations = async () => {
     if (!inviteEmails.trim()) {
       error('Please enter email addresses');
       return;
     }
 
+    if (!showInviteModal.exam) {
+      error('No exam selected');
+      return;
+    }
+
     const emails = inviteEmails.split(',').map(email => email.trim()).filter(email => email);
-    success(`Invitations sent to ${emails.length} students for "${showInviteModal.exam?.title}"`);
+    if (emails.length === 0) {
+      error('Please enter at least one valid email address');
+      return;
+    }
+
+    const examToInvite = showInviteModal.exam;
+    const entityIdToUse = examToInvite.entityId;
+
+    if (!entityIdToUse) {
+      error('Entity ID is required to invite students');
+      return;
+    }
+
     setShowInviteModal({ exam: null, show: false });
     setInviteEmails('');
+
+    try {
+      // Bulk invite all students at once
+      const res = await examApi.inviteStudents({
+        examId: examToInvite.id,
+        entityId: entityIdToUse,
+        emails, // All emails in one request
+      });
+
+      const results = res?.payload?.results || [];
+      let totalInvited = 0;
+
+      // Show individual notification for each result
+      results.forEach((result: { email: string; success: boolean; reason: string }) => {
+        if (result.success) {
+          totalInvited++;
+          success(`✓ Invitation sent to ${result.email}`);
+        } else {
+          error(`✗ Failed to invite ${result.email} - ${result.reason}`);
+        }
+      });
+
+      // Update local exam state if needed
+      if (totalInvited > 0) {
+        setExams(exams.map(e => 
+          e.id === examToInvite.id 
+            ? { ...e, studentsEnrolled: (e.studentsEnrolled || 0) + totalInvited }
+            : e
+        ));
+      }
+    } catch (err: any) {
+      console.error('Failed to send invites', err);
+      error('Failed to send invitations. Please try again.');
+    }
   };
+<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
+read_file
 
   const handleExamAction = (action: string, exam: Exam) => {
     switch (action) {
