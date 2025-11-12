@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../../../shared/components/ui/dialog';
 import { Entity } from './EntityManagement';
 import { Input } from '../../../shared/components/ui/input';
 import { Label } from '../../../shared/components/ui/label';
 import { Textarea } from '../../../shared/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../shared/components/ui/select';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../shared/components/ui/card';
 import { Button } from '../../../shared/components/ui/button';
 import { Badge } from '../../../shared/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../shared/components/ui/tabs';
+import { updateEntity } from '../../../services/api/entity';
 import { 
   Building, 
   Users, 
@@ -16,9 +18,6 @@ import {
   BarChart3, 
   MapPin,
   Calendar,
-  TrendingUp,
-  Plus,
-  Eye,
   Settings
 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -46,7 +45,6 @@ export function EntityDetailPage({
   onEditExam
 }: EntityDetailPageProps) {
   const [activeTab, setActiveTab] = useState(editMode ? 'settings' : 'exams');
-  const [showSettingsModal, setShowSettingsModal] = useState(editMode || false);
   const [showInsightsModal, setShowInsightsModal] = useState(false);
   const [entityDetails, setEntityDetails] = useState<Entity>(entity);
   const [entitySettings, setEntitySettings] = useState({
@@ -58,8 +56,9 @@ export function EntityDetailPage({
     contactPhone: entity.phone || '',
     logoLink: entity.logo_link || ''
   });
+  const [isSaving, setIsSaving] = useState(false);
 
-  const { success } = useNotifications();
+  const { success, error } = useNotifications();
 
   const breadcrumbItems = [
     { label: 'Dashboard', onClick: onBackToDashboard },
@@ -117,98 +116,6 @@ export function EntityDetailPage({
                 </div>
               </div>
               <div className="flex gap-2">
-                <Dialog open={showSettingsModal} onOpenChange={setShowSettingsModal}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Settings className="h-4 w-4 mr-2" />
-                      Settings
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
-                    <DialogHeader>
-                      <DialogTitle>Entity Settings</DialogTitle>
-                      <DialogDescription>
-                        Update entity information and configuration
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid gap-2">
-                        <Label htmlFor="entity-name">Entity Name</Label>
-                        <Input
-                          id="entity-name"
-                          value={entitySettings.name}
-                          onChange={(e) => setEntitySettings({ ...entitySettings, name: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="entity-type">Type</Label>
-                        <Input
-                          id="entity-type"
-                          value={entitySettings.type}
-                          onChange={(e) => setEntitySettings({ ...entitySettings, type: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="entity-address">Address</Label>
-                        <Textarea
-                          id="entity-address"
-                          value={entitySettings.address}
-                          onChange={(e) => setEntitySettings({ ...entitySettings, address: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label htmlFor="entity-description">Description</Label>
-                        <Textarea
-                          id="entity-description"
-                          value={entitySettings.description}
-                          onChange={(e) => setEntitySettings({ ...entitySettings, description: e.target.value })}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2">
-                          <Label htmlFor="contact-email">Contact Email</Label>
-                          <Input
-                            id="contact-email"
-                            type="email"
-                            value={entitySettings.contactEmail}
-                            onChange={(e) => setEntitySettings({ ...entitySettings, contactEmail: e.target.value })}
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="contact-phone">Contact Phone</Label>
-                          <Input
-                            id="contact-phone"
-                            value={entitySettings.contactPhone}
-                            onChange={(e) => setEntitySettings({ ...entitySettings, contactPhone: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="entity-logo">Logo</Label>
-                          <Input
-                            id="entity-logo"
-                            value={entitySettings.logoLink}
-                            onChange={(e) => setEntitySettings({ ...entitySettings, logoLink: e.target.value })}
-                          />
-                        </div>
-                      </div>
-                      <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowSettingsModal(false)}>
-                          Cancel
-                        </Button>
-                        <Button 
-                          onClick={() => {
-                            setShowSettingsModal(false);
-                            success('Entity settings updated successfully');
-                          }}
-                          className="bg-primary hover:bg-primary/90"
-                        >
-                          Save Changes
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-                
                 <Dialog open={showInsightsModal} onOpenChange={setShowInsightsModal}>
                   <DialogTrigger asChild>
                     <Button size="sm" className="bg-primary hover:bg-primary/90">
@@ -321,57 +228,168 @@ export function EntityDetailPage({
               <div>
                 <h2 className="text-xl font-semibold">Entity Settings</h2>
                 <p className="text-muted-foreground">
-                  Configure settings and preferences for {entityDetails.name}
+                  Update entity information and configuration
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>General Settings</CardTitle>
-                  <CardDescription>Basic entity information and configuration</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Entity Name</Label>
-                    <Input value={entitySettings.name} disabled />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Type</Label>
-                    <Input value={entitySettings.type} disabled />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Address</Label>
-                    <Textarea value={entitySettings.address} disabled rows={2} />
-                  </div>
-                  <Button onClick={() => setShowSettingsModal(true)} className="w-full">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Edit Settings
-                  </Button>
-                </CardContent>
-              </Card>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setIsSaving(true);
+                try {
+                  console.log('🟢 EntityDetailPage - Submitting form with settings:', entitySettings);
+                  
+                  const payload: any = {
+                    entity_id: entityDetails.id,
+                    name: entitySettings.name,
+                    type: entitySettings.type,
+                    address: entitySettings.address,
+                    description: entitySettings.description || '',
+                    email: entitySettings.contactEmail || '',
+                    phone_number: entitySettings.contactPhone || '',
+                  };
+                  
+                  // Note: logo_link is not supported by the API - only file uploads are supported
+                  // If logo needs to be updated, it should be done via file upload in a separate feature
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>Contact Information</CardTitle>
-                  <CardDescription>Contact details and communication preferences</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Contact Email</Label>
-                    <Input value={entitySettings.contactEmail} disabled />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Contact Phone</Label>
-                    <Input value={entitySettings.contactPhone} disabled />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Description</Label>
-                    <Textarea value={entitySettings.description} disabled rows={3} />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                  console.log('🟢 EntityDetailPage - Calling updateEntity with payload:', payload);
+                  const response = await updateEntity(payload);
+                  console.log('🟢 EntityDetailPage - Update response:', response);
+                  
+                  // Update local state with response
+                  if (response && response.payload) {
+                    const updatedEntity = {
+                      ...entityDetails,
+                      name: response.payload.name || entityDetails.name,
+                      type: response.payload.type || entityDetails.type,
+                      location: response.payload.address || entityDetails.location,
+                      description: response.payload.description || entityDetails.description,
+                      email: response.payload.email || entityDetails.email,
+                      phone: response.payload.phone_number || entityDetails.phone,
+                      logo_link: response.payload.logo_link || entityDetails.logo_link,
+                    };
+                    
+                    setEntityDetails(updatedEntity);
+                    
+                    // Also update the entitySettings state to reflect saved values
+                    setEntitySettings({
+                      name: updatedEntity.name,
+                      type: updatedEntity.type,
+                      address: updatedEntity.location,
+                      description: updatedEntity.description || '',
+                      contactEmail: updatedEntity.email || '',
+                      contactPhone: updatedEntity.phone || '',
+                      logoLink: updatedEntity.logo_link || '',
+                    });
+                  }
+                  
+                  success('Entity settings updated successfully');
+                } catch (err: any) {
+                  console.error('❌ EntityDetailPage - Error updating entity:', err);
+                  const errorMessage = err?.message || err?.response?.data?.message || 'Failed to update entity settings';
+                  error(errorMessage);
+                } finally {
+                  setIsSaving(false);
+                }
+              }}
+            >
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>General Settings</CardTitle>
+                    <CardDescription>Basic entity information and configuration</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="entity-name">Entity Name</Label>
+                      <Input
+                        id="entity-name"
+                        value={entitySettings.name}
+                        onChange={(e) => setEntitySettings({ ...entitySettings, name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="entity-type">Type</Label>
+                      <Select
+                        value={entitySettings.type}
+                        onValueChange={(value: 'COLLEGE' | 'SCHOOL') => setEntitySettings({ ...entitySettings, type: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="COLLEGE">College</SelectItem>
+                          <SelectItem value="SCHOOL">School</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="entity-address">Address</Label>
+                      <Textarea
+                        id="entity-address"
+                        value={entitySettings.address}
+                        onChange={(e) => setEntitySettings({ ...entitySettings, address: e.target.value })}
+                        rows={2}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="entity-logo">Logo URL</Label>
+                      <Input
+                        id="entity-logo"
+                        value={entitySettings.logoLink}
+                        onChange={(e) => setEntitySettings({ ...entitySettings, logoLink: e.target.value })}
+                        placeholder="https://example.com/logo.png"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Contact Information</CardTitle>
+                    <CardDescription>Contact details and communication preferences</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="contact-email">Contact Email</Label>
+                      <Input
+                        id="contact-email"
+                        type="email"
+                        value={entitySettings.contactEmail}
+                        onChange={(e) => setEntitySettings({ ...entitySettings, contactEmail: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="contact-phone">Contact Phone</Label>
+                      <Input
+                        id="contact-phone"
+                        value={entitySettings.contactPhone}
+                        onChange={(e) => setEntitySettings({ ...entitySettings, contactPhone: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="entity-description">Description</Label>
+                      <Textarea
+                        id="entity-description"
+                        value={entitySettings.description}
+                        onChange={(e) => setEntitySettings({ ...entitySettings, description: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+              <div className="flex justify-end gap-2 mt-6">
+                <Button
+                  type="submit"
+                  disabled={isSaving}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </form>
           </TabsContent>
         </Tabs>
       </motion.div>
