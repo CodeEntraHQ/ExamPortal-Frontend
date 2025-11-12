@@ -1,40 +1,55 @@
-import { authenticatedFetch, getApiUrl } from './index';
+/**
+ * User API service
+ * Handles user profile and account operations
+ */
 
-export const updateUserProfile = async (formData: FormData) => {
-  try {
-    const response = await authenticatedFetch(getApiUrl('/users'), {
-      method: 'PATCH',
-      body: formData,
-    });
-    return await response.json();
-  } catch (error: any) {
-    try {
-      // The error from authenticatedFetch should be a JSON string.
-      const errorData = JSON.parse(error.message);
-      throw new Error(errorData.responseMessage || 'An unexpected error occurred.');
-    } catch (e) {
-      // If parsing fails, it might be a network error or a non-JSON response.
-      throw new Error(error.message || 'An unexpected network error occurred.');
-    }
-  }
-};
+import { authenticatedFetch, getApiUrl } from './core';
 
-export const changePassword = async (currentPassword: string, newPassword: string) => {
-  try {
-    const response = await authenticatedFetch(getApiUrl('/users/password/change'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ currentPassword, newPassword }),
-    });
-    return await response.json();
-  } catch (error: any) {
-    try {
-      const errorData = JSON.parse(error.message);
-      throw new Error(errorData.responseMessage || 'An unexpected error occurred.');
-    } catch (e) {
-      throw new Error(error.message || 'An unexpected network error occurred.');
-    }
-  }
-};
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: 'SUPERADMIN' | 'ADMIN' | 'STUDENT';
+  entityId?: string;
+  entityName?: string;
+  profile_picture_link?: string;
+  phone_number?: string;
+  address?: string;
+  bio?: string;
+  created_at?: string;
+  gender?: string;
+  roll_number?: string;
+  last_login_at?: string;
+  two_fa_enabled?: boolean;
+}
+
+/**
+ * Update user profile
+ */
+export async function updateUserProfile(formData: FormData): Promise<{ payload: UserProfile }> {
+  const response = await authenticatedFetch(getApiUrl('/v1/users'), {
+    method: 'PATCH',
+    body: formData,
+  });
+
+  return response.json();
+}
+
+/**
+ * Change password
+ */
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  const response = await authenticatedFetch(getApiUrl('/v1/users/password/change'), {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+
+  await response.json();
+}
+
