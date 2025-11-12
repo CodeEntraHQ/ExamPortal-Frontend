@@ -1,19 +1,46 @@
-import { getApiUrl, storeToken, authenticatedFetch } from './index';
+/**
+ * Authentication API service
+ * Handles login, password reset, and related auth operations
+ */
+
+import { authenticatedFetch, getApiUrl, setToken } from './core';
+
+export interface LoginResponse {
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    role: 'SUPERADMIN' | 'ADMIN' | 'STUDENT';
+    entityId?: string;
+    entityName?: string;
+    profile_picture_link?: string;
+    phone_number?: string;
+    address?: string;
+    bio?: string;
+    created_at?: string;
+    gender?: string;
+    roll_number?: string;
+    last_login_at?: string;
+    two_fa_enabled?: boolean;
+  };
+  requires2FA?: boolean;
+  token?: string;
+}
 
 /**
- * Logs in a user and stores the authentication token.
- * @param email The user's email.
- * @param password The user's password.
- * @returns The user data from the payload.
- * @throws An error if the login fails.
+ * Login user
  */
-export const login = async (email: string, password: string, authentication_code?: string): Promise<any> => {
-  const body: any = { email, password };
-  if (authentication_code) {
-    body.authentication_code = authentication_code;
+export async function login(email: string, password: string, otp?: string): Promise<LoginResponse> {
+  const body: { email: string; password: string; authentication_code?: string } = {
+    email,
+    password,
+  };
+
+  if (otp) {
+    body.authentication_code = otp;
   }
 
-  const response = await fetch(getApiUrl('/users/login'), {
+  const response = await authenticatedFetch(getApiUrl('/v1/users/login'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -21,33 +48,30 @@ export const login = async (email: string, password: string, authentication_code
     body: JSON.stringify(body),
   });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ responseMessage: 'Network response was not ok' }));
-    throw new Error(errorData.responseMessage || errorData.message || 'Login failed');
-  }
-
   const data = await response.json();
 
-  if (data.status === 'SUCCESS') {
-    if (data.payload && data.payload.token) {
-      storeToken(data.payload.token);
-      return { user: data.payload.user };
-    }
-    if (data.responseCode === 'AUTHENTICATION_CODE_REQUIRED') {
-      return { requires2FA: true };
-    }
+  // Check if 2FA is required
+  if (data.message === 'AUTHENTICATION_CODE_REQUIRED' || data.message === 'AUTHENTICATION_CODE_REQUIRED') {
+    return { requires2FA: true };
   }
 
-  throw new Error(data.responseCode || 'Login failed: Invalid response structure');
-};
+  // Store token if provided
+  if (data.payload?.token) {
+    setToken(data.payload.token);
+  }
+
+  return {
+    user: data.payload?.user || data.payload,
+    token: data.payload?.token,
+    requires2FA: false,
+  };
+}
 
 /**
- * Initiates the password reset process for a user.
- * @param email The user's email.
- * @throws An error if the request fails.
+ * Forgot password - request password reset
  */
-export const forgotPassword = async (email: string) => {
-  const response = await fetch(getApiUrl('/users/password/forgot'), {
+export async function forgotPassword(email: string): Promise<void> {
+  const response = await authenticatedFetch(getApiUrl('/v1/users/password/forgot'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -55,51 +79,45 @@ export const forgotPassword = async (email: string) => {
     body: JSON.stringify({ email }),
   });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ responseMessage: 'An error occurred' }));
-    throw new Error(errorData.responseMessage || 'Failed to initiate password reset');
-  }
-
-  return response.json();
-};
+  await response.json();
+}
 
 /**
- * Resets the user's password using a reset token.
- * @param password The new password.
- * @param token The password reset token.
- * @throws An error if the request fails.
+ * Reset password with token
  */
-export const resetPassword = async (password: string, token: string) => {
-  const response = await fetch(getApiUrl(`/users/password/reset`), {
+export async function resetPassword(token: string, newPassword: string): Promise<{ responseCode: string; responseMessage?: string }> {
+  const response = await authenticatedFetch(getApiUrl('/v1/users/password/reset'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
     },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({
+      token,
+      new_password: newPassword,
+    }),
   });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ responseMessage: 'An error occurred' }));
-    throw new Error(errorData.responseMessage || 'Failed to reset password');
-  }
-
   return response.json();
-};
-
-export const resendOTP = async () => {
-    const response = await authenticatedFetch(getApiUrl('/users/resend-otp'), {
-        method: 'POST',
-    });
-    return response.json();
 }
 
+/**
+ * Resend OTP for 2FA
+ */
+export async function resendOTP(): Promise<void> {
+  const response = await authenticatedFetch(getApiUrl('/v1/users/two-fa/generate'), {
+    method: 'GET',
+  });
+
+  await response.json();
+}
+
+/**
+ * Auth API object for convenience
+ */
 export const authAPI = {
-    login,
-    resendOTP,
+  login,
+  forgotPassword,
+  resetPassword,
+  resendOTP,
 };
 
-export const passwordResetAPI = {
-    requestReset: forgotPassword,
-    reset: resetPassword,
-};
