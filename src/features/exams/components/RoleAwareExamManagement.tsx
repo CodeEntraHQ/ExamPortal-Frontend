@@ -221,6 +221,20 @@ export function RoleAwareExamManagement({
   const [limit, setLimit] = useState<number>(10);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalExams, setTotalExams] = useState<number>(0);
+  
+  // Statistics state
+  const [statistics, setStatistics] = useState<{
+    totalExams: number;
+    activeExams: number;
+    totalStudents: number;
+    averageCompletion: number;
+  }>({
+    totalExams: 0,
+    activeExams: 0,
+    totalStudents: 0,
+    averageCompletion: 0,
+  });
+  const [statisticsLoading, setStatisticsLoading] = useState<boolean>(false);
 
   // Fetch exams from backend
   useEffect(() => {
@@ -242,6 +256,36 @@ export function RoleAwareExamManagement({
 
     fetchExams();
   }, [page, limit, currentEntity, user?.role]);
+
+  // Fetch statistics from backend
+  useEffect(() => {
+    const fetchStatistics = async () => {
+      // Only fetch statistics for ADMIN and SUPERADMIN
+      if (user?.role !== 'ADMIN' && user?.role !== 'SUPERADMIN') {
+        return;
+      }
+
+      try {
+        setStatisticsLoading(true);
+        const response = await examApi.getExamStatistics(
+          user?.role === 'SUPERADMIN' ? currentEntity : undefined
+        );
+        setStatistics({
+          totalExams: response.payload.totalExams,
+          activeExams: response.payload.activeExams,
+          totalStudents: response.payload.totalStudentsInvited,
+          averageCompletion: response.payload.averageCompletion,
+        });
+      } catch (err) {
+        console.error('Error fetching statistics:', err);
+        // Don't show error to user, just use default values
+      } finally {
+        setStatisticsLoading(false);
+      }
+    };
+
+    fetchStatistics();
+  }, [currentEntity, user?.role]);
 
   // Filter exams based on user role
   const getFilteredExams = () => {
@@ -440,32 +484,28 @@ export function RoleAwareExamManagement({
   const examStats = [
     {
       title: 'Total Exams',
-      value: getFilteredExams().length,
+      value: statisticsLoading ? '...' : statistics.totalExams,
       icon: BookOpen,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100 dark:bg-blue-900/30'
     },
     {
       title: 'Active Exams',
-      value: getFilteredExams().filter(e => e.status === 'ACTIVE').length,
+      value: statisticsLoading ? '...' : statistics.activeExams,
       icon: Play,
       color: 'text-green-600',
       bgColor: 'bg-green-100 dark:bg-green-900/30'
     },
     {
       title: 'Total Students',
-      value: getFilteredExams().reduce((sum, exam) => sum + exam.studentsInvited, 0),
+      value: statisticsLoading ? '...' : statistics.totalStudents,
       icon: Users,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100 dark:bg-purple-900/30'
     },
     {
       title: 'Avg. Completion',
-      value: `${Math.round(
-        getFilteredExams().reduce((sum, exam) => 
-          sum + (exam.studentsInvited > 0 ? (exam.studentsCompleted / exam.studentsInvited) * 100 : 0), 0
-        ) / Math.max(getFilteredExams().length, 1)
-      )}%`,
+      value: statisticsLoading ? '...' : `${statistics.averageCompletion}%`,
       icon: Target,
       color: 'text-orange-600',
       bgColor: 'bg-orange-100 dark:bg-orange-900/30'
