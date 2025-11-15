@@ -66,6 +66,7 @@ export interface InviteUserResponse {
 
 export interface CreateUserPayload {
   email: string;
+  password: string;
   name?: string;
   role: 'ADMIN' | 'STUDENT';
   entity_id?: string;
@@ -81,7 +82,6 @@ export interface CreateUserResponse {
     id: string;
     email: string;
     role: 'ADMIN' | 'STUDENT';
-    password: string; // Random password generated
   };
 }
 
@@ -135,7 +135,7 @@ export async function inviteUser(payload: InviteUserPayload): Promise<InviteUser
 }
 
 /**
- * Create a new user directly with random password
+ * Create a new user directly with provided password
  */
 export async function createUser(payload: CreateUserPayload): Promise<CreateUserResponse> {
   const response = await authenticatedFetch(getApiUrl('/v1/users/create'), {
@@ -159,6 +159,17 @@ export async function deregisterUser(userId?: string): Promise<void> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(userId ? { user_id: userId } : {}),
+  });
+
+  await response.json();
+}
+
+/**
+ * Permanently delete a user
+ */
+export async function deleteUser(userId: string): Promise<void> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/users/delete/${userId}`), {
+    method: 'DELETE',
   });
 
   await response.json();
