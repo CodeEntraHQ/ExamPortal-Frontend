@@ -27,7 +27,10 @@ import {
   BarChart3,
   Mail,
   UserPlus,
-  Layers
+  Layers,
+  Trophy,
+  Medal,
+  Award
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
@@ -36,7 +39,8 @@ import { QuestionManagement } from './QuestionManagement';
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { useExamContext } from '../providers/ExamContextProvider';
 import { EditExamModal } from './EditExamModal';
-import { examApi } from '../../../services/api/exam';
+import { examApi, LeaderboardEntry } from '../../../services/api/exam';
+import { useEffect } from 'react';
 
 interface ExamDetailPageProps {
   examId: string;
@@ -65,9 +69,67 @@ export function ExamDetailPage({
   const { info, success, error } = useNotifications();
   const { user } = useAuth();
   const { currentExam, setCurrentExam } = useExamContext();
+  
+  // Statistics state
+  const [statistics, setStatistics] = useState<{
+    totalAttempts: number;
+    totalStudentsInvited: number;
+    completionRate: number;
+  }>({
+    totalAttempts: 0,
+    totalStudentsInvited: 0,
+    completionRate: 0,
+  });
+  const [statisticsLoading, setStatisticsLoading] = useState<boolean>(false);
+  
+  // Leaderboard state
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [leaderboardLoading, setLeaderboardLoading] = useState<boolean>(false);
 
   // Role-based access control
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
+  
+  // Fetch statistics from backend
+  useEffect(() => {
+    const fetchStatistics = async () => {
+      if (!canManageQuestions) return;
+      
+      try {
+        setStatisticsLoading(true);
+        const response = await examApi.getExamDetailStatistics(examId);
+        setStatistics({
+          totalAttempts: response.payload.totalAttempts,
+          totalStudentsInvited: response.payload.totalStudentsInvited,
+          completionRate: response.payload.completionRate,
+        });
+      } catch (err) {
+        console.error('Error fetching exam statistics:', err);
+      } finally {
+        setStatisticsLoading(false);
+      }
+    };
+
+    fetchStatistics();
+  }, [examId, canManageQuestions]);
+  
+  // Fetch leaderboard from backend
+  useEffect(() => {
+    const fetchLeaderboard = async () => {
+      if (!canManageQuestions) return;
+      
+      try {
+        setLeaderboardLoading(true);
+        const response = await examApi.getExamLeaderboard(examId);
+        setLeaderboard(response.payload.leaderboard);
+      } catch (err) {
+        console.error('Error fetching leaderboard:', err);
+      } finally {
+        setLeaderboardLoading(false);
+      }
+    };
+
+    fetchLeaderboard();
+  }, [examId, canManageQuestions]);
 
   // Helper function to format duration from seconds to minutes
   const formatDurationFromSeconds = (seconds?: number): number => {
@@ -128,11 +190,11 @@ export function ExamDetailPage({
   const stats = [
     {
       title: 'Total Attempts',
-      value: examDetails.completedAttempts.toString(),
+      value: statisticsLoading ? '...' : statistics.totalAttempts.toString(),
       icon: Users,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100 dark:bg-blue-900/30',
-      subtext: `${examDetails.activeAttempts} active`
+      subtext: `${statistics.totalStudentsInvited - statistics.totalAttempts} remaining`
     },
     {
       title: 'Average Score',
@@ -144,11 +206,11 @@ export function ExamDetailPage({
     },
     {
       title: 'Completion Rate',
-      value: `${Math.round((examDetails.completedAttempts / examDetails.totalStudents) * 100)}%`,
+      value: statisticsLoading ? '...' : `${statistics.completionRate}%`,
       icon: TrendingUp,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100 dark:bg-purple-900/30',
-      subtext: `${examDetails.totalStudents - examDetails.completedAttempts} remaining`
+      subtext: `${statistics.totalStudentsInvited} total students`
     },
     {
       title: 'Live Sessions',
@@ -450,17 +512,21 @@ export function ExamDetailPage({
                 <CardContent className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Completed</span>
-                    <span className="text-sm font-medium">{examDetails.completedAttempts}/{examDetails.totalStudents}</span>
+                    <span className="text-sm font-medium">
+                      {statisticsLoading ? '...' : `${statistics.totalAttempts}/${statistics.totalStudentsInvited}`}
+                    </span>
                   </div>
                   <Progress 
-                    value={(examDetails.completedAttempts / examDetails.totalStudents) * 100} 
+                    value={statisticsLoading ? 0 : statistics.completionRate} 
                     className="h-2"
                   />
                   <div className="grid grid-cols-3 gap-4 text-center">
                     <div className="space-y-1">
                       <div className="flex items-center justify-center gap-1">
                         <CheckCircle className="h-4 w-4 text-success" />
-                        <span className="text-sm font-medium">{examDetails.completedAttempts}</span>
+                        <span className="text-sm font-medium">
+                          {statisticsLoading ? '...' : statistics.totalAttempts}
+                        </span>
                       </div>
                       <p className="text-xs text-muted-foreground">Completed</p>
                     </div>
@@ -474,7 +540,9 @@ export function ExamDetailPage({
                     <div className="space-y-1">
                       <div className="flex items-center justify-center gap-1">
                         <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">{examDetails.totalStudents - examDetails.completedAttempts - examDetails.activeAttempts}</span>
+                        <span className="text-sm font-medium">
+                          {statisticsLoading ? '...' : statistics.totalStudentsInvited - statistics.totalAttempts - examDetails.activeAttempts}
+                        </span>
                       </div>
                       <p className="text-xs text-muted-foreground">Pending</p>
                     </div>
@@ -621,8 +689,8 @@ export function ExamDetailPage({
                     <PieChart>
                       <Pie
                         data={[
-                          { name: 'Pass', value: Math.round(examDetails.completedAttempts * (examDetails.passRate / 100)), color: 'hsl(var(--success))' },
-                          { name: 'Fail', value: examDetails.completedAttempts - Math.round(examDetails.completedAttempts * (examDetails.passRate / 100)), color: 'hsl(var(--destructive))' }
+                          { name: 'Pass', value: Math.round(statistics.totalAttempts * (examDetails.passRate / 100)), color: 'hsl(var(--success))' },
+                          { name: 'Fail', value: statistics.totalAttempts - Math.round(statistics.totalAttempts * (examDetails.passRate / 100)), color: 'hsl(var(--destructive))' }
                         ]}
                         cx="50%"
                         cy="50%"
@@ -639,6 +707,71 @@ export function ExamDetailPage({
                 </CardContent>
               </Card>
             </div>
+            
+            {/* Leaderboard */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-yellow-500" />
+                  Leaderboard
+                </CardTitle>
+                <CardDescription>Top performers ranked by correct answers</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {leaderboardLoading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : leaderboard.length === 0 ? (
+                  <div className="text-center py-10 text-muted-foreground">
+                    <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No completed attempts yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {leaderboard.map((entry, index) => {
+                      const getRankIcon = () => {
+                        if (index === 0) return <Trophy className="h-5 w-5 text-yellow-500 dark:text-yellow-400" />;
+                        if (index === 1) return <Medal className="h-5 w-5 text-gray-400 dark:text-gray-300" />;
+                        if (index === 2) return <Award className="h-5 w-5 text-orange-500 dark:text-orange-400" />;
+                        return <span className="w-8 h-8 flex items-center justify-center text-sm font-medium text-foreground">{index + 1}</span>;
+                      };
+                      
+                      const getRankColor = () => {
+                        if (index === 0) return 'bg-yellow-50 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-700';
+                        if (index === 1) return 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700';
+                        if (index === 2) return 'bg-orange-50 dark:bg-orange-900/30 border-orange-200 dark:border-orange-700';
+                        return 'bg-muted/50 dark:bg-muted border-border';
+                      };
+                      
+                      return (
+                        <div
+                          key={entry.userId}
+                          className={`flex items-center justify-between p-4 rounded-lg border ${getRankColor()}`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center justify-center w-10">
+                              {getRankIcon()}
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">{entry.name || entry.email}</p>
+                              <p className="text-sm text-muted-foreground">{entry.email}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-primary">{entry.correctAnswers}</p>
+                            <p className="text-xs text-muted-foreground">correct answers</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(entry.completedAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="responses" className="space-y-6">

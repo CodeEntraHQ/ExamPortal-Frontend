@@ -110,6 +110,41 @@ export interface GetExamResponse {
   payload: BackendExam;
 }
 
+export interface ExamStatistics {
+  totalExams: number;
+  activeExams: number;
+  totalStudentsInvited: number;
+  averageCompletion: number;
+}
+
+export interface GetExamStatisticsResponse {
+  payload: ExamStatistics;
+}
+
+export interface ExamDetailStatistics {
+  totalAttempts: number;
+  totalStudentsInvited: number;
+  completionRate: number;
+}
+
+export interface GetExamDetailStatisticsResponse {
+  payload: ExamDetailStatistics;
+}
+
+export interface LeaderboardEntry {
+  userId: string;
+  email: string;
+  name: string;
+  correctAnswers: number;
+  completedAt: string;
+}
+
+export interface GetExamLeaderboardResponse {
+  payload: {
+    leaderboard: LeaderboardEntry[];
+  };
+}
+
 export interface StudentEnrollment {
   id: string;
   exam_id: string;
@@ -359,6 +394,45 @@ export async function updateExam(examId: string, payload: UpdateExamPayload): Pr
 }
 
 /**
+ * Get exam statistics
+ */
+export async function getExamStatistics(entityId?: string): Promise<GetExamStatisticsResponse> {
+  const params = new URLSearchParams();
+  if (entityId) {
+    params.append('entity_id', entityId);
+  }
+
+  const url = `/v1/exams/statistics${params.toString() ? `?${params.toString()}` : ''}`;
+  const response = await authenticatedFetch(getApiUrl(url), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
+ * Get exam detail statistics
+ */
+export async function getExamDetailStatistics(examId: string): Promise<GetExamDetailStatisticsResponse> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/statistics`), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
+ * Get exam leaderboard
+ */
+export async function getExamLeaderboard(examId: string): Promise<GetExamLeaderboardResponse> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/leaderboard`), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
  * Invite students to an exam
  */
 export interface InviteStudentsPayload {
@@ -426,5 +500,8 @@ export const examApi = {
   createExam,
   updateExam,
   inviteStudents,
+  getExamStatistics,
+  getExamDetailStatistics,
+  getExamLeaderboard,
 };
 
