@@ -100,6 +100,9 @@ export interface GetQuestionsResponse {
   payload: {
     questions: BackendQuestion[];
     total: number;
+    page?: number;
+    limit?: number;
+    totalPages?: number;
   };
 }
 
@@ -233,8 +236,14 @@ export async function deleteQuestion(questionId: string): Promise<void> {
  * Start an exam
  */
 export async function startExam(examId: string): Promise<{ payload: { started_at: string } }> {
-  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/start`), {
+  const response = await authenticatedFetch(getApiUrl('/v1/submissions/start'), {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      exam_id: examId,
+    }),
   });
 
   return response.json();
@@ -244,12 +253,13 @@ export async function startExam(examId: string): Promise<{ payload: { started_at
  * Save an answer
  */
 export async function saveAnswer(examId: string, questionId: string, answer: string): Promise<void> {
-  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/submission`), {
+  const response = await authenticatedFetch(getApiUrl('/v1/submissions/answer'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
+      exam_id: examId,
       question_id: questionId,
       answer,
     }),
@@ -262,8 +272,14 @@ export async function saveAnswer(examId: string, questionId: string, answer: str
  * Submit exam
  */
 export async function submitExam(examId: string): Promise<{ payload: { completed_at: string } }> {
-  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/submit`), {
+  const response = await authenticatedFetch(getApiUrl('/v1/submissions/submit'), {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      exam_id: examId,
+    }),
   });
 
   return response.json();
@@ -282,7 +298,11 @@ export async function getSubmissions(examId: string): Promise<{
     }>;
   };
 }> {
-  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/submission`), {
+  const params = new URLSearchParams({
+    exam_id: examId,
+  });
+
+  const response = await authenticatedFetch(getApiUrl(`/v1/submissions?${params.toString()}`), {
     method: 'GET',
   });
 
@@ -301,7 +321,7 @@ export async function getStudentEnrollments(): Promise<{
     all: StudentEnrollment[];
   } 
 }> {
-  const response = await authenticatedFetch(getApiUrl('/v1/exams/enrollment'), {
+  const response = await authenticatedFetch(getApiUrl('/v1/exams/enrollments'), {
     method: 'GET',
   });
 
