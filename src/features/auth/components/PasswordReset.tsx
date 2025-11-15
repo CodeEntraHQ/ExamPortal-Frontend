@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../../../shared/components/ui/button';
 import { Input } from '../../../shared/components/ui/input';
 import { Label } from '../../../shared/components/ui/label';
@@ -9,11 +10,20 @@ import { Moon, Sun, ArrowLeft, GraduationCap, AlertCircle, Eye, EyeOff, Loader2,
 import { motion } from 'motion/react';
 
 interface PasswordResetProps {
-  onBackToLogin: () => void;
+  onBackToLogin?: () => void;
   resetToken?: string; // URL parameter for reset token
 }
 
 export function PasswordReset({ onBackToLogin, resetToken }: PasswordResetProps) {
+  const navigate = useNavigate();
+  
+  const handleBackToLogin = () => {
+    if (onBackToLogin) {
+      onBackToLogin();
+    } else {
+      navigate('/login');
+    }
+  };
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -94,7 +104,7 @@ export function PasswordReset({ onBackToLogin, resetToken }: PasswordResetProps)
                   </AlertDescription>
                 </Alert>
                 <Button 
-                  onClick={onBackToLogin}
+                  onClick={handleBackToLogin}
                   className="w-full"
                 >
                   Return to Login
@@ -112,7 +122,7 @@ export function PasswordReset({ onBackToLogin, resetToken }: PasswordResetProps)
       <div className="absolute top-4 left-4 right-4 flex justify-between">
         <Button
           variant="outline"
-          onClick={onBackToLogin}
+          onClick={handleBackToLogin}
           className="border-border hover:bg-accent"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />

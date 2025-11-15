@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../shared/components/ui/card';
 import { Button } from '../../../shared/components/ui/button';
 import { Badge } from '../../../shared/components/ui/badge';
@@ -58,6 +59,7 @@ interface Result {
 
 export function ExamPortal() {
   const [activeTab, setActiveTab] = useState('upcoming');
+  const navigate = useNavigate();
 
   const upcomingExams: Exam[] = [
     {
@@ -274,7 +276,10 @@ export function ExamPortal() {
                 </Alert>
               )}
               {exam.status === 'active' ? (
-                <Button className="bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105">
+                <Button 
+                  className="bg-primary hover:bg-primary/90 transition-all duration-200 hover:scale-105"
+                  onClick={() => navigate(`/student/exam/${exam.id}`)}
+                >
                   <Play className="h-4 w-4 mr-2" />
                   Start Exam
                 </Button>
@@ -284,7 +289,10 @@ export function ExamPortal() {
                   Scheduled
                 </Button>
               ) : (
-                <Button variant="outline">
+                <Button 
+                  variant="outline"
+                  onClick={() => navigate(`/student/results/${exam.id}`)}
+                >
                   <Eye className="h-4 w-4 mr-2" />
                   View Details
                 </Button>
@@ -362,7 +370,11 @@ export function ExamPortal() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => navigate(`/student/results/${result.id}`)}
+            >
               <Eye className="h-4 w-4 mr-2" />
               View Details
             </Button>

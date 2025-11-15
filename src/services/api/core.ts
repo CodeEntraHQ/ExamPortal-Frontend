@@ -68,11 +68,25 @@ export async function authenticatedFetch(
 
   // Handle non-2xx responses
   if (!response.ok) {
+    // Handle 401 Unauthorized - token is invalid or expired
+    if (response.status === 401) {
+      // Clear authentication data
+      removeToken();
+      localStorage.removeItem('user');
+      
+      // Only redirect if we're not already on the login/landing page
+      // This prevents infinite redirect loops
+      if (!window.location.pathname.includes('login') && window.location.pathname !== '/') {
+        // Dispatch a custom event that AuthProvider can listen to
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
+    }
+    
     let errorMessage = `Server error: ${response.status} ${response.statusText}`;
     let errorData: any = null;
     
     // Log request details for debugging
-    let requestBody = null;
+    let requestBody: BodyInit | any | null = null;
     if (options.body) {
       try {
         requestBody = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;

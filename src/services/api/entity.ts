@@ -68,6 +68,18 @@ export async function getEntities(
 }
 
 /**
+ * Get a single entity by ID
+ * Allows ADMIN users to get their own entity, SUPERADMIN can get any entity
+ */
+export async function getEntityById(entityId: string): Promise<{ payload: ApiEntity }> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/entities/${entityId}`), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
  * Create an entity
  */
 export async function createEntity(payload: CreateEntityPayload | FormData): Promise<{ payload: ApiEntity }> {
