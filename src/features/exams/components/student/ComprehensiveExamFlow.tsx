@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getExamById, getQuestions, BackendExam, startExam, saveAnswer, submitExam, getSubmissions } from '../../../../services/api/exam';
+import { getExamById, getQuestions, BackendExam, BackendQuestion, startExam, saveAnswer, submitExam, getSubmissions } from '../../../../services/api/exam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../shared/components/ui/card';
 import { Button } from '../../../../shared/components/ui/button';
 import { Progress } from '../../../../shared/components/ui/progress';
@@ -40,6 +40,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+
+const QUESTIONS_PAGE_SIZE = 10;
 
 interface Question {
   id: string;
@@ -124,6 +126,36 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   const [twoFactorEnabled] = useState(true); // Mock - in real app this would come from user profile
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  const fetchAllExamQuestions = async (examId: string) => {
+    const aggregatedQuestions: BackendQuestion[] = [];
+    let currentPage = 1;
+    let totalPages = 1;
+
+    while (currentPage <= totalPages) {
+      const response = await getQuestions(examId, currentPage, QUESTIONS_PAGE_SIZE);
+      const { questions = [], totalPages: serverTotalPages, total, limit } = response.payload;
+
+      aggregatedQuestions.push(...questions);
+
+      const effectiveLimit = limit ?? QUESTIONS_PAGE_SIZE;
+      if (serverTotalPages) {
+        totalPages = serverTotalPages;
+      } else if (typeof total === 'number' && effectiveLimit > 0) {
+        totalPages = Math.max(1, Math.ceil(total / effectiveLimit));
+      } else if (questions.length < effectiveLimit) {
+        break;
+      }
+
+      if (questions.length < effectiveLimit) {
+        break;
+      }
+
+      currentPage += 1;
+    }
+
+    return aggregatedQuestions;
+  };
+
   // Fetch exam data from backend
   useEffect(() => {
     const fetchExamData = async () => {
@@ -136,8 +168,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
         const exam: BackendExam = examResponse.payload;
         
         // Fetch questions
-        const questionsResponse = await getQuestions(examId, 1, 100); // Get all questions
-        const questions = questionsResponse.payload.questions;
+        const questions = await fetchAllExamQuestions(examId);
 
         // Check for existing submissions (session management)
         let existingSubmissions: any = {};
