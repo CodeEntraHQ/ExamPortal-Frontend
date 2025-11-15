@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '../../../shared/components/ui/button';
 import { Input } from '../../../shared/components/ui/input';
 import { Label } from '../../../shared/components/ui/label';
@@ -34,8 +35,10 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [otp, setOtp] = useState('');
   
-  const { login, verify2FA } = useAuth();
+  const { login, verify2FA, user } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Handle remember me on component mount
   useEffect(() => {
@@ -45,6 +48,27 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
       setRememberMe(true);
     }
   }, []);
+
+  // Redirect after successful login
+  useEffect(() => {
+    if (user) {
+      const from = (location.state as any)?.from?.pathname || null;
+      
+      // Determine redirect path based on role
+      const rolePath = {
+        STUDENT: '/student/dashboard',
+        ADMIN: '/admin/entity',
+        SUPERADMIN: '/superadmin/dashboard',
+      }[user.role];
+
+      // Redirect to intended path or role-based default
+      const redirectPath = from && from.startsWith(`/${user.role.toLowerCase()}`) 
+        ? from 
+        : rolePath;
+
+      navigate(redirectPath, { replace: true });
+    }
+  }, [user, navigate, location]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,6 +118,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
       await verify2FA(otp);
       setShow2FAModal(false);
       toast.success('Login successful!');
+      // Navigation will happen via useEffect when user is set
     } catch (err: any)
     {
       setError(err.message || 'Invalid authentication code.');

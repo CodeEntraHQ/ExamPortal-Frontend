@@ -248,7 +248,11 @@ export function TopNavigation({ currentView, setCurrentView, breadcrumbItems = [
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem 
-                  onClick={logout}
+                  onClick={() => {
+                    logout().catch((error) => {
+                      console.error('Logout error:', error);
+                    });
+                  }}
                   className="text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
@@ -280,7 +284,11 @@ export function TopNavigation({ currentView, setCurrentView, breadcrumbItems = [
                   ))}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem 
-                    onClick={logout}
+                    onClick={() => {
+                      logout().catch((error) => {
+                        console.error('Logout error:', error);
+                      });
+                    }}
                     className="text-destructive focus:text-destructive md:hidden"
                   >
                     <LogOut className="mr-2 h-4 w-4" />

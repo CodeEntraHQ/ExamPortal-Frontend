@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '../../../shared/components/ui/button';
 import { Input } from '../../../shared/components/ui/input';
 import { resetPassword } from '../../../services/api';
@@ -10,10 +11,22 @@ import { motion } from 'motion/react';
 import { useTheme } from '../../../shared/providers/ThemeProvider';
 
 interface ResetPasswordConfirmProps {
-  onPasswordResetSuccess: () => void;
+  onPasswordResetSuccess?: () => void;
 }
 
 export function ResetPasswordConfirm({ onPasswordResetSuccess }: ResetPasswordConfirmProps) {
+  const navigate = useNavigate();
+  const { token: tokenFromParams } = useParams<{ token?: string }>();
+  const [searchParams] = useSearchParams();
+  
+  const handlePasswordResetSuccess = () => {
+    if (onPasswordResetSuccess) {
+      onPasswordResetSuccess();
+    } else {
+      navigate('/login');
+    }
+  };
+  
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -25,12 +38,12 @@ export function ResetPasswordConfirm({ onPasswordResetSuccess }: ResetPasswordCo
   const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const tokenFromUrl = searchParams.get('token');
+    // Try to get token from URL params, search params, or route params
+    const tokenFromUrl = searchParams.get('token') || tokenFromParams;
     if (tokenFromUrl) {
       setToken(tokenFromUrl);
     }
-  }, []);
+  }, [searchParams, tokenFromParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +66,7 @@ export function ResetPasswordConfirm({ onPasswordResetSuccess }: ResetPasswordCo
       if (response.responseCode === 'RESET_PASSWORD_SUCCESSFUL') {
         setSuccess(true);
         setTimeout(() => {
-          onPasswordResetSuccess();
+          handlePasswordResetSuccess();
         }, 2000);
       } else {
         setError(response.responseMessage || 'Failed to reset password. Please try again.');
@@ -70,7 +83,7 @@ export function ResetPasswordConfirm({ onPasswordResetSuccess }: ResetPasswordCo
       <div className="absolute top-4 left-4 right-4 flex justify-between">
         <Button
           variant="outline"
-          onClick={onPasswordResetSuccess}
+          onClick={handlePasswordResetSuccess}
           className="border-border hover:bg-accent"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -112,7 +125,7 @@ export function ResetPasswordConfirm({ onPasswordResetSuccess }: ResetPasswordCo
                     Your password has been reset successfully. You can now log in with your new password.
                   </AlertDescription>
                 </Alert>
-                <Button onClick={onPasswordResetSuccess} className="w-full">
+                <Button onClick={handlePasswordResetSuccess} className="w-full">
                   Return to Login
                 </Button>
               </div>
