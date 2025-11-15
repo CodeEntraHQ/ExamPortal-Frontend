@@ -3,7 +3,7 @@
  * Handles login, password reset, and related auth operations
  */
 
-import { authenticatedFetch, getApiUrl, setToken } from './core';
+import { authenticatedFetch, getApiUrl, getToken, setToken } from './core';
 
 export interface LoginResponse {
   user?: {
@@ -11,8 +11,10 @@ export interface LoginResponse {
     name: string;
     email: string;
     role: 'SUPERADMIN' | 'ADMIN' | 'STUDENT';
-    entityId?: string;
-    entityName?: string;
+    entity_id?: string;
+    entity_name?: string;
+    entityId?: string; // For backward compatibility
+    entityName?: string; // For backward compatibility
     profile_picture_link?: string;
     phone_number?: string;
     address?: string;
@@ -60,8 +62,15 @@ export async function login(email: string, password: string, otp?: string): Prom
     setToken(data.payload.token);
   }
 
+  // Normalize entity field names (backend uses entity_id/entity_name, frontend uses entityId/entityName)
+  const userData = data.payload?.user || data.payload;
+  if (userData) {
+    userData.entityId = userData.entityId || userData.entity_id;
+    userData.entityName = userData.entityName || userData.entity_name;
+  }
+
   return {
-    user: data.payload?.user || data.payload,
+    user: userData,
     token: data.payload?.token,
     requires2FA: false,
   };
@@ -112,6 +121,31 @@ export async function resendOTP(): Promise<void> {
 }
 
 /**
+ * Logout user
+ * Calls the backend logout endpoint and clears all authentication data
+ */
+export async function logout(): Promise<void> {
+  try {
+    // Try to call logout endpoint if token exists
+    const token = getToken();
+    if (token) {
+      try {
+        await authenticatedFetch(getApiUrl('/v1/users/logout'), {
+          method: 'POST',
+        });
+      } catch (error) {
+        // Even if logout endpoint fails, continue with cleanup
+        // This handles cases where token is already invalid
+        console.warn('Logout endpoint call failed, continuing with cleanup:', error);
+      }
+    }
+  } catch (error) {
+    // Continue with cleanup even if API call fails
+    console.warn('Error during logout API call:', error);
+  }
+}
+
+/**
  * Auth API object for convenience
  */
 export const authAPI = {
@@ -119,5 +153,6 @@ export const authAPI = {
   forgotPassword,
   resetPassword,
   resendOTP,
+  logout,
 };
 

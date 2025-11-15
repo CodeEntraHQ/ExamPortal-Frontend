@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '../shared/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../shared/components/ui/card';
 import { Badge } from '../shared/components/ui/badge';
@@ -18,11 +19,20 @@ import {
 import { useTheme } from '../shared/providers/ThemeProvider';
 
 interface LandingPageProps {
-  onLoginClick: () => void;
+  onLoginClick?: () => void;
 }
 
 export function LandingPage({ onLoginClick }: LandingPageProps) {
   const { theme, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+
+  const handleLoginClick = () => {
+    if (onLoginClick) {
+      onLoginClick();
+    } else {
+      navigate('/login');
+    }
+  };
 
   const features = [
     {
@@ -83,7 +93,7 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
               {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
             </Button>
             <Button 
-              onClick={onLoginClick}
+              onClick={handleLoginClick}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               Sign In
@@ -108,7 +118,7 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button 
               size="lg" 
-              onClick={onLoginClick}
+              onClick={handleLoginClick}
               className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3"
             >
               Get Started
@@ -188,7 +198,7 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
             <Button 
               size="lg" 
               variant="secondary"
-              onClick={onLoginClick}
+              onClick={handleLoginClick}
               className="bg-white text-primary hover:bg-white/90 px-8 py-3"
             >
               Start Free Trial

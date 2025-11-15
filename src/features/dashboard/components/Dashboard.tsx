@@ -58,23 +58,29 @@ interface DashboardProps {
 export function Dashboard({ currentEntity, onNavigateToAdministration, onViewExamDetails, onStartExam, onViewResults }: DashboardProps) {
   const { user } = useAuth();
 
+  // Redirect ADMIN users to their entity management page (fallback for manual navigation)
+  React.useEffect(() => {
+    if (user?.role === 'ADMIN' && user?.entityId && onNavigateToAdministration) {
+      // Small delay to ensure navigation state is ready
+      const timer = setTimeout(() => {
+        onNavigateToAdministration();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [user?.role, user?.id, user?.entityId, onNavigateToAdministration]);
+
   if (user?.role === 'STUDENT') {
     return <EnhancedStudentDashboard onStartExam={onStartExam} onViewResults={onViewResults} />;
   }
 
-  // Use innovative dashboard for ADMIN and SUPERADMIN
-  if (user?.role === 'ADMIN' || user?.role === 'SUPERADMIN') {
+  // Only SUPERADMIN should see the innovative dashboard
+  if (user?.role === 'SUPERADMIN') {
     return (
       <InnovativeAdminDashboard 
         currentEntity={currentEntity}
         onNavigateToEntities={onNavigateToAdministration}
         onNavigateToExams={() => {
-          // For ADMIN, go directly to their entity's exam management
-          if (user?.role === 'ADMIN' && onViewExamDetails) {
-            onNavigateToAdministration && onNavigateToAdministration();
-          } else {
-            onNavigateToAdministration && onNavigateToAdministration();
-          }
+          onNavigateToAdministration && onNavigateToAdministration();
         }}
         onNavigateToUsers={() => {
           // Navigate to user management
@@ -85,6 +91,18 @@ export function Dashboard({ currentEntity, onNavigateToAdministration, onViewExa
           onNavigateToAdministration && onNavigateToAdministration();
         }}
       />
+    );
+  }
+
+  // For ADMIN, show a loading state while redirecting
+  if (user?.role === 'ADMIN') {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Redirecting to your entity management...</p>
+        </div>
+      </div>
     );
   }
 

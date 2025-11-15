@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../../../shared/components/ui/dialog';
 import { Entity } from './EntityManagement';
 import { Input } from '../../../shared/components/ui/input';
@@ -6,11 +6,12 @@ import { Label } from '../../../shared/components/ui/label';
 import { Textarea } from '../../../shared/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../shared/components/ui/select';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
+import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../shared/components/ui/card';
 import { Button } from '../../../shared/components/ui/button';
 import { Badge } from '../../../shared/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../shared/components/ui/tabs';
-import { updateEntity } from '../../../services/api/entity';
+import { updateEntity, getEntities, ApiEntity } from '../../../services/api/entity';
 import { 
   Building, 
   Users, 
@@ -33,7 +34,25 @@ interface EntityDetailPageProps {
   onBackToDashboard: () => void;
   onExploreExam: (examId: string, examName: string) => void;
   onEditExam?: (examId: string, examName: string) => void;
+  onCreateExam?: () => void;
 }
+
+// Helper function to map API entity to UI entity (same as in EntityManagement)
+const mapApiEntityToUiEntity = (apiEntity: ApiEntity): Entity => ({
+  id: apiEntity.id,
+  name: apiEntity.name,
+  type: apiEntity.type || '',
+  studentsCount: apiEntity.total_students || 0,
+  examsCount: apiEntity.total_exams || 0,
+  status: 'active',
+  createdAt: apiEntity.created_at ? new Date(apiEntity.created_at).toLocaleDateString() : '',
+  location: apiEntity.address || '',
+  email: apiEntity.email || '',
+  phone: apiEntity.phone_number || '',
+  lastActivity: apiEntity.created_at ? new Date(apiEntity.created_at).toLocaleDateString() : '',
+  description: apiEntity.description || '',
+  logo_link: apiEntity.logo_link || '',
+});
 
 export function EntityDetailPage({
   entity,
@@ -41,15 +60,17 @@ export function EntityDetailPage({
   onBackToEntities,
   onBackToDashboard,
   onExploreExam,
-  onEditExam
+  onEditExam,
+  onCreateExam
 }: EntityDetailPageProps) {
   const [activeTab, setActiveTab] = useState(editMode ? 'settings' : 'exams');
   const [showInsightsModal, setShowInsightsModal] = useState(false);
   const [entityDetails, setEntityDetails] = useState<Entity>(entity);
+  const [isLoadingEntity, setIsLoadingEntity] = useState(false);
   const [entitySettings, setEntitySettings] = useState({
     name: entity.name,
-    type: entity.type,
-    address: entity.location,
+    type: entity.type || '',
+    address: entity.location || '',
     description: entity.description || '',
     contactEmail: entity.email || '',
     contactPhone: entity.phone || '',
@@ -58,6 +79,86 @@ export function EntityDetailPage({
   const [isSaving, setIsSaving] = useState(false);
 
   const { success, error } = useNotifications();
+  const { user } = useAuth();
+
+  // Sync entityDetails when entity prop changes
+  useEffect(() => {
+    console.log('🔵 EntityDetailPage - Entity prop received:', entity);
+    console.log('🔵 EntityDetailPage - Entity details:', {
+      id: entity.id,
+      name: entity.name,
+      type: entity.type,
+      location: entity.location,
+      email: entity.email,
+      phone: entity.phone,
+      createdAt: entity.createdAt,
+      description: entity.description,
+      logo_link: entity.logo_link,
+    });
+    
+    setEntityDetails(entity);
+    setEntitySettings({
+      name: entity.name,
+      type: entity.type || '',
+      address: entity.location || '',
+      description: entity.description || '',
+      contactEmail: entity.email || '',
+      contactPhone: entity.phone || '',
+      logoLink: entity.logo_link || ''
+    });
+    
+    console.log('✅ EntityDetailPage - Entity details and settings synced');
+  }, [entity]);
+
+  // Fetch full entity data if entity is incomplete (only has id and name)
+  useEffect(() => {
+    const fetchEntityData = async () => {
+      // Check if entity is incomplete (missing required fields like createdAt, type, etc.)
+      const isIncomplete = !entity.createdAt || !entity.type || !entity.location;
+      
+      // ADMIN users don't have permission to list entities, so skip fetch for them
+      if (user?.role === 'ADMIN') {
+        // For ADMIN, use the entity data as-is (it comes from login response)
+        return;
+      }
+      
+      if (isIncomplete && entity.id) {
+        setIsLoadingEntity(true);
+        try {
+          // Only SUPERADMIN can fetch entities list
+          if (user?.role === 'SUPERADMIN') {
+            // Fetch entities and find the one matching our entity ID
+            const response = await getEntities(1, 10); // Fetch entities (max 10 per backend limit)
+            const foundEntity = response.payload.entities.find(e => e.id === entity.id);
+            
+            if (foundEntity) {
+              const fullEntity = mapApiEntityToUiEntity(foundEntity);
+              setEntityDetails(fullEntity);
+              setEntitySettings({
+                name: fullEntity.name,
+                type: fullEntity.type,
+                address: fullEntity.location,
+                description: fullEntity.description || '',
+                contactEmail: fullEntity.email || '',
+                contactPhone: fullEntity.phone || '',
+                logoLink: fullEntity.logo_link || ''
+              });
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch entity details:', err);
+          // Don't show error for ADMIN users as they don't have permission
+          if (user?.role === 'SUPERADMIN') {
+            error('Failed to load entity details');
+          }
+        } finally {
+          setIsLoadingEntity(false);
+        }
+      }
+    };
+
+    fetchEntityData();
+  }, [entity.id, entity.createdAt, entity.type, entity.location, error, user?.role]);
 
   return (
     <div className="space-y-6">
@@ -92,16 +193,25 @@ export function EntityDetailPage({
                     </Badge>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Badge variant="outline">{entityDetails.type}</Badge>
-                    </div>
+                    {entityDetails.type && (
+                      <div className="flex items-center gap-1">
+                        <Badge variant="outline">{entityDetails.type}</Badge>
+                      </div>
+                    )}
                     <div className="flex items-center gap-1">
                       <MapPin className="h-4 w-4" />
-                      <span>{entityDetails.location}</span>
+                      <span>{entityDetails.location || 'No location set'}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
-                      <span>Created {new Date(entityDetails.createdAt).toLocaleDateString()}</span>
+                      <span>
+                        {entityDetails.createdAt 
+                          ? `Created ${entityDetails.createdAt}`
+                          : isLoadingEntity 
+                            ? 'Loading...'
+                            : 'Created N/A'
+                        }
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -189,10 +299,11 @@ export function EntityDetailPage({
           <TabsContent value="exams" className="space-y-6">
             <RoleAwareExamManagement 
               currentEntity={entityDetails.id} 
-              onCreateExam={() => {
-                // Navigate to exam creation or trigger creation modal
+              onCreateExam={onCreateExam || (() => {
+                // Default: navigate to exam creation
+                // This will be overridden by parent components with proper navigation
                 console.log('Creating exam for entity:', entityDetails.id);
-              }}
+              })}
               onViewExamDetails={onExploreExam}
               onEditExamDetails={onEditExam}
             />
@@ -249,28 +360,55 @@ export function EntityDetailPage({
                   
                   // Update local state with response
                   if (response && response.payload) {
-                    const updatedEntity = {
+                    const updatedEntity = response.payload;
+                    const updatedEntityDetails: Entity = {
                       ...entityDetails,
-                      name: response.payload.name || entityDetails.name,
-                      type: response.payload.type || entityDetails.type,
-                      location: response.payload.address || entityDetails.location,
-                      description: response.payload.description || entityDetails.description,
-                      email: response.payload.email || entityDetails.email,
-                      phone: response.payload.phone_number || entityDetails.phone,
-                      logo_link: response.payload.logo_link || entityDetails.logo_link,
+                      name: updatedEntity.name || entityDetails.name,
+                      type: updatedEntity.type || entityDetails.type || '',
+                      location: updatedEntity.address || entityDetails.location || '',
+                      description: updatedEntity.description || entityDetails.description || '',
+                      email: updatedEntity.email || entityDetails.email || '',
+                      phone: updatedEntity.phone_number || entityDetails.phone || '',
+                      logo_link: updatedEntity.logo_link || entityDetails.logo_link || '',
+                      createdAt: updatedEntity.created_at 
+                        ? new Date(updatedEntity.created_at).toLocaleDateString() 
+                        : entityDetails.createdAt || new Date().toLocaleDateString(),
                     };
                     
-                    setEntityDetails(updatedEntity);
+                    console.log('✅ EntityDetailPage - Updated entity details:', updatedEntityDetails);
+                    setEntityDetails(updatedEntityDetails);
+                    
+                    // Save entity data to localStorage for admin users (so it persists on reload)
+                    if (user?.role === 'ADMIN' && updatedEntityDetails.id) {
+                      const savedEntityKey = `entity_${updatedEntityDetails.id}`;
+                      const dataToSave = {
+                        name: updatedEntityDetails.name,
+                        type: updatedEntityDetails.type,
+                        location: updatedEntityDetails.location,
+                        email: updatedEntityDetails.email,
+                        phone: updatedEntityDetails.phone,
+                        description: updatedEntityDetails.description,
+                        logo_link: updatedEntityDetails.logo_link,
+                        createdAt: updatedEntityDetails.createdAt,
+                        status: updatedEntityDetails.status,
+                      };
+                      console.log('🔵 EntityDetailPage - Saving entity data to localStorage:', {
+                        key: savedEntityKey,
+                        data: dataToSave,
+                      });
+                      localStorage.setItem(savedEntityKey, JSON.stringify(dataToSave));
+                      console.log('✅ EntityDetailPage - Entity data saved to localStorage');
+                    }
                     
                     // Also update the entitySettings state to reflect saved values
                     setEntitySettings({
-                      name: updatedEntity.name,
-                      type: updatedEntity.type,
-                      address: updatedEntity.location,
-                      description: updatedEntity.description || '',
-                      contactEmail: updatedEntity.email || '',
-                      contactPhone: updatedEntity.phone || '',
-                      logoLink: updatedEntity.logo_link || '',
+                      name: updatedEntityDetails.name,
+                      type: updatedEntityDetails.type,
+                      address: updatedEntityDetails.location,
+                      description: updatedEntityDetails.description || '',
+                      contactEmail: updatedEntityDetails.email || '',
+                      contactPhone: updatedEntityDetails.phone || '',
+                      logoLink: updatedEntityDetails.logo_link || '',
                     });
                   }
                   

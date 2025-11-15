@@ -164,7 +164,11 @@ export function AppSidebar({ currentView, setCurrentView }: AppSidebarProps) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={logout}
+              onClick={() => {
+                logout().catch((error) => {
+                  console.error('Logout error:', error);
+                });
+              }}
               className="flex-1"
             >
               <LogOut className="h-4 w-4" />
