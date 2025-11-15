@@ -12,7 +12,6 @@ import { useNotifications } from '../../../shared/providers/NotificationProvider
 import { examApi, BackendQuestion, CreateQuestionPayload, UpdateQuestionPayload } from '../../../services/api/exam';
 import { 
   Plus, 
-  Edit, 
   Trash2, 
   Search,
   Loader2,
@@ -325,7 +324,7 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
         <CardContent className="p-4">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
             {/* Search Bar */}
-            <div className="flex-1 max-w-md w-full">
+            <div className="flex-1 w-full">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -393,12 +392,16 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                   <TableHead>Question</TableHead>
                   <TableHead className="w-24">Type</TableHead>
                   <TableHead className="w-32">Created</TableHead>
-                  <TableHead className="w-32 text-right">Actions</TableHead>
+                  <TableHead className="w-32 text-right">Delete</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredQuestions.map((question, index) => (
-                  <TableRow key={question.id}>
+                  <TableRow
+                    key={question.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => openEditModal(question)}
+                  >
                     <TableCell className="font-mono text-sm">{index + 1}</TableCell>
                     <TableCell>
                       <div className="max-w-2xl">
@@ -417,19 +420,14 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                       {question.created_at ? new Date(question.created_at).toLocaleDateString() : 'N/A'}
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end">
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={() => openEditModal(question)}
-                          disabled={loading}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteQuestion(question.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDeleteQuestion(question.id);
+                          }}
                           disabled={loading}
                           className="text-destructive hover:text-destructive"
                         >
