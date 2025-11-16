@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../shared/components/ui/card';
 import { Button } from '../../../shared/components/ui/button';
 import { Badge } from '../../../shared/components/ui/badge';
@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from '../../../shared/components/ui/input';
 import { Label } from '../../../shared/components/ui/label';
 import { Textarea } from '../../../shared/components/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/components/ui/table';
 import { 
   FileText, 
   Users, 
@@ -30,8 +31,12 @@ import {
   Layers,
   Trophy,
   Medal,
-  Award
+  Award,
+  UserMinus,
+  Loader2,
+  RefreshCcw
 } from 'lucide-react';
+import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
 import { motion } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
@@ -39,8 +44,7 @@ import { QuestionManagement } from './QuestionManagement';
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { useExamContext } from '../providers/ExamContextProvider';
 import { EditExamModal } from './EditExamModal';
-import { examApi, LeaderboardEntry } from '../../../services/api/exam';
-import { useEffect } from 'react';
+import { examApi, LeaderboardEntry, ExamEnrollment } from '../../../services/api/exam';
 
 interface ExamDetailPageProps {
   examId: string;
@@ -85,9 +89,14 @@ export function ExamDetailPage({
   // Leaderboard state
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState<boolean>(false);
+  const [enrolledStudents, setEnrolledStudents] = useState<ExamEnrollment[]>([]);
+  const [enrollmentsLoading, setEnrollmentsLoading] = useState<boolean>(false);
+  const [enrollmentsError, setEnrollmentsError] = useState<string | null>(null);
+  const [deEnrollInFlight, setDeEnrollInFlight] = useState<string | null>(null);
 
   // Role-based access control
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
+  const effectiveExamId = currentExam?.id || examId;
   
   // Fetch statistics from backend
   useEffect(() => {
@@ -317,6 +326,59 @@ export function ExamDetailPage({
     } catch (err: any) {
       console.error('Failed to send invites', err);
       error('Failed to send invitations. Please try again.');
+    }
+  };
+
+  const fetchExamEnrollments = useCallback(async () => {
+    if (!canManageQuestions || !effectiveExamId) return;
+
+    try {
+      setEnrollmentsLoading(true);
+      setEnrollmentsError(null);
+      const response = await examApi.getExamEnrollments(effectiveExamId);
+      setEnrolledStudents(response.payload.enrollments || []);
+    } catch (err: any) {
+      console.error('Error fetching exam enrollments:', err);
+      const message = err?.message || 'Failed to load enrolled students';
+      setEnrollmentsError(message);
+      error(message);
+    } finally {
+      setEnrollmentsLoading(false);
+    }
+  }, [canManageQuestions, effectiveExamId, error]);
+
+  useEffect(() => {
+    fetchExamEnrollments();
+  }, [fetchExamEnrollments]);
+
+  const handleDeEnrollStudent = async (enrollmentId: string) => {
+    if (!canManageQuestions || !effectiveExamId) {
+      error('You do not have permission to update enrollments');
+      return;
+    }
+
+    try {
+      setDeEnrollInFlight(enrollmentId);
+      await examApi.deleteExamEnrollment(effectiveExamId, enrollmentId);
+      setEnrolledStudents((prev) => prev.filter((student) => student.id !== enrollmentId));
+      success('Student de-enrolled successfully');
+
+      // Update statistics locally to keep counts aligned
+      setStatistics((prev) => {
+        const nextTotalStudents = Math.max(prev.totalStudentsInvited - 1, 0);
+        const nextTotalAttempts = Math.min(prev.totalAttempts, nextTotalStudents);
+        return {
+          ...prev,
+          totalStudentsInvited: nextTotalStudents,
+          totalAttempts: nextTotalAttempts,
+        };
+      });
+    } catch (err: any) {
+      console.error('Failed to de-enroll student:', err);
+      const message = err?.message || 'Failed to de-enroll student';
+      error(message);
+    } finally {
+      setDeEnrollInFlight(null);
     }
   };
 
@@ -580,6 +642,127 @@ export function ExamDetailPage({
                 </CardContent>
               </Card>
             </div>
+
+            {canManageQuestions && (
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between w-full">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        Enrolled Students
+                      </CardTitle>
+                      <CardDescription className="whitespace-nowrap">
+                        Current roster for this exam. Remove access when a student should not participate.
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-2 justify-end w-full lg:w-auto">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={fetchExamEnrollments}
+                        disabled={enrollmentsLoading}
+                      >
+                        {enrollmentsLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Refreshing...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCcw className="h-4 w-4 mr-2" />
+                            Refresh
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowInviteModal(true)}
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Invite More
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {enrollmentsLoading ? (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : enrollmentsError ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>{enrollmentsError}</AlertDescription>
+                    </Alert>
+                  ) : enrolledStudents.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Users className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                      <p>No students are enrolled yet.</p>
+                      <p className="text-sm">Invite students to see them listed here.</p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Student</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Enrolled</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {enrolledStudents.map((student) => (
+                          <TableRow key={student.id}>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <p className="font-medium text-foreground">
+                                  {student.name || 'Unknown Student'}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {student.email || 'No email'}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="capitalize">
+                                {student.status.toLowerCase()}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {student.enrolled_at
+                                ? new Date(student.enrolled_at).toLocaleString()
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeEnrollStudent(student.id)}
+                                disabled={deEnrollInFlight === student.id}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                {deEnrollInFlight === student.id ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                    Removing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserMinus className="h-4 w-4 mr-1" />
+                                    De-enroll
+                                  </>
+                                )}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {canManageQuestions && (
