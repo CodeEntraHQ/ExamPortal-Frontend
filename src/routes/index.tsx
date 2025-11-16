@@ -29,6 +29,7 @@ import { SuperAdminEntityDetail } from '../pages/superadmin/SuperAdminEntityDeta
 
 // Representative Pages
 import { RepresentativeDashboard } from '../pages/representative/RepresentativeDashboard';
+import { AdmissionFormViewPage } from '../pages/representative/AdmissionFormViewPage';
 
 // Shared Pages
 import { ProfilePage } from '../pages/shared/ProfilePage';
@@ -220,6 +221,10 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard',
         element: <RepresentativeDashboard />,
+      },
+      {
+        path: 'exam/:examId/form',
+        element: <AdmissionFormViewPage />,
       },
       {
         path: 'profile',

@@ -389,6 +389,40 @@ export async function getStudentEnrollments(): Promise<{
   return response.json();
 }
 
+export interface RepresentativeEnrollment {
+  id: string;
+  exam_id: string;
+  user_id: string;
+  status: string;
+  enrollment_created_at: string;
+  exam: {
+    id: string;
+    title: string;
+    type: string;
+    active: boolean;
+    created_at: string;
+    duration_seconds: number;
+    metadata: any;
+    entity_id: string;
+  };
+}
+
+/**
+ * Get representative enrollments (ASSIGNED status only)
+ */
+export async function getRepresentativeEnrollments(): Promise<{ 
+  payload: { 
+    enrollments: RepresentativeEnrollment[];
+    total: number;
+  } 
+}> {
+  const response = await authenticatedFetch(getApiUrl('/v1/exams/representative/enrollments'), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
 export async function getExamEnrollments(
   examId: string
 ): Promise<GetExamEnrollmentsResponse> {
@@ -573,6 +607,7 @@ export async function inviteRepresentatives(payload: InviteRepresentativesPayloa
  * Exam API object for convenience
  */
 export const examApi = {
+  getRepresentativeEnrollments,
   getExams,
   getExamById,
   getQuestions,
