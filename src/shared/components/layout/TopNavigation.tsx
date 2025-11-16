@@ -50,8 +50,8 @@ export function TopNavigation({ currentView, setCurrentView, breadcrumbItems = [
       { id: 'administration', label: 'Administration', icon: Settings }
     ];
 
-    // Students only see Dashboard
-    if (user?.role === 'STUDENT') {
+    // Students and Representatives only see Dashboard
+    if (user?.role === 'STUDENT' || user?.role === 'REPRESENTATIVE') {
       return [{ id: 'dashboard', label: 'Dashboard', icon: Home }];
     }
 
@@ -68,6 +68,8 @@ export function TopNavigation({ currentView, setCurrentView, breadcrumbItems = [
         return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
       case 'STUDENT':
         return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+      case 'REPRESENTATIVE':
+        return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
       default:
         return 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300';
     }

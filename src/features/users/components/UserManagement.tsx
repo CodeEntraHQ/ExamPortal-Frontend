@@ -35,7 +35,7 @@ interface User {
   id: string;
   name: string | null;
   email: string;
-  role: 'SUPERADMIN' | 'ADMIN' | 'STUDENT';
+  role: 'SUPERADMIN' | 'ADMIN' | 'STUDENT' | 'REPRESENTATIVE';
   entityId?: string;
   entityName?: string;
   status: 'active' | 'inactive';
@@ -89,12 +89,14 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isCreateRepresentativeDialogOpen, setIsCreateRepresentativeDialogOpen] = useState(false);
   const [showUserDetail, setShowUserDetail] = useState<User | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [isAdminCardExpanded, setIsAdminCardExpanded] = useState(true);
   const [isStudentCardExpanded, setIsStudentCardExpanded] = useState(true);
+  const [isRepresentativeCardExpanded, setIsRepresentativeCardExpanded] = useState(true);
   const limit = 10; // Backend limit is max 10
 
   // Fetch entities for mapping entity_id to entity name
@@ -150,15 +152,27 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
         return;
       }
 
-      // Fetch both ADMIN and STUDENT users and combine
-      const [adminResponse, studentResponse] = await Promise.all([
+      // Fetch ADMIN, STUDENT, and REPRESENTATIVE users
+      // Representatives don't belong to any entity (entity_id is null), so don't pass entity_id for them
+      const [adminResponse, studentResponse, representativeResponse] = await Promise.all([
         getUsers({ entity_id: entityId, role: 'ADMIN', page, limit: 10 }),
         getUsers({ entity_id: entityId, role: 'STUDENT', page, limit: 10 }),
+        getUsers({ role: 'REPRESENTATIVE', page, limit: 10 }).catch(() => ({
+          payload: { users: [], total: 0, totalPages: 0 }
+        })),
       ]);
       
-      const allUsers = [...adminResponse.payload.users, ...studentResponse.payload.users];
-      const totalCount = adminResponse.payload.total + studentResponse.payload.total;
-      const maxPages = Math.max(adminResponse.payload.totalPages, studentResponse.payload.totalPages);
+      const allUsers = [
+        ...adminResponse.payload.users, 
+        ...studentResponse.payload.users,
+        ...representativeResponse.payload.users
+      ];
+      const totalCount = adminResponse.payload.total + studentResponse.payload.total + representativeResponse.payload.total;
+      const maxPages = Math.max(
+        adminResponse.payload.totalPages, 
+        studentResponse.payload.totalPages,
+        representativeResponse.payload.totalPages
+      );
 
       const mappedUsers = allUsers.map(apiUser => 
         mapApiUserToUiUser(apiUser, entitiesMap)
@@ -193,12 +207,14 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
   // Separate users by role
   const adminUsers = filteredUsers.filter(user => user.role === 'ADMIN' || user.role === 'SUPERADMIN');
   const studentUsers = filteredUsers.filter(user => user.role === 'STUDENT');
+  const representativeUsers = filteredUsers.filter(user => user.role === 'REPRESENTATIVE');
 
   const getRoleBadgeVariant = (role: User['role']) => {
     const variants = {
       SUPERADMIN: { variant: 'destructive' as const, className: 'bg-destructive text-destructive-foreground' },
       ADMIN: { variant: 'default' as const, className: 'bg-primary text-primary-foreground' },
-      STUDENT: { variant: 'secondary' as const, className: 'bg-secondary text-secondary-foreground' }
+      STUDENT: { variant: 'secondary' as const, className: 'bg-secondary text-secondary-foreground' },
+      REPRESENTATIVE: { variant: 'outline' as const, className: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border-purple-300' }
     };
     return variants[role];
   };
@@ -255,10 +271,12 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
   };
 
   // Calculate stats from real data
-  const totalUsers = total;
-  const activeUsers = users.filter(u => u.status === 'active').length;
-  const inactiveUsers = users.filter(u => u.status === 'inactive').length;
-  const studentCount = users.filter(u => u.role === 'STUDENT').length;
+  // Exclude representatives from entity user counts (they're external users)
+  const entityUsers = users.filter(u => u.role !== 'REPRESENTATIVE');
+  const totalUsers = entityUsers.length;
+  const activeUsers = entityUsers.filter(u => u.status === 'active').length;
+  const inactiveUsers = entityUsers.filter(u => u.status === 'inactive').length;
+  const totalRepresentatives = representativeUsers.length;
 
   return (
     <div className="space-y-6">
@@ -272,7 +290,30 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
             Manage users and their permissions
           </p>
         </div>
-        <div>
+        <div className="flex gap-2">
+          <Dialog open={isCreateRepresentativeDialogOpen} onOpenChange={setIsCreateRepresentativeDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add Representative
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Create New Representative</DialogTitle>
+                <DialogDescription>
+                  Create a new representative account. Representatives do not belong to any specific entity.
+                </DialogDescription>
+              </DialogHeader>
+              <CreateRepresentativeForm 
+                onClose={() => setIsCreateRepresentativeDialogOpen(false)}
+                onSuccess={async () => {
+                  setIsCreateRepresentativeDialogOpen(false);
+                  await fetchUsers();
+                }}
+              />
+            </DialogContent>
+          </Dialog>
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -318,7 +359,7 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
             </div>
             
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
                 <div className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
@@ -326,7 +367,7 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                 </div>
                 <div className="text-right">
                   <div className="text-lg font-bold">{totalUsers}</div>
-                  <p className="text-xs text-muted-foreground">total</p>
+                  <p className="text-xs text-muted-foreground">entity users</p>
                 </div>
               </div>
 
@@ -349,6 +390,17 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                 <div className="text-right">
                   <div className="text-lg font-bold">{inactiveUsers}</div>
                   <p className="text-xs text-muted-foreground">inactive</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium">Representatives</span>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold">{totalRepresentatives}</div>
+                  <p className="text-xs text-muted-foreground">external</p>
                 </div>
               </div>
             </div>
@@ -597,6 +649,167 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                       <TableCell>
                         <div className="text-sm">
                           {user.roll_number || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {user.phone_number || 'N/A'}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {user.createdAt 
+                            ? new Date(user.createdAt).toLocaleDateString()
+                            : 'N/A'
+                          }
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {user.lastLogin 
+                            ? new Date(user.lastLogin).toLocaleDateString()
+                            : 'Never'
+                          }
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Switch
+                            checked={user.status === 'active'}
+                            onCheckedChange={() => handleToggleUserStatus(user.id)}
+                          />
+                          <Badge 
+                            variant={getStatusBadgeVariant(user.status).variant}
+                            className={getStatusBadgeVariant(user.status).className}
+                          >
+                            {user.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setShowUserDetail(user)}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit User
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => handleToggleUserStatus(user.id)}
+                            >
+                              {user.status === 'active' ? (
+                                <>
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Deactivate User
+                                </>
+                              ) : (
+                                <>
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Activate User
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              className="text-destructive"
+                              onClick={() => handleDeleteUser(user.id)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete User
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Representatives Table */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 flex-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsRepresentativeCardExpanded(!isRepresentativeCardExpanded)}
+                className="h-8 w-8 p-0"
+              >
+                {isRepresentativeCardExpanded ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
+              <div>
+                <CardTitle>Representatives</CardTitle>
+                <CardDescription>Manage representative accounts</CardDescription>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-lg font-bold">{representativeUsers.length}</div>
+              <p className="text-xs text-muted-foreground">total</p>
+            </div>
+          </div>
+        </CardHeader>
+        {isRepresentativeCardExpanded && (
+          <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : error ? (
+            <div className="text-center py-12 text-destructive">
+              <p>{error}</p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => fetchUsers()}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : representativeUsers.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No representatives found</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Phone Number</TableHead>
+                  <TableHead>Created At</TableHead>
+                  <TableHead>Last Login</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {representativeUsers.map((user) => (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar>
+                            <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium">{user.name || 'N/A'}</p>
+                            <p className="text-sm text-muted-foreground">{user.email}</p>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
@@ -1099,6 +1312,202 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
             </>
           ) : (
             'Create User'
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+interface CreateRepresentativeFormProps {
+  onClose: () => void;
+  onSuccess: () => Promise<void>;
+}
+
+function CreateRepresentativeForm({ onClose, onSuccess }: CreateRepresentativeFormProps) {
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    name: '',
+    phone_number: '',
+    address: '',
+    bio: '',
+    gender: '' as '' | 'MALE' | 'FEMALE',
+  });
+  const [loading, setLoading] = useState(false);
+  const { success, error: showError } = useNotifications();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.email) {
+      showError('Please fill in all required fields');
+      return;
+    }
+
+    if (!formData.password || formData.password.length < 8) {
+      showError('Password must be at least 8 characters long');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      showError('Passwords do not match');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const payload: any = {
+        email: formData.email,
+        password: formData.password,
+        role: 'REPRESENTATIVE',
+        // Don't send entity_id for representatives - backend will set it to null
+      };
+
+      // Add optional fields only if they have values
+      if (formData.name) payload.name = formData.name;
+      if (formData.phone_number) {
+        // Convert phone number to integer (remove non-digits first)
+        const phoneDigits = formData.phone_number.replace(/\D/g, '');
+        if (phoneDigits.length > 0) {
+          const phoneNum = parseInt(phoneDigits, 10);
+          // Backend validation requires phone_number to be between 6000000000 and 9999999999
+          if (phoneNum >= 6000000000 && phoneNum <= 9999999999) {
+            payload.phone_number = phoneNum;
+          }
+        }
+      }
+      if (formData.address) payload.address = formData.address;
+      if (formData.bio) payload.bio = formData.bio;
+      if (formData.gender) payload.gender = formData.gender;
+
+      await createUser(payload);
+      success('Representative created successfully.');
+      await onSuccess();
+    } catch (err: any) {
+      const errorMessage = err.message || 'Failed to create representative';
+      showError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Basic Information */}
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="rep-name">Full Name</Label>
+            <Input
+              id="rep-name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Enter full name"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rep-email">Email Address *</Label>
+            <Input
+              id="rep-email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="Enter email address"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="rep-password">Password *</Label>
+            <Input
+              id="rep-password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              placeholder="Enter password"
+              required
+            />
+            <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rep-confirmPassword">Confirm Password *</Label>
+            <Input
+              id="rep-confirmPassword"
+              type="password"
+              value={formData.confirmPassword}
+              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+              placeholder="Re-enter password"
+              required
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="rep-phone_number">Phone Number</Label>
+            <Input
+              id="rep-phone_number"
+              type="tel"
+              value={formData.phone_number}
+              onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+              placeholder="Enter phone number"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rep-gender">Gender</Label>
+            <Select 
+              value={formData.gender} 
+              onValueChange={(value) => setFormData({ ...formData, gender: value as 'MALE' | 'FEMALE' })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select gender" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="MALE">Male</SelectItem>
+                <SelectItem value="FEMALE">Female</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="rep-address">Address</Label>
+          <Input
+            id="rep-address"
+            value={formData.address}
+            onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+            placeholder="Enter address"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="rep-bio">Bio</Label>
+          <Textarea
+            id="rep-bio"
+            value={formData.bio}
+            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+            placeholder="Enter bio"
+            rows={3}
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Creating...
+            </>
+          ) : (
+            'Create Representative'
           )}
         </Button>
       </div>

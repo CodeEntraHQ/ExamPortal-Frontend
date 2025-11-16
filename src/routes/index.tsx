@@ -27,6 +27,9 @@ import { SuperAdminDashboard } from '../pages/superadmin/SuperAdminDashboard';
 import { SuperAdminEntityManagement } from '../pages/superadmin/SuperAdminEntityManagement';
 import { SuperAdminEntityDetail } from '../pages/superadmin/SuperAdminEntityDetail';
 
+// Representative Pages
+import { RepresentativeDashboard } from '../pages/representative/RepresentativeDashboard';
+
 // Shared Pages
 import { ProfilePage } from '../pages/shared/ProfilePage';
 import { ExamDetailPageWrapper } from '../pages/shared/ExamDetailPageWrapper';
@@ -193,6 +196,30 @@ export const router = createBrowserRouter([
       {
         path: 'exam/:examId/admission-form',
         element: <AdmissionFormBuilderPage />,
+      },
+      {
+        path: 'profile',
+        element: <ProfilePage />,
+      },
+    ],
+  },
+
+  // Protected routes - Representative
+  {
+    path: '/representative',
+    element: (
+      <ProtectedRoute allowedRoles={['REPRESENTATIVE']}>
+        <RoleBasedLayout role="REPRESENTATIVE" />
+      </ProtectedRoute>
+    ),
+    children: [
+      {
+        index: true,
+        element: <Navigate to="/representative/dashboard" replace />,
+      },
+      {
+        path: 'dashboard',
+        element: <RepresentativeDashboard />,
       },
       {
         path: 'profile',

@@ -10,7 +10,7 @@ import { useAuth } from '../features/auth/providers/AuthProvider';
 import { useEffect } from 'react';
 
 interface RoleBasedLayoutProps {
-  role: 'STUDENT' | 'ADMIN' | 'SUPERADMIN';
+  role: 'STUDENT' | 'ADMIN' | 'SUPERADMIN' | 'REPRESENTATIVE';
 }
 
 export function RoleBasedLayout({ role }: RoleBasedLayoutProps) {
@@ -26,6 +26,7 @@ export function RoleBasedLayout({ role }: RoleBasedLayoutProps) {
         STUDENT: '/student/dashboard',
         ADMIN: '/admin/entity',
         SUPERADMIN: '/superadmin/dashboard',
+        REPRESENTATIVE: '/representative/dashboard',
       }[user.role];
 
       navigate(rolePath, { replace: true });
@@ -37,6 +38,7 @@ export function RoleBasedLayout({ role }: RoleBasedLayoutProps) {
       STUDENT: '/student',
       ADMIN: '/admin',
       SUPERADMIN: '/superadmin',
+      REPRESENTATIVE: '/representative',
     }[role];
 
     switch (view) {
@@ -107,10 +109,10 @@ export function RoleBasedLayout({ role }: RoleBasedLayoutProps) {
       return undefined;
     }
     
-    const rolePrefix = pathParts[0]; // 'admin', 'superadmin', or 'student'
+    const rolePrefix = pathParts[0]; // 'admin', 'superadmin', 'student', or 'representative'
     
     // Validate role prefix to prevent navigation to invalid routes
-    if (!['admin', 'superadmin', 'student'].includes(rolePrefix)) {
+    if (!['admin', 'superadmin', 'student', 'representative'].includes(rolePrefix)) {
       return undefined;
     }
     
