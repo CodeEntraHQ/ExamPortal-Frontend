@@ -31,6 +31,7 @@ import { SuperAdminEntityDetail } from '../pages/superadmin/SuperAdminEntityDeta
 import { ProfilePage } from '../pages/shared/ProfilePage';
 import { ExamDetailPageWrapper } from '../pages/shared/ExamDetailPageWrapper';
 import { ExamCreationWrapper } from '../pages/shared/ExamCreationWrapper';
+import { AdmissionFormBuilderPage } from '../pages/shared/AdmissionFormBuilderPage';
 
 export const router = createBrowserRouter([
   // Public routes
@@ -146,6 +147,10 @@ export const router = createBrowserRouter([
         element: <ExamCreationWrapper />,
       },
       {
+        path: 'exam/:examId/admission-form',
+        element: <AdmissionFormBuilderPage />,
+      },
+      {
         path: 'profile',
         element: <ProfilePage />,
       },
@@ -184,6 +189,10 @@ export const router = createBrowserRouter([
       {
         path: 'exam/create',
         element: <ExamCreationWrapper />,
+      },
+      {
+        path: 'exam/:examId/admission-form',
+        element: <AdmissionFormBuilderPage />,
       },
       {
         path: 'profile',
