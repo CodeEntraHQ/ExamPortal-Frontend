@@ -34,17 +34,24 @@ import {
   Award,
   UserMinus,
   Loader2,
-  RefreshCcw
+  RefreshCcw,
+  Search
 } from 'lucide-react';
 import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
 import { motion } from 'motion/react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
 import { QuestionManagement } from './QuestionManagement';
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { useExamContext } from '../providers/ExamContextProvider';
 import { EditExamModal } from './EditExamModal';
 import { examApi, LeaderboardEntry, ExamEnrollment } from '../../../services/api/exam';
+import { admissionFormApi } from '../../../services/api/admissionForm';
+import { getUsers, ApiUser } from '../../../services/api/user';
+import { useNavigate } from 'react-router-dom';
+import { Checkbox } from '../../../shared/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../shared/components/ui/tooltip';
+import { SquarePen, FilePlus2 } from 'lucide-react';
 
 interface ExamDetailPageProps {
   examId: string;
@@ -70,9 +77,18 @@ export function ExamDetailPage({
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [inviteEmails, setInviteEmails] = useState('');
+  const [showInviteRepresentativeModal, setShowInviteRepresentativeModal] = useState(false);
+  const [hasAdmissionForm, setHasAdmissionForm] = useState(false);
+  const [checkingAdmissionForm, setCheckingAdmissionForm] = useState(false);
+  const [representatives, setRepresentatives] = useState<Array<{id: string; name: string | null; email: string; status: string}>>([]);
+  const [selectedRepresentativeIds, setSelectedRepresentativeIds] = useState<Set<string>>(new Set());
+  const [loadingRepresentatives, setLoadingRepresentatives] = useState(false);
+  const [representativeSearchTerm, setRepresentativeSearchTerm] = useState('');
+  const [invitingRepresentatives, setInvitingRepresentatives] = useState(false);
   const { info, success, error } = useNotifications();
   const { user } = useAuth();
   const { currentExam, setCurrentExam } = useExamContext();
+  const navigate = useNavigate();
   
   // Statistics state
   const [statistics, setStatistics] = useState<{
@@ -97,6 +113,150 @@ export function ExamDetailPage({
   // Role-based access control
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
   const effectiveExamId = currentExam?.id || examId;
+  
+  // Check if admission form exists
+  useEffect(() => {
+    const checkAdmissionForm = async () => {
+      if (!effectiveExamId || !canManageQuestions) return;
+      
+      setCheckingAdmissionForm(true);
+      try {
+        await admissionFormApi.getAdmissionForm(effectiveExamId);
+        setHasAdmissionForm(true);
+      } catch (err: any) {
+        const errorMessage = String(err?.message || '').toLowerCase();
+        const isNotFoundError =
+          errorMessage.includes('404') ||
+          errorMessage.includes('not_found') ||
+          errorMessage.includes('not found') ||
+          errorMessage.includes('admission form not found');
+        
+        if (isNotFoundError) {
+          setHasAdmissionForm(false);
+        } else {
+          console.warn('Error checking admission form:', err);
+        }
+      } finally {
+        setCheckingAdmissionForm(false);
+      }
+    };
+
+    checkAdmissionForm();
+  }, [effectiveExamId, canManageQuestions]);
+
+  // Fetch representatives when modal opens
+  useEffect(() => {
+    const fetchRepresentatives = async () => {
+      if (showInviteRepresentativeModal && effectiveExamId) {
+        setLoadingRepresentatives(true);
+        try {
+          // First, fetch enrollments for this exam to get already invited representatives
+          let enrolledUserIds = new Set<string>();
+          try {
+            const enrollmentsResponse = await examApi.getExamEnrollments(effectiveExamId);
+            enrolledUserIds = new Set(
+              (enrollmentsResponse.payload.enrollments || []).map((e: any) => e.user_id)
+            );
+          } catch (err) {
+            console.warn('Failed to fetch enrollments, proceeding without filter:', err);
+          }
+
+          // Fetch representatives in batches (backend limit is 10)
+          const allRepresentatives: ApiUser[] = [];
+          let page = 1;
+          let hasMore = true;
+
+          while (hasMore) {
+            const response = await getUsers({ 
+              role: 'REPRESENTATIVE',
+              limit: 10,
+              page: page
+            });
+            
+            const users = response.payload.users || [];
+            allRepresentatives.push(...users);
+            
+            // Check if there are more pages
+            hasMore = page < response.payload.totalPages;
+            page++;
+          }
+
+          // Filter active representatives and exclude already invited ones
+          const activeRepresentatives = allRepresentatives.filter(
+            (user: ApiUser) => user.status === 'ACTIVE' && !enrolledUserIds.has(user.id)
+          );
+          setRepresentatives(activeRepresentatives.map((user: ApiUser) => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            status: user.status,
+          })));
+        } catch (err: any) {
+          console.error('Failed to fetch representatives', err);
+          error('Failed to load representatives. Please try again.');
+        } finally {
+          setLoadingRepresentatives(false);
+        }
+      }
+    };
+
+    fetchRepresentatives();
+  }, [showInviteRepresentativeModal, effectiveExamId, error]);
+
+  const handleInviteRepresentatives = async () => {
+    if (selectedRepresentativeIds.size === 0) {
+      error('Please select at least one representative');
+      return;
+    }
+
+    if (!effectiveExamId) {
+      return;
+    }
+
+    setInvitingRepresentatives(true);
+
+    try {
+      const res = await examApi.inviteRepresentatives({
+        examId: effectiveExamId,
+        user_ids: Array.from(selectedRepresentativeIds),
+      });
+
+      const enrolledCount = res?.payload?.enrolledCount || 0;
+
+      if (enrolledCount > 0) {
+        success(`Successfully invited ${enrolledCount} representative(s) to the exam`);
+      } else {
+        error('No representatives were invited. They may already be enrolled.');
+      }
+
+      setShowInviteRepresentativeModal(false);
+      setSelectedRepresentativeIds(new Set());
+      setRepresentativeSearchTerm('');
+    } catch (err: any) {
+      console.error('Failed to invite representatives', err);
+      error(err?.message || 'Failed to invite representatives. Please try again.');
+    } finally {
+      setInvitingRepresentatives(false);
+    }
+  };
+
+  const toggleRepresentativeSelection = (representativeId: string) => {
+    const newSelection = new Set(selectedRepresentativeIds);
+    if (newSelection.has(representativeId)) {
+      newSelection.delete(representativeId);
+    } else {
+      newSelection.add(representativeId);
+    }
+    setSelectedRepresentativeIds(newSelection);
+  };
+
+  const filteredRepresentatives = representatives.filter(rep => {
+    const searchLower = representativeSearchTerm.toLowerCase();
+    return (
+      rep.name?.toLowerCase().includes(searchLower) ||
+      rep.email.toLowerCase().includes(searchLower)
+    );
+  });
   
   // Fetch statistics from backend
   useEffect(() => {
@@ -424,20 +584,70 @@ export function ExamDetailPage({
               </div>
               <div className="flex gap-2">
                 {canManageQuestions && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      if (currentExam) {
-                        setShowEditModal(true);
-                      } else {
-                        error('Exam data not available. Please refresh the page.');
-                      }
-                    }}
-                  >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit Exam
-                  </Button>
+                  <>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              const basePath = user?.role === 'SUPERADMIN' ? '/superadmin' : '/admin';
+                              navigate(`${basePath}/exam/${effectiveExamId}/admission-form`);
+                            }}
+                          >
+                            {hasAdmissionForm ? (
+                              <SquarePen className="h-4 w-4 mr-2" />
+                            ) : (
+                              <FilePlus2 className="h-4 w-4 mr-2" />
+                            )}
+                            {hasAdmissionForm ? 'Edit Admission Form' : 'Create Admission Form'}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {hasAdmissionForm ? 'Edit admission form' : 'Create admission form'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            disabled={!hasAdmissionForm}
+                            onClick={() => {
+                              setSelectedRepresentativeIds(new Set());
+                              setRepresentativeSearchTerm('');
+                              setShowInviteRepresentativeModal(true);
+                            }}
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Invite Representative
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {hasAdmissionForm 
+                            ? 'Invite representative' 
+                            : 'Create admission form first'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        if (currentExam) {
+                          setShowEditModal(true);
+                        } else {
+                          error('Exam data not available. Please refresh the page.');
+                        }
+                      }}
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit Exam
+                    </Button>
+                  </>
                 )}
                 <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
                   <DialogTrigger asChild>
@@ -788,7 +998,7 @@ export function ExamDetailPage({
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="time" />
                       <YAxis />
-                      <Tooltip />
+                      <RechartsTooltip />
                       <Line 
                         type="monotone" 
                         dataKey="attempts" 
@@ -854,7 +1064,7 @@ export function ExamDetailPage({
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="range" />
                       <YAxis />
-                      <Tooltip />
+                      <RechartsTooltip />
                       <Bar dataKey="count" fill="hsl(var(--primary))" />
                     </BarChart>
                   </ResponsiveContainer>
@@ -884,7 +1094,7 @@ export function ExamDetailPage({
                         <Cell fill="hsl(var(--success))" />
                         <Cell fill="hsl(var(--destructive))" />
                       </Pie>
-                      <Tooltip />
+                      <RechartsTooltip />
                     </PieChart>
                   </ResponsiveContainer>
                 </CardContent>
@@ -1026,6 +1236,96 @@ export function ExamDetailPage({
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Invite Representatives Modal */}
+        <Dialog open={showInviteRepresentativeModal} onOpenChange={setShowInviteRepresentativeModal}>
+          <DialogContent className="sm:max-w-[500px] max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle>Invite Representatives</DialogTitle>
+              <DialogDescription>
+                Select representatives to invite
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+              {/* Search */}
+              <div className="space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or email..."
+                    value={representativeSearchTerm}
+                    onChange={(e) => setRepresentativeSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+
+              {/* Representatives List */}
+              <div className="flex-1 overflow-y-auto border rounded-md">
+                {loadingRepresentatives ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : filteredRepresentatives.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                    <Users className="h-12 w-12 mb-4 opacity-50" />
+                    <p className="text-sm">
+                      {representativeSearchTerm ? 'No representatives found' : 'No representatives available'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y">
+                    {filteredRepresentatives.map((representative) => (
+                      <div
+                        key={representative.id}
+                        className="flex items-center gap-4 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                        onClick={() => toggleRepresentativeSelection(representative.id)}
+                      >
+                        <Checkbox
+                          checked={selectedRepresentativeIds.has(representative.id)}
+                          onCheckedChange={() => toggleRepresentativeSelection(representative.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex-shrink-0"
+                        />
+                        <div className="flex-1 flex items-center justify-between gap-4 min-w-0">
+                          <p className="font-medium text-sm text-foreground truncate">
+                            {representative.name || 'No Name'}
+                          </p>
+                          <p className="text-sm text-muted-foreground truncate flex-shrink-0">
+                            {representative.email}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setShowInviteRepresentativeModal(false);
+                  setSelectedRepresentativeIds(new Set());
+                  setRepresentativeSearchTerm('');
+                }}
+                disabled={invitingRepresentatives}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleInviteRepresentatives} 
+                className="bg-primary hover:bg-primary/90"
+                disabled={invitingRepresentatives || selectedRepresentativeIds.size === 0}
+              >
+                <Mail className="h-4 w-4 mr-2" />
+                {invitingRepresentatives 
+                  ? 'Sending...' 
+                  : `Invite ${selectedRepresentativeIds.size > 0 ? `(${selectedRepresentativeIds.size})` : ''}`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Edit Exam Modal */}
         {currentExam && (
