@@ -8,7 +8,7 @@ import { useAuth } from '../features/auth/providers/AuthProvider';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: ('STUDENT' | 'ADMIN' | 'SUPERADMIN')[];
+  allowedRoles?: ('STUDENT' | 'ADMIN' | 'SUPERADMIN' | 'REPRESENTATIVE')[];
 }
 
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
@@ -27,6 +27,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
       STUDENT: '/student/dashboard',
       ADMIN: '/admin/entity',
       SUPERADMIN: '/superadmin/dashboard',
+      REPRESENTATIVE: '/representative/dashboard',
     }[user.role];
 
     return <Navigate to={rolePath} replace />;
