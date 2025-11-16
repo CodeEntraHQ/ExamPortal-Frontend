@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
 import { Checkbox } from '../../../shared/components/ui/checkbox';
 import { useAuth } from '../providers/AuthProvider';
 import { useTheme } from '../../../shared/providers/ThemeProvider';
-import { Moon, Sun, ArrowLeft, GraduationCap, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Moon, Sun, ArrowLeft, GraduationCap, AlertCircle, Eye, EyeOff, Loader2, Home } from 'lucide-react';
 import { CaptchaComponent } from '../../../shared/components/common/CaptchaComponent';
 import { authAPI, forgotPassword } from '../../../services/api';
 import { motion } from 'motion/react';
@@ -39,6 +39,14 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const handleBackToHome = () => {
+    if (onBackToHome) {
+      onBackToHome();
+    } else {
+      navigate('/');
+    }
+  };
 
   // Handle remember me on component mount
   useEffect(() => {
@@ -346,27 +354,23 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div className="absolute top-4 left-4 right-4 flex justify-between">
-        {onBackToHome && (
-          <Button
-            variant="outline"
-            onClick={onBackToHome}
-            className="border-border hover:bg-accent"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Home
-          </Button>
-        )}
-        <div className={onBackToHome ? '' : 'ml-auto'}>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleTheme}
-            className="border-border hover:bg-accent"
-          >
-            {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-          </Button>
-        </div>
+      <div className="absolute top-4 left-4 right-4 flex items-center justify-between gap-4">
+        <Button
+          variant="outline"
+          onClick={handleBackToHome}
+          className="border-border hover:bg-accent"
+        >
+          <Home className="h-4 w-4 mr-2" />
+          Back to Home
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={toggleTheme}
+          className="border-border hover:bg-accent"
+        >
+          {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+        </Button>
       </div>
       
       <motion.div
