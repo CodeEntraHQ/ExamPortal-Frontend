@@ -28,6 +28,7 @@ export function AdmissionFormViewPage() {
   const [shareUrl, setShareUrl] = useState<string>('');
   const [showShareDialog, setShowShareDialog] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState<boolean>(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -96,6 +97,50 @@ export function AdmissionFormViewPage() {
       ...prev,
       [fieldId]: value,
     }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!examId) {
+      error('Exam ID is required');
+      return;
+    }
+
+    // Validate required fields
+    const missingFields: string[] = [];
+    formFields.forEach((field) => {
+      const fieldId = field.id || field.label;
+      if (field.required && (!formData[fieldId] || formData[fieldId] === '')) {
+        missingFields.push(field.label);
+      }
+    });
+
+    if (missingFields.length > 0) {
+      error(`Please fill in all required fields: ${missingFields.join(', ')}`);
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await admissionFormApi.submitAdmissionForm(examId, {
+        form_responses: formData,
+      });
+      success('Admission form submitted successfully!');
+      
+      // Reset form after successful submission
+      const initialData: Record<string, any> = {};
+      formFields.forEach((field) => {
+        initialData[field.id || field.label] = '';
+      });
+      setFormData(initialData);
+    } catch (err: any) {
+      console.error('Error submitting admission form:', err);
+      const errorMessage = err?.message || 'Failed to submit admission form. Please try again.';
+      error(errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderField = (field: FormField) => {
@@ -279,8 +324,35 @@ export function AdmissionFormViewPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form className="space-y-6">
+            <form className="space-y-6" onSubmit={handleSubmit}>
               {formFields.map((field) => renderField(field))}
+              <div className="flex justify-end gap-4 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    // Reset form
+                    const initialData: Record<string, any> = {};
+                    formFields.forEach((field) => {
+                      initialData[field.id || field.label] = '';
+                    });
+                    setFormData(initialData);
+                  }}
+                  disabled={submitting}
+                >
+                  Reset
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit Form'
+                  )}
+                </Button>
+              </div>
             </form>
           </CardContent>
         </Card>
