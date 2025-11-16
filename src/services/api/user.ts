@@ -27,7 +27,7 @@ export interface ApiUser {
   id: string;
   name: string | null;
   email: string;
-  role: 'SUPERADMIN' | 'ADMIN' | 'STUDENT';
+  role: 'SUPERADMIN' | 'ADMIN' | 'STUDENT' | 'REPRESENTATIVE';
   status: 'ACTIVE' | 'INACTIVE' | 'ACTIVATION_PENDING';
   entity_id?: string;
   profile_picture_link?: string;
@@ -68,7 +68,7 @@ export interface CreateUserPayload {
   email: string;
   password: string;
   name?: string;
-  role: 'ADMIN' | 'STUDENT';
+  role: 'ADMIN' | 'STUDENT' | 'REPRESENTATIVE';
   entity_id?: string;
   phone_number?: string;
   address?: string;
@@ -81,7 +81,7 @@ export interface CreateUserResponse {
   payload: {
     id: string;
     email: string;
-    role: 'ADMIN' | 'STUDENT';
+    role: 'ADMIN' | 'STUDENT' | 'REPRESENTATIVE';
   };
 }
 
@@ -91,7 +91,7 @@ export interface CreateUserResponse {
 export async function getUsers(
   params?: {
     entity_id?: string;
-    role?: 'ADMIN' | 'STUDENT';
+    role?: 'ADMIN' | 'STUDENT' | 'REPRESENTATIVE';
     page?: number;
     limit?: number;
   }
