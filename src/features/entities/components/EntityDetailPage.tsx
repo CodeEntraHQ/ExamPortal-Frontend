@@ -19,7 +19,8 @@ import {
   BarChart3, 
   MapPin,
   Calendar,
-  Settings
+  Settings,
+  Pencil
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { RoleAwareExamManagement } from '../../../features/exams/components/RoleAwareExamManagement';
@@ -77,6 +78,7 @@ export function EntityDetailPage({
     logoLink: entity.logo_link || ''
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const { success, error } = useNotifications();
   const { user } = useAuth();
@@ -106,6 +108,7 @@ export function EntityDetailPage({
       contactPhone: entity.phone || '',
       logoLink: entity.logo_link || ''
     });
+    setIsEditing(false);
     
     console.log('✅ EntityDetailPage - Entity details and settings synced');
   }, [entity]);
@@ -326,13 +329,24 @@ export function EntityDetailPage({
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-start gap-4">
               <div>
                 <h2 className="text-xl font-semibold">Entity Settings</h2>
                 <p className="text-muted-foreground">
                   Update entity information and configuration
                 </p>
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={isEditing ? 'Editing enabled' : 'Enable editing'}
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => setIsEditing(true)}
+                disabled={isEditing}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
             </div>
             <form
               onSubmit={async (e) => {
@@ -413,6 +427,7 @@ export function EntityDetailPage({
                   }
                   
                   success('Entity settings updated successfully');
+                setIsEditing(false);
                 } catch (err: any) {
                   console.error('❌ EntityDetailPage - Error updating entity:', err);
                   const errorMessage = err?.message || err?.response?.data?.message || 'Failed to update entity settings';
@@ -436,15 +451,17 @@ export function EntityDetailPage({
                         value={entitySettings.name}
                         onChange={(e) => setEntitySettings({ ...entitySettings, name: e.target.value })}
                         required
+                        disabled={!isEditing}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="entity-type">Type</Label>
                       <Select
                         value={entitySettings.type}
+                        disabled={!isEditing}
                         onValueChange={(value: 'COLLEGE' | 'SCHOOL') => setEntitySettings({ ...entitySettings, type: value })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger disabled={!isEditing}>
                           <SelectValue placeholder="Select type" />
                         </SelectTrigger>
                         <SelectContent>
@@ -460,6 +477,7 @@ export function EntityDetailPage({
                         value={entitySettings.address}
                         onChange={(e) => setEntitySettings({ ...entitySettings, address: e.target.value })}
                         rows={2}
+                        disabled={!isEditing}
                       />
                     </div>
                     <div className="space-y-2">
@@ -469,6 +487,7 @@ export function EntityDetailPage({
                         value={entitySettings.logoLink}
                         onChange={(e) => setEntitySettings({ ...entitySettings, logoLink: e.target.value })}
                         placeholder="https://example.com/logo.png"
+                        disabled={!isEditing}
                       />
                     </div>
                   </CardContent>
@@ -487,6 +506,7 @@ export function EntityDetailPage({
                         type="email"
                         value={entitySettings.contactEmail}
                         onChange={(e) => setEntitySettings({ ...entitySettings, contactEmail: e.target.value })}
+                        disabled={!isEditing}
                       />
                     </div>
                     <div className="space-y-2">
@@ -495,6 +515,7 @@ export function EntityDetailPage({
                         id="contact-phone"
                         value={entitySettings.contactPhone}
                         onChange={(e) => setEntitySettings({ ...entitySettings, contactPhone: e.target.value })}
+                        disabled={!isEditing}
                       />
                     </div>
                     <div className="space-y-2">
@@ -504,6 +525,7 @@ export function EntityDetailPage({
                         value={entitySettings.description}
                         onChange={(e) => setEntitySettings({ ...entitySettings, description: e.target.value })}
                         rows={3}
+                        disabled={!isEditing}
                       />
                     </div>
                   </CardContent>
@@ -512,7 +534,7 @@ export function EntityDetailPage({
               <div className="flex justify-end gap-2 mt-6">
                 <Button
                   type="submit"
-                  disabled={isSaving}
+                  disabled={!isEditing || isSaving}
                   className="bg-primary hover:bg-primary/90"
                 >
                   {isSaving ? 'Saving...' : 'Save Changes'}
