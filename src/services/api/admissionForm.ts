@@ -50,6 +50,23 @@ export interface UpdateAdmissionFormResponse {
   payload: AdmissionForm;
 }
 
+export interface SubmitAdmissionFormPayload {
+  form_responses: Record<string, any>;
+}
+
+export interface AdmissionFormSubmission {
+  id: string;
+  exam_id: string;
+  representative_id: string;
+  form_responses: Record<string, any>;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  created_at: string;
+}
+
+export interface SubmitAdmissionFormResponse {
+  payload: AdmissionFormSubmission;
+}
+
 /**
  * Get admission form for an exam
  */
@@ -101,11 +118,30 @@ export async function updateAdmissionForm(
 }
 
 /**
+ * Submit an admission form
+ */
+export async function submitAdmissionForm(
+  examId: string,
+  payload: SubmitAdmissionFormPayload
+): Promise<SubmitAdmissionFormResponse> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/admission-forms/${examId}/submit`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return response.json();
+}
+
+/**
  * Admission Form API object for convenience
  */
 export const admissionFormApi = {
   getAdmissionForm,
   createAdmissionForm,
   updateAdmissionForm,
+  submitAdmissionForm,
 };
 
