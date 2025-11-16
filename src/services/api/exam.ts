@@ -20,6 +20,7 @@ export interface BackendExam {
   total_marks?: number;
   passing_marks?: number;
   status?: string;
+  has_admission_form?: boolean;
 }
 
 export interface BackendQuestion {

@@ -53,8 +53,12 @@ import {
   Layers,
   PlusCircle,
   MessageSquare,
-  Activity
+  Activity,
+  SquarePen,
+  FilePlus2
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../shared/components/ui/tooltip';
+import { useNavigate } from 'react-router-dom';
 
 interface Question {
   id: string;
@@ -115,6 +119,7 @@ export function RoleAwareExamManagement({
   const { user } = useAuth();
   const { success, info, error } = useNotifications();
   const { setCurrentExam } = useExamContext();
+  const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -515,6 +520,7 @@ export function RoleAwareExamManagement({
   const canCreateExam = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
   const canManageAllEntities = user?.role === 'SUPERADMIN';
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
+  const examTableColumnCount = 6; // Name, Type, Duration, Admission Form, Status, Created At
 
   if (user?.role === 'STUDENT') {
     return (
@@ -736,6 +742,7 @@ export function RoleAwareExamManagement({
                     <TableHead>Exam Name</TableHead>
                     <TableHead>Type</TableHead>
                     <TableHead>Duration</TableHead>
+                    <TableHead className="text-center">Admission Form</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created At</TableHead>
                   </TableRow>
@@ -743,7 +750,7 @@ export function RoleAwareExamManagement({
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={canManageAllEntities ? 4 : 3} className="text-center py-10">
+                      <TableCell colSpan={examTableColumnCount} className="text-center py-10">
                         <div className="flex flex-col items-center justify-center space-y-4">
                           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                           <p className="text-sm text-muted-foreground">Loading exams...</p>
@@ -752,7 +759,7 @@ export function RoleAwareExamManagement({
                     </TableRow>
                   ) : fetchError ? (
                     <TableRow>
-                      <TableCell colSpan={canManageAllEntities ? 4 : 3} className="text-center py-10">
+                      <TableCell colSpan={examTableColumnCount} className="text-center py-10">
                         <div className="flex flex-col items-center justify-center space-y-2">
                           <AlertTriangle className="h-8 w-8 text-destructive" />
                           <p className="text-sm text-destructive">{fetchError}</p>
@@ -764,7 +771,7 @@ export function RoleAwareExamManagement({
                     </TableRow>
                   ) : getFilteredBackendExams().length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={canManageAllEntities ? 4 : 3} className="text-center py-10">
+                      <TableCell colSpan={examTableColumnCount} className="text-center py-10">
                         <div className="flex flex-col items-center justify-center space-y-2">
                           <FileText className="h-8 w-8 text-muted-foreground" />
                           <p className="text-sm text-muted-foreground">No exams found</p>
@@ -795,6 +802,36 @@ export function RoleAwareExamManagement({
                         <TableCell>
                           <div className="text-sm text-muted-foreground">
                             {formatDuration(exam.duration_seconds)}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex justify-center">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={exam.has_admission_form ? 'Edit admission form' : 'Create admission form'}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      const basePath = user?.role === 'SUPERADMIN' ? '/superadmin' : '/admin';
+                                      navigate(`${basePath}/exam/${exam.id}/admission-form`);
+                                    }}
+                                  >
+                                    {exam.has_admission_form ? (
+                                      <SquarePen className="h-4 w-4" />
+                                    ) : (
+                                      <FilePlus2 className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {exam.has_admission_form ? 'Edit admission form' : 'Create admission form'}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </TableCell>
                         <TableCell>
