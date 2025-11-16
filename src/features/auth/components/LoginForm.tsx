@@ -67,6 +67,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
         STUDENT: '/student/dashboard',
         ADMIN: '/admin/entity',
         SUPERADMIN: '/superadmin/dashboard',
+        REPRESENTATIVE: '/representative/dashboard',
       }[user.role];
 
       // Redirect to intended path or role-based default
@@ -74,9 +75,13 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
         ? from 
         : rolePath;
 
-      navigate(redirectPath, { replace: true });
+      // Only navigate if we're not already on the target path
+      if (redirectPath && location.pathname !== redirectPath) {
+        navigate(redirectPath, { replace: true });
+      }
     }
-  }, [user, navigate, location]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
