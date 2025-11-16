@@ -67,6 +67,36 @@ export interface SubmitAdmissionFormResponse {
   payload: AdmissionFormSubmission;
 }
 
+export interface GetAdmissionFormSubmissionsParams {
+  entity_id?: string;
+  page?: number;
+  limit?: number;
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
+
+export interface AdmissionFormSubmissionListItem {
+  id: string;
+  exam_id: string;
+  exam_title: string;
+  representative_id: string;
+  representative_name: string;
+  representative_email: string;
+  form_responses: Record<string, any>;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GetAdmissionFormSubmissionsResponse {
+  payload: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+    submissions: AdmissionFormSubmissionListItem[];
+  };
+}
+
 /**
  * Get admission form for an exam
  */
@@ -136,6 +166,67 @@ export async function submitAdmissionForm(
 }
 
 /**
+ * Get admission form submissions
+ */
+export async function getAdmissionFormSubmissions(
+  params?: GetAdmissionFormSubmissionsParams
+): Promise<GetAdmissionFormSubmissionsResponse> {
+  const queryParams = new URLSearchParams();
+  if (params?.entity_id) queryParams.append('entity_id', params.entity_id);
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  if (params?.status) queryParams.append('status', params.status);
+
+  const queryString = queryParams.toString();
+  const url = `/v1/admission-forms/submissions${queryString ? `?${queryString}` : ''}`;
+
+  const response = await authenticatedFetch(getApiUrl(url), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+export interface UpdateSubmissionStatusPayload {
+  action: 'approve' | 'reject';
+  password?: string;
+}
+
+export interface UpdateSubmissionStatusResponse {
+  payload: {
+    id: string;
+    status: string;
+    user?: {
+      id: string;
+      email: string;
+      name: string | null;
+    };
+    enrolled?: boolean;
+  };
+}
+
+/**
+ * Update submission status (approve or reject)
+ */
+export async function updateSubmissionStatus(
+  submissionId: string,
+  payload: UpdateSubmissionStatusPayload
+): Promise<UpdateSubmissionStatusResponse> {
+  const response = await authenticatedFetch(
+    getApiUrl(`/v1/admission-forms/submissions/${submissionId}/status`),
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  return response.json();
+}
+
+/**
  * Admission Form API object for convenience
  */
 export const admissionFormApi = {
@@ -143,5 +234,7 @@ export const admissionFormApi = {
   createAdmissionForm,
   updateAdmissionForm,
   submitAdmissionForm,
+  getAdmissionFormSubmissions,
+  updateSubmissionStatus,
 };
 
