@@ -20,12 +20,14 @@ import {
   MapPin,
   Calendar,
   Settings,
-  Pencil
+  Pencil,
+  FileText
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { RoleAwareExamManagement } from '../../../features/exams/components/RoleAwareExamManagement';
 import { UserManagement } from '../../../features/users/components/UserManagement';
 import { AnalyticsDashboard } from '../../../features/dashboard/components/AnalyticsDashboard';
+import { SubmissionsManagement } from '../../../features/submissions/components/SubmissionsManagement';
 import { ImageWithFallback } from '../../../shared/components/common/ImageWithFallback';
 
 interface EntityDetailPageProps {
@@ -280,7 +282,7 @@ export function EntityDetailPage({
 
         {/* Management Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="exams" className="flex items-center gap-2">
               <BookOpen className="h-4 w-4" />
               Manage Exams
@@ -288,6 +290,10 @@ export function EntityDetailPage({
             <TabsTrigger value="users" className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Manage Users
+            </TabsTrigger>
+            <TabsTrigger value="submissions" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Manage Submissions
             </TabsTrigger>
             <TabsTrigger value="analytics" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
@@ -314,6 +320,10 @@ export function EntityDetailPage({
 
           <TabsContent value="users" className="space-y-6">
             <UserManagement currentEntity={entityDetails.id} />
+          </TabsContent>
+
+          <TabsContent value="submissions" className="space-y-6">
+            <SubmissionsManagement currentEntity={entityDetails.id} />
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
