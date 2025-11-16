@@ -169,6 +169,31 @@ export interface StudentEnrollment {
   } | null;
 }
 
+export interface ExamEnrollment {
+  id: string;
+  user_id: string;
+  email: string | null;
+  name: string | null;
+  roll_number: string | null;
+  status: string;
+  enrolled_at?: string;
+  score?: number | null;
+  metadata?: any;
+}
+
+export interface GetExamEnrollmentsResponse {
+  payload: {
+    exam_id: string;
+    enrollments: ExamEnrollment[];
+  };
+}
+
+export interface DeleteExamEnrollmentResponse {
+  payload: {
+    enrollment_id: string;
+  };
+}
+
 /**
  * Get exams with pagination
  */
@@ -363,6 +388,33 @@ export async function getStudentEnrollments(): Promise<{
   return response.json();
 }
 
+export async function getExamEnrollments(
+  examId: string
+): Promise<GetExamEnrollmentsResponse> {
+  const response = await authenticatedFetch(
+    getApiUrl(`/v1/exams/${examId}/enrollments`),
+    {
+      method: "GET",
+    }
+  );
+
+  return response.json();
+}
+
+export async function deleteExamEnrollment(
+  examId: string,
+  enrollmentId: string
+): Promise<DeleteExamEnrollmentResponse> {
+  const response = await authenticatedFetch(
+    getApiUrl(`/v1/exams/${examId}/enrollments/${enrollmentId}`),
+    {
+      method: "DELETE",
+    }
+  );
+
+  return response.json();
+}
+
 /**
  * Create an exam
  */
@@ -497,6 +549,8 @@ export const examApi = {
   submitExam,
   getSubmissions,
   getStudentEnrollments,
+  getExamEnrollments,
+  deleteExamEnrollment,
   createExam,
   updateExam,
   inviteStudents,
