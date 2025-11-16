@@ -535,6 +535,40 @@ export async function inviteStudents(payload: InviteStudentsPayload): Promise<{
   return responseData;
 }
 
+export interface InviteRepresentativesPayload {
+  examId: string;
+  user_ids: string[];
+}
+
+export async function inviteRepresentatives(payload: InviteRepresentativesPayload): Promise<{
+  payload?: {
+    enrollments?: Array<{
+      id: string;
+      exam_id: string;
+      user_id: string;
+      status: string;
+      created_at: string;
+    }>;
+    enrolledCount?: number;
+    totalEmails?: number;
+  };
+}> {
+  const requestBody = {
+    user_ids: payload.user_ids,
+  };
+
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${payload.examId}/invite-representatives`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  const responseData = await response.json();
+  return responseData;
+}
+
 /**
  * Exam API object for convenience
  */
@@ -555,6 +589,7 @@ export const examApi = {
   createExam,
   updateExam,
   inviteStudents,
+  inviteRepresentatives,
   getExamStatistics,
   getExamDetailStatistics,
   getExamLeaderboard,

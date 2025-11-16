@@ -8,6 +8,7 @@ import { Label } from '../../../shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../shared/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../../shared/components/ui/dialog';
+import { Checkbox } from '../../../shared/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '../../../shared/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
 import { Progress } from '../../../shared/components/ui/progress';
@@ -16,6 +17,7 @@ import { useNotifications } from '../../../shared/providers/NotificationProvider
 import { QuestionManagement } from './QuestionManagement';
 import { motion, AnimatePresence } from 'motion/react';
 import { examApi, BackendExam } from '../../../services/api/exam';
+import { getUsers, ApiUser } from '../../../services/api/user';
 import { CreateExamModal } from './CreateExamModal';
 import { useExamContext } from '../providers/ExamContextProvider';
 import { 
@@ -130,6 +132,13 @@ export function RoleAwareExamManagement({
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmails, setInviteEmails] = useState('');
+  const [showInviteRepresentativeModal, setShowInviteRepresentativeModal] = useState(false);
+  const [selectedExamForInvite, setSelectedExamForInvite] = useState<BackendExam | null>(null);
+  const [invitingRepresentatives, setInvitingRepresentatives] = useState(false);
+  const [representatives, setRepresentatives] = useState<Array<{id: string; name: string | null; email: string; status: string}>>([]);
+  const [selectedRepresentativeIds, setSelectedRepresentativeIds] = useState<Set<string>>(new Set());
+  const [loadingRepresentatives, setLoadingRepresentatives] = useState(false);
+  const [representativeSearchTerm, setRepresentativeSearchTerm] = useState('');
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
 
   // Mock exam data based on user role
@@ -486,6 +495,121 @@ export function RoleAwareExamManagement({
     }
   };
 
+  // Fetch representatives when modal opens
+  useEffect(() => {
+    const fetchRepresentatives = async () => {
+      if (showInviteRepresentativeModal && selectedExamForInvite) {
+        setLoadingRepresentatives(true);
+        try {
+          // First, fetch enrollments for this exam to get already invited representatives
+          let enrolledUserIds = new Set<string>();
+          try {
+            const enrollmentsResponse = await examApi.getExamEnrollments(selectedExamForInvite.id);
+            enrolledUserIds = new Set(
+              (enrollmentsResponse.payload.enrollments || []).map((e: any) => e.user_id)
+            );
+          } catch (err) {
+            console.warn('Failed to fetch enrollments, proceeding without filter:', err);
+          }
+
+          // Fetch representatives in batches (backend limit is 10)
+          const allRepresentatives: ApiUser[] = [];
+          let page = 1;
+          let hasMore = true;
+
+          while (hasMore) {
+            const response = await getUsers({ 
+              role: 'REPRESENTATIVE',
+              limit: 10,
+              page: page
+            });
+            
+            const users = response.payload.users || [];
+            allRepresentatives.push(...users);
+            
+            // Check if there are more pages
+            hasMore = page < response.payload.totalPages;
+            page++;
+          }
+
+          // Filter active representatives and exclude already invited ones
+          const activeRepresentatives = allRepresentatives.filter(
+            (user: ApiUser) => user.status === 'ACTIVE' && !enrolledUserIds.has(user.id)
+          );
+          setRepresentatives(activeRepresentatives.map((user: ApiUser) => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            status: user.status,
+          })));
+        } catch (err: any) {
+          console.error('Failed to fetch representatives', err);
+          error('Failed to load representatives. Please try again.');
+        } finally {
+          setLoadingRepresentatives(false);
+        }
+      }
+    };
+
+    fetchRepresentatives();
+  }, [showInviteRepresentativeModal, selectedExamForInvite, error]);
+
+  const handleInviteRepresentatives = async () => {
+    if (selectedRepresentativeIds.size === 0) {
+      error('Please select at least one representative');
+      return;
+    }
+
+    if (!selectedExamForInvite) {
+      return;
+    }
+
+    setInvitingRepresentatives(true);
+
+    try {
+      const res = await examApi.inviteRepresentatives({
+        examId: selectedExamForInvite.id,
+        user_ids: Array.from(selectedRepresentativeIds),
+      });
+
+      const enrolledCount = res?.payload?.enrolledCount || 0;
+
+      if (enrolledCount > 0) {
+        success(`Successfully invited ${enrolledCount} representative(s) to the exam`);
+      } else {
+        error('No representatives were invited. They may already be enrolled.');
+      }
+
+      setShowInviteRepresentativeModal(false);
+      setSelectedRepresentativeIds(new Set());
+      setSelectedExamForInvite(null);
+      setRepresentativeSearchTerm('');
+    } catch (err: any) {
+      console.error('Failed to invite representatives', err);
+      error(err?.message || 'Failed to invite representatives. Please try again.');
+    } finally {
+      setInvitingRepresentatives(false);
+    }
+  };
+
+  const toggleRepresentativeSelection = (representativeId: string) => {
+    const newSelection = new Set(selectedRepresentativeIds);
+    if (newSelection.has(representativeId)) {
+      newSelection.delete(representativeId);
+    } else {
+      newSelection.add(representativeId);
+    }
+    setSelectedRepresentativeIds(newSelection);
+  };
+
+  const filteredRepresentatives = representatives.filter(rep => {
+    const searchLower = representativeSearchTerm.toLowerCase();
+    return (
+      rep.name?.toLowerCase().includes(searchLower) ||
+      rep.email.toLowerCase().includes(searchLower)
+    );
+  });
+
   const examStats = [
     {
       title: 'Total Exams',
@@ -520,7 +644,7 @@ export function RoleAwareExamManagement({
   const canCreateExam = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
   const canManageAllEntities = user?.role === 'SUPERADMIN';
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
-  const examTableColumnCount = 6; // Name, Type, Duration, Admission Form, Status, Created At
+  const examTableColumnCount = 7; // Name, Type, Duration, Admission Form, Invite Representative, Status, Created At
 
   if (user?.role === 'STUDENT') {
     return (
@@ -743,6 +867,7 @@ export function RoleAwareExamManagement({
                     <TableHead>Type</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead className="text-center">Admission Form</TableHead>
+                    <TableHead className="text-center">Invite Representative</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created At</TableHead>
                   </TableRow>
@@ -834,6 +959,38 @@ export function RoleAwareExamManagement({
                             </TooltipProvider>
                           </div>
                         </TableCell>
+                        <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-center">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label="Invite representative"
+                                    disabled={!exam.has_admission_form}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      event.preventDefault();
+                                      setSelectedExamForInvite(exam);
+                                      setSelectedRepresentativeIds(new Set());
+                                      setRepresentativeSearchTerm('');
+                                      setShowInviteRepresentativeModal(true);
+                                    }}
+                                  >
+                                    <UserPlus className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {exam.has_admission_form 
+                                    ? 'Invite representative' 
+                                    : 'Create admission form first'}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Badge className={exam.active ? 'bg-success text-success-foreground' : 'bg-muted text-muted-foreground'}>
                             {exam.active ? 'ACTIVE' : 'INACTIVE'}
@@ -913,6 +1070,97 @@ export function RoleAwareExamManagement({
             <Button onClick={handleInviteStudents} className="bg-primary hover:bg-primary/90">
               <Mail className="h-4 w-4 mr-2" />
               Send Invitations
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite Representatives Modal */}
+      <Dialog open={showInviteRepresentativeModal} onOpenChange={setShowInviteRepresentativeModal}>
+        <DialogContent className="sm:max-w-[500px] max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Invite Representatives</DialogTitle>
+            <DialogDescription>
+              Select representatives to invite
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
+            {/* Search */}
+            <div className="space-y-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or email..."
+                  value={representativeSearchTerm}
+                  onChange={(e) => setRepresentativeSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            {/* Representatives List */}
+            <div className="flex-1 overflow-y-auto border rounded-md">
+              {loadingRepresentatives ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : filteredRepresentatives.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                  <Users className="h-12 w-12 mb-4 opacity-50" />
+                  <p className="text-sm">
+                    {representativeSearchTerm ? 'No representatives found' : 'No representatives available'}
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {filteredRepresentatives.map((representative) => (
+                    <div
+                      key={representative.id}
+                      className="flex items-center gap-4 px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => toggleRepresentativeSelection(representative.id)}
+                    >
+                      <Checkbox
+                        checked={selectedRepresentativeIds.has(representative.id)}
+                        onCheckedChange={() => toggleRepresentativeSelection(representative.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex-shrink-0"
+                      />
+                      <div className="flex-1 flex items-center justify-between gap-4 min-w-0">
+                        <p className="font-medium text-sm text-foreground truncate">
+                          {representative.name || 'No Name'}
+                        </p>
+                        <p className="text-sm text-muted-foreground truncate flex-shrink-0">
+                          {representative.email}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowInviteRepresentativeModal(false);
+                setSelectedRepresentativeIds(new Set());
+                setSelectedExamForInvite(null);
+                setRepresentativeSearchTerm('');
+              }}
+              disabled={invitingRepresentatives}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleInviteRepresentatives} 
+              className="bg-primary hover:bg-primary/90"
+              disabled={invitingRepresentatives || selectedRepresentativeIds.size === 0}
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              {invitingRepresentatives 
+                ? 'Sending...' 
+                : `Invite ${selectedRepresentativeIds.size > 0 ? `(${selectedRepresentativeIds.size})` : ''}`}
             </Button>
           </DialogFooter>
         </DialogContent>
