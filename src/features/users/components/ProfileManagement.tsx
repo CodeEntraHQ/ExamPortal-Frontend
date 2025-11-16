@@ -25,9 +25,6 @@ import {
   Save,
   Upload,
   Activity,
-  Award,
-  Clock,
-  TrendingUp,
   AlertCircle,
   Eye,
   EyeOff
@@ -232,26 +229,6 @@ export function ProfileManagement() {
     }
   };
 
-  const getStatsData = () => {
-    if (user?.role === 'STUDENT') {
-      return [
-        { label: 'Exams Taken', value: '24', icon: Activity, trend: '+3 this month' },
-        { label: 'Average Score', value: '87%', icon: TrendingUp, trend: '+5% improvement' },
-        { label: 'Certificates', value: '8', icon: Award, trend: '2 pending' },
-        { label: 'Study Hours', value: '156h', icon: Clock, trend: 'This semester' },
-      ];
-    } else {
-      return [
-        { label: 'Exams Created', value: '45', icon: Activity, trend: '+8 this month' },
-        { label: 'Students Managed', value: '340', icon: User, trend: 'Across 12 courses' },
-        { label: 'Success Rate', value: '94%', icon: TrendingUp, trend: 'Above average' },
-        { label: 'Active Hours', value: '89h', icon: Clock, trend: 'This month' },
-      ];
-    }
-  };
-
-  const statsData = getStatsData();
-
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -272,33 +249,6 @@ export function ProfileManagement() {
         >
           {isEditing ? 'Cancel' : 'Edit Profile'}
         </Button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statsData.map((stat, index) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-          >
-            <Card className="hover:shadow-lg transition-all duration-300 border-border/50">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground">{stat.label}</p>
-                    <p className="text-2xl font-bold text-foreground">{stat.value}</p>
-                    <p className="text-xs text-primary mt-1">{stat.trend}</p>
-                  </div>
-                  <div className="p-3 rounded-full bg-primary/10">
-                    <stat.icon className="h-6 w-6 text-primary" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
       </div>
 
       {/* Main Profile Content */}
