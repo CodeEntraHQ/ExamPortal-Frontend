@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
-import { admissionFormApi, AdmissionFormSubmissionListItem } from '../../../services/api/admissionForm';
+import { admissionFormApi, AdmissionFormSubmissionListItem, GetAdmissionFormSubmissionsParams } from '../../../services/api/admissionForm';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '../../../shared/components/ui/dialog';
 
 interface SubmissionsManagementProps {
@@ -67,16 +67,32 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
   // Check if user is admin or super admin
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
 
+  const requiresEntityFilter = user?.role === 'SUPERADMIN';
+
+  const buildQueryParams = useCallback((status: 'PENDING' | 'APPROVED' | 'REJECTED', page: number) => {
+    const params: GetAdmissionFormSubmissionsParams = {
+      page,
+      limit,
+      status,
+    };
+
+    if (requiresEntityFilter) {
+      params.entity_id = currentEntity;
+    }
+
+    return params;
+  }, [currentEntity, requiresEntityFilter]);
+
   const fetchPendingSubmissions = useCallback(async () => {
+    if (requiresEntityFilter && !currentEntity) {
+      return;
+    }
     setPendingLoading(true);
     setError(null);
     try {
-      const response = await admissionFormApi.getAdmissionFormSubmissions({
-        entity_id: currentEntity,
-        page: pendingPage,
-        limit,
-        status: 'PENDING',
-      });
+      const response = await admissionFormApi.getAdmissionFormSubmissions(
+        buildQueryParams('PENDING', pendingPage)
+      );
       
       setPendingSubmissions(response.payload.submissions);
       setPendingTotal(response.payload.total);
@@ -88,17 +104,17 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
     } finally {
       setPendingLoading(false);
     }
-  }, [currentEntity, pendingPage, showError]);
+  }, [buildQueryParams, currentEntity, pendingPage, requiresEntityFilter, showError]);
 
   const fetchApprovedSubmissions = useCallback(async () => {
+    if (requiresEntityFilter && !currentEntity) {
+      return;
+    }
     setApprovedLoading(true);
     try {
-      const response = await admissionFormApi.getAdmissionFormSubmissions({
-        entity_id: currentEntity,
-        page: approvedPage,
-        limit,
-        status: 'APPROVED',
-      });
+      const response = await admissionFormApi.getAdmissionFormSubmissions(
+        buildQueryParams('APPROVED', approvedPage)
+      );
       
       setApprovedSubmissions(response.payload.submissions);
       setApprovedTotal(response.payload.total);
@@ -108,17 +124,17 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
     } finally {
       setApprovedLoading(false);
     }
-  }, [currentEntity, approvedPage]);
+  }, [approvedPage, buildQueryParams, currentEntity, requiresEntityFilter]);
 
   const fetchRejectedSubmissions = useCallback(async () => {
+    if (requiresEntityFilter && !currentEntity) {
+      return;
+    }
     setRejectedLoading(true);
     try {
-      const response = await admissionFormApi.getAdmissionFormSubmissions({
-        entity_id: currentEntity,
-        page: rejectedPage,
-        limit,
-        status: 'REJECTED',
-      });
+      const response = await admissionFormApi.getAdmissionFormSubmissions(
+        buildQueryParams('REJECTED', rejectedPage)
+      );
       
       setRejectedSubmissions(response.payload.submissions);
       setRejectedTotal(response.payload.total);
@@ -128,7 +144,7 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
     } finally {
       setRejectedLoading(false);
     }
-  }, [currentEntity, rejectedPage]);
+  }, [buildQueryParams, currentEntity, rejectedPage, requiresEntityFilter]);
 
   // Fetch data when tab changes or pagination changes
   useEffect(() => {

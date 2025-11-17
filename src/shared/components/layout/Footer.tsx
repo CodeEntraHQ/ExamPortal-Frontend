@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GraduationCap, Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 
 export function Footer() {
+  const [contactOpen, setContactOpen] = useState(false);
   const currentYear = new Date().getFullYear();
 
   const socialLinks = [
@@ -20,7 +22,14 @@ export function Footer() {
           </div>
           <span>© {currentYear} CodeEntra. All rights reserved.</span>
         </div>
-        <div className="flex w-full items-center justify-end gap-3 text-sm text-muted-foreground md:w-auto">
+        <div className="flex w-full flex-wrap items-center justify-end gap-3 text-sm text-muted-foreground md:w-auto">
+          <button
+            type="button"
+            onClick={() => setContactOpen(true)}
+            className="rounded-full border border-primary/40 px-3 py-2 text-primary transition hover:bg-primary/10"
+          >
+            Contact Us
+          </button>
           <span className="whitespace-nowrap">Connect with us</span>
           {socialLinks.map((social) => (
             <a
@@ -34,8 +43,53 @@ export function Footer() {
               <social.icon className="h-4 w-4" />
             </a>
           ))}
+          <a
+            href="https://codeentra.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Visit CodeEntra main site"
+            className="inline-flex items-center gap-2 rounded-full border border-primary/40 px-3 py-2 text-primary transition hover:bg-primary/10"
+          >
+            <GraduationCap className="h-4 w-4" />
+            <span className="sr-only">Visit CodeEntra main site</span>
+          </a>
         </div>
       </div>
+      <Dialog open={contactOpen} onOpenChange={setContactOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Contact Us</DialogTitle>
+            <DialogDescription>
+              CodeEntra (ExamEntra Product Division)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div>
+              <p className="font-medium text-foreground">Email</p>
+              <a href="mailto:codeentrasocial18@gmail.com" className="text-primary hover:underline">
+                codeentrasocial18@gmail.com
+              </a>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">Phone</p>
+              <a href="tel:+919608758841" className="text-primary hover:underline">
+                +91-9608758841
+              </a>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">Website</p>
+              <a href="https://www.codeentra.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                https://www.codeentra.com
+              </a>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">Head Office</p>
+              <p className="text-muted-foreground">CodeEntra Unlocking Solutions Pvt. Ltd.</p>
+              <p className="text-muted-foreground">Patna | Bengaluru</p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </footer>
   );
 }

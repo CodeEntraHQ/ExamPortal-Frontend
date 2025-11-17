@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../shared/components/ui/card';
 import { Button } from '../../../shared/components/ui/button';
 import { Badge } from '../../../shared/components/ui/badge';
@@ -109,6 +109,20 @@ export function ExamDetailPage({
   const [enrollmentsLoading, setEnrollmentsLoading] = useState<boolean>(false);
   const [enrollmentsError, setEnrollmentsError] = useState<string | null>(null);
   const [deEnrollInFlight, setDeEnrollInFlight] = useState<string | null>(null);
+
+  const { students: studentEnrollments, representatives: representativeEnrollments } = useMemo(() => {
+    return enrolledStudents.reduce(
+      (acc, enrollment) => {
+        if (enrollment.status === 'ASSIGNED') {
+          acc.representatives.push(enrollment);
+        } else {
+          acc.students.push(enrollment);
+        }
+        return acc;
+      },
+      { students: [] as ExamEnrollment[], representatives: [] as ExamEnrollment[] }
+    );
+  }, [enrolledStudents]);
 
   // Role-based access control
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
@@ -854,6 +868,7 @@ export function ExamDetailPage({
             </div>
 
             {canManageQuestions && (
+              <>
               <Card>
                 <CardHeader>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between w-full">
@@ -905,7 +920,7 @@ export function ExamDetailPage({
                     <Alert variant="destructive">
                       <AlertDescription>{enrollmentsError}</AlertDescription>
                     </Alert>
-                  ) : enrolledStudents.length === 0 ? (
+                  ) : studentEnrollments.length === 0 ? (
                     <div className="text-center py-10 text-muted-foreground">
                       <Users className="h-10 w-10 mx-auto mb-3 opacity-50" />
                       <p>No students are enrolled yet.</p>
@@ -922,7 +937,7 @@ export function ExamDetailPage({
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {enrolledStudents.map((student) => (
+                        {studentEnrollments.map((student) => (
                           <TableRow key={student.id}>
                             <TableCell>
                               <div className="space-y-1">
@@ -972,6 +987,130 @@ export function ExamDetailPage({
                   )}
                 </CardContent>
               </Card>
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between w-full">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        Assigned Representatives
+                      </CardTitle>
+                      <CardDescription className="whitespace-nowrap">
+                        Representatives assigned to this exam to manage admission forms.
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-2 justify-end w-full lg:w-auto">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={fetchExamEnrollments}
+                        disabled={enrollmentsLoading}
+                      >
+                        {enrollmentsLoading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Refreshing...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCcw className="h-4 w-4 mr-2" />
+                            Refresh
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!hasAdmissionForm}
+                        onClick={() => {
+                          setSelectedRepresentativeIds(new Set());
+                          setRepresentativeSearchTerm('');
+                          setShowInviteRepresentativeModal(true);
+                        }}
+                      >
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        Invite Representative
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {enrollmentsLoading ? (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    </div>
+                  ) : enrollmentsError ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>{enrollmentsError}</AlertDescription>
+                    </Alert>
+                  ) : representativeEnrollments.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <Users className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                      <p>No representatives are assigned yet.</p>
+                      <p className="text-sm">Invite representatives to see them listed here.</p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Representative</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Assigned</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {representativeEnrollments.map((representative) => (
+                          <TableRow key={representative.id}>
+                            <TableCell>
+                              <div className="space-y-1">
+                                <p className="font-medium text-foreground">
+                                  {representative.name || 'Unknown Representative'}
+                                </p>
+                                <p className="text-sm text-muted-foreground">
+                                  {representative.email || 'No email'}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="capitalize">
+                                {representative.status.toLowerCase()}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {representative.enrolled_at
+                                ? new Date(representative.enrolled_at).toLocaleString()
+                                : '—'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeEnrollStudent(representative.id)}
+                                disabled={deEnrollInFlight === representative.id}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                {deEnrollInFlight === representative.id ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                    Removing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserMinus className="h-4 w-4 mr-1" />
+                                    Remove
+                                  </>
+                                )}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+              </>
             )}
           </TabsContent>
 

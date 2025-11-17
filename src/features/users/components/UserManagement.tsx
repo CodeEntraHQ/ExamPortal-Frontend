@@ -1049,6 +1049,7 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
   });
   const [loading, setLoading] = useState(false);
   const { success, error: showError } = useNotifications();
+  const isStudent = formData.role === 'STUDENT';
 
   // Filter entities based on user role
   const availableEntities = currentUser?.role === 'SUPERADMIN' 
@@ -1088,6 +1089,11 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
       return;
     }
 
+    if (isStudent && !formData.roll_number.trim()) {
+      showError('Roll number is required for student users');
+      return;
+    }
+
     setLoading(true);
     try {
       const payload: any = {
@@ -1113,7 +1119,7 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
       if (formData.address) payload.address = formData.address;
       if (formData.bio) payload.bio = formData.bio;
       if (formData.gender) payload.gender = formData.gender;
-      if (formData.roll_number) payload.roll_number = formData.roll_number;
+      if (formData.roll_number) payload.roll_number = formData.roll_number.trim();
 
       await createUser(payload);
       success('User created successfully.');
@@ -1225,15 +1231,17 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
           </div>
         </div>
 
-        {formData.role === 'STUDENT' && (
+        {isStudent && (
           <div className="space-y-2">
-            <Label htmlFor="roll_number">Roll Number</Label>
+            <Label htmlFor="roll_number">Roll Number *</Label>
             <Input
               id="roll_number"
               value={formData.roll_number}
               onChange={(e) => setFormData({ ...formData, roll_number: e.target.value })}
               placeholder="Enter roll number"
+              required={isStudent}
             />
+            <p className="text-xs text-muted-foreground">Required for student accounts</p>
           </div>
         )}
 
@@ -1264,7 +1272,13 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
         <Label htmlFor="role">Role *</Label>
         <Select 
           value={formData.role} 
-          onValueChange={(value) => setFormData({ ...formData, role: value as 'ADMIN' | 'STUDENT' })}
+          onValueChange={(value) => 
+            setFormData((prev) => ({
+              ...prev,
+              role: value as 'ADMIN' | 'STUDENT',
+              roll_number: value === 'STUDENT' ? prev.roll_number : '',
+            }))
+          }
         >
           <SelectTrigger>
             <SelectValue placeholder="Select role" />
