@@ -124,6 +124,8 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   const [warningMessage, setWarningMessage] = useState('');
   const [proctoringActive, setProctoringActive] = useState(false);
   const [twoFactorEnabled] = useState(true); // Mock - in real app this would come from user profile
+  const [showFullscreenExitWarning, setShowFullscreenExitWarning] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const fetchAllExamQuestions = async (examId: string) => {
@@ -314,6 +316,29 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     }
   };
 
+  const enterFullscreen = async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        // Safari support
+        await (document.documentElement as any).webkitRequestFullscreen();
+        setIsFullscreen(true);
+      } else if ((document.documentElement as any).mozRequestFullScreen) {
+        // Firefox support
+        await (document.documentElement as any).mozRequestFullScreen();
+        setIsFullscreen(true);
+      } else if ((document.documentElement as any).msRequestFullscreen) {
+        // IE/Edge support
+        await (document.documentElement as any).msRequestFullscreen();
+        setIsFullscreen(true);
+      }
+    } catch (error) {
+      console.error('Error entering fullscreen:', error);
+    }
+  };
+
   const calculateScore = () => {
     if (!examConfig) return 0;
     
@@ -356,6 +381,16 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     return maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
   };
 
+  const handleFullscreenGoBack = async () => {
+    setShowFullscreenExitWarning(false);
+    await enterFullscreen();
+  };
+
+  const handleFullscreenExit = async () => {
+    setShowFullscreenExitWarning(false);
+    await handleSubmitExam();
+  };
+
   const handleSubmitExam = async () => {
     if (!examConfig) return;
     
@@ -385,6 +420,53 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       setShowWarning(true);
     }
   };
+
+  // Enter fullscreen when exam becomes active
+  useEffect(() => {
+    if (examState.phase === 'active' && !isFullscreen) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        enterFullscreen();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [examState.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fullscreen change listener - only active during exam
+  useEffect(() => {
+    if (examState.phase !== 'active') return;
+
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+
+      // Check if we were in fullscreen and now we're not
+      const wasFullscreen = isFullscreen;
+      setIsFullscreen(isCurrentlyFullscreen);
+
+      if (!isCurrentlyFullscreen && wasFullscreen) {
+        // User exited fullscreen - show warning
+        setShowFullscreenExitWarning(true);
+      }
+    };
+
+    // Listen for fullscreen changes
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, [examState.phase, isFullscreen]);
 
   // Timer effect - only active during exam, calculates remaining time from started_at
   useEffect(() => {
@@ -495,12 +577,8 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       timeRemaining: initialRemainingTime
     }));
 
-    // Enable proctoring features
-    if (examConfig.proctoring.screenLockRequired) {
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen();
-      }
-    }
+    // Always enter fullscreen mode when exam starts
+    enterFullscreen();
 
     if (examConfig.proctoring.tabSwitchDetection) {
       document.addEventListener('visibilitychange', handleTabSwitch);
@@ -658,22 +736,60 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   }
 
   if (examState.phase === 'active') {
-    return <ActiveExamPhase 
-      examConfig={examConfig}
-      examState={examState}
-      onAnswerChange={handleAnswerChange}
-      onFlagQuestion={handleFlagQuestion}
-      onNavigateToQuestion={navigateToQuestion}
-      onSubmitExam={handleSubmitExam}
-      formatTime={formatTime}
-      showCalculator={showCalculator}
-      setShowCalculator={setShowCalculator}
-      showWarning={showWarning}
-      setShowWarning={setShowWarning}
-      warningMessage={warningMessage}
-      proctoringActive={proctoringActive}
-      videoRef={videoRef}
-    />;
+    return (
+      <>
+        <ActiveExamPhase 
+          examConfig={examConfig}
+          examState={examState}
+          onAnswerChange={handleAnswerChange}
+          onFlagQuestion={handleFlagQuestion}
+          onNavigateToQuestion={navigateToQuestion}
+          onSubmitExam={handleSubmitExam}
+          formatTime={formatTime}
+          showCalculator={showCalculator}
+          setShowCalculator={setShowCalculator}
+          showWarning={showWarning}
+          setShowWarning={setShowWarning}
+          warningMessage={warningMessage}
+          proctoringActive={proctoringActive}
+          videoRef={videoRef}
+        />
+        {/* Fullscreen Exit Warning Dialog */}
+        <Dialog open={showFullscreenExitWarning} onOpenChange={() => {}}>
+          <DialogContent className="sm:max-w-md" onEscapeKeyDown={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+                Fullscreen Mode Required
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-muted-foreground">
+                You have exited fullscreen mode. The exam requires fullscreen mode to be active at all times.
+              </p>
+              <p className="text-sm font-medium">
+                Please choose an option:
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button 
+                  onClick={handleFullscreenGoBack}
+                  className="w-full"
+                >
+                  Go Back to Fullscreen
+                </Button>
+                <Button 
+                  onClick={handleFullscreenExit}
+                  variant="destructive"
+                  className="w-full"
+                >
+                  Exit and Submit Exam
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
   }
 
   if (examState.phase === 'submitted') {

@@ -78,8 +78,8 @@ export function Footer() {
             </div>
             <div>
               <p className="font-medium text-foreground">Website</p>
-              <a href="https://www.codeentra.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                https://www.codeentra.com
+              <a href="https://codeentra.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                https://codeentra.com
               </a>
             </div>
             <div>
