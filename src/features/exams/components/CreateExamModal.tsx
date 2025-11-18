@@ -21,6 +21,7 @@ import {
 import { Textarea } from '../../../shared/components/ui/textarea';
 import { Switch } from '../../../shared/components/ui/switch';
 import { examApi, CreateExamPayload } from '../../../services/api/exam';
+import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import '../../../styles/scrollbar.css';
 
 interface CreateExamModalProps {
@@ -57,6 +58,7 @@ type ExamFormData = {
 };
 
 export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateExamModalProps) => {
+  const { user } = useAuth();
   const availableMetadataFields: (MetadataFieldDefinition & { description: string })[] = [
     { 
       key: 'totalMarks', 
@@ -174,7 +176,9 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
         .filter(inst => inst.length > 0);
       
       const submissionData: CreateExamPayload = {
-        ...formData,
+        title: formData.title,
+        type: formData.type,
+        duration_seconds: formData.duration_seconds,
         metadata: {
           totalMarks: formData.metadata.totalMarks ?? 100,
           passingMarks: formData.metadata.passingMarks ?? 40,
@@ -183,7 +187,11 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
           ...(formData.type === 'QUIZ' && formData.metadata.isMultipleCorrect !== undefined
             ? { isMultipleCorrect: formData.metadata.isMultipleCorrect }
             : {}),
-        }
+        },
+        // Only include entity_id for SUPERADMIN users with a valid non-empty string
+        ...(user?.role === 'SUPERADMIN' && formData.entity_id && formData.entity_id.trim().length > 0
+          ? { entity_id: formData.entity_id.trim() }
+          : {}),
       };
       await examApi.createExam(submissionData);
       setFormData(initialFormState);
