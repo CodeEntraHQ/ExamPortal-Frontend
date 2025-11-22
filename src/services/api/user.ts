@@ -221,3 +221,30 @@ export async function changePassword(currentPassword: string, newPassword: strin
   await response.json();
 }
 
+export interface RecentLogin {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  entity_name: string;
+  last_login_at: string;
+  profile_picture_link?: string;
+}
+
+export interface GetRecentLoginsResponse {
+  payload: {
+    recentLogins: RecentLogin[];
+  };
+}
+
+/**
+ * Get recent logins
+ */
+export async function getRecentLogins(): Promise<GetRecentLoginsResponse> {
+  const response = await authenticatedFetch(getApiUrl('/v1/users/recent-logins'), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+

@@ -105,6 +105,21 @@ export function ExamDetailPage({
   // Leaderboard state
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [leaderboardLoading, setLeaderboardLoading] = useState<boolean>(false);
+  
+  // State for score distribution
+  const [scoreDistribution, setScoreDistribution] = useState<Array<{
+    range: string;
+    count: number;
+    percentage: number;
+    color?: string;
+  }>>([
+    { range: '90-100', count: 0, percentage: 0, color: 'hsl(var(--success))' },
+    { range: '80-89', count: 0, percentage: 0, color: 'hsl(var(--primary))' },
+    { range: '70-79', count: 0, percentage: 0, color: 'hsl(var(--chart-3))' },
+    { range: '60-69', count: 0, percentage: 0, color: 'hsl(var(--chart-4))' },
+    { range: '<60', count: 0, percentage: 0, color: 'hsl(var(--destructive))' }
+  ]);
+  const [scoreDistributionLoading, setScoreDistributionLoading] = useState<boolean>(false);
   const [enrolledStudents, setEnrolledStudents] = useState<ExamEnrollment[]>([]);
   const [enrollmentsLoading, setEnrollmentsLoading] = useState<boolean>(false);
   const [enrollmentsError, setEnrollmentsError] = useState<string | null>(null);
@@ -123,6 +138,23 @@ export function ExamDetailPage({
       { students: [] as ExamEnrollment[], representatives: [] as ExamEnrollment[] }
     );
   }, [enrolledStudents]);
+
+  // Calculate participation status from enrollment data
+  const participationStatus = useMemo(() => {
+    const completed = studentEnrollments.filter(s => s.status === 'COMPLETED').length;
+    const inProgress = studentEnrollments.filter(s => s.status === 'ONGOING').length;
+    const pending = studentEnrollments.filter(s => s.status === 'UPCOMING').length;
+    const total = studentEnrollments.length;
+    const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    return {
+      completed,
+      inProgress,
+      pending,
+      total,
+      completionRate
+    };
+  }, [studentEnrollments]);
 
   // Role-based access control
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
@@ -314,6 +346,39 @@ export function ExamDetailPage({
     fetchLeaderboard();
   }, [examId, canManageQuestions]);
 
+  // Fetch score distribution from backend
+  useEffect(() => {
+    const fetchScoreDistribution = async () => {
+      if (!canManageQuestions || !effectiveExamId) return;
+      
+      try {
+        setScoreDistributionLoading(true);
+        const response = await examApi.getExamScoreDistribution(effectiveExamId);
+        if (response.payload?.distribution) {
+          // Map backend data to include colors for chart
+          const colors = [
+            'hsl(var(--success))',
+            'hsl(var(--primary))',
+            'hsl(var(--chart-3))',
+            'hsl(var(--chart-4))',
+            'hsl(var(--destructive))'
+          ];
+          const distributionWithColors = response.payload.distribution.map((item, index) => ({
+            ...item,
+            color: colors[index] || 'hsl(var(--primary))'
+          }));
+          setScoreDistribution(distributionWithColors);
+        }
+      } catch (err) {
+        console.error('Error fetching score distribution:', err);
+      } finally {
+        setScoreDistributionLoading(false);
+      }
+    };
+
+    fetchScoreDistribution();
+  }, [effectiveExamId, canManageQuestions]);
+
   // Helper function to format duration from seconds to minutes
   const formatDurationFromSeconds = (seconds?: number): number => {
     if (!seconds) return 0;
@@ -405,13 +470,14 @@ export function ExamDetailPage({
     }
   ];
 
-  const scoreDistribution = [
-    { range: '90-100', count: 45, color: 'hsl(var(--success))' },
-    { range: '80-89', count: 67, color: 'hsl(var(--primary))' },
-    { range: '70-79', count: 52, color: 'hsl(var(--chart-3))' },
-    { range: '60-69', count: 18, color: 'hsl(var(--chart-4))' },
-    { range: '0-59', count: 7, color: 'hsl(var(--destructive))' }
-  ];
+  // Commented out - using backend data now
+  // const scoreDistribution = [
+  //   { range: '90-100', count: 45, color: 'hsl(var(--success))' },
+  //   { range: '80-89', count: 67, color: 'hsl(var(--primary))' },
+  //   { range: '70-79', count: 52, color: 'hsl(var(--chart-3))' },
+  //   { range: '60-69', count: 18, color: 'hsl(var(--chart-4))' },
+  //   { range: '<60', count: 12, color: 'hsl(var(--destructive))' }
+  // ];
 
   const timelineData = [
     { time: '09:00', attempts: 5 },
@@ -799,11 +865,11 @@ export function ExamDetailPage({
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-muted-foreground">Completed</span>
                     <span className="text-sm font-medium">
-                      {statisticsLoading ? '...' : `${statistics.totalAttempts}/${statistics.totalStudentsInvited}`}
+                      {enrollmentsLoading ? '...' : `${participationStatus.completed}/${participationStatus.total}`}
                     </span>
                   </div>
                   <Progress 
-                    value={statisticsLoading ? 0 : statistics.completionRate} 
+                    value={enrollmentsLoading ? 0 : participationStatus.completionRate} 
                     className="h-2"
                   />
                   <div className="grid grid-cols-3 gap-4 text-center">
@@ -811,7 +877,7 @@ export function ExamDetailPage({
                       <div className="flex items-center justify-center gap-1">
                         <CheckCircle className="h-4 w-4 text-success" />
                         <span className="text-sm font-medium">
-                          {statisticsLoading ? '...' : statistics.totalAttempts}
+                          {enrollmentsLoading ? '...' : participationStatus.completed}
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground">Completed</p>
@@ -819,7 +885,9 @@ export function ExamDetailPage({
                     <div className="space-y-1">
                       <div className="flex items-center justify-center gap-1">
                         <Play className="h-4 w-4 text-primary" />
-                        <span className="text-sm font-medium">{examDetails.activeAttempts}</span>
+                        <span className="text-sm font-medium">
+                          {enrollmentsLoading ? '...' : participationStatus.inProgress}
+                        </span>
                       </div>
                       <p className="text-xs text-muted-foreground">In Progress</p>
                     </div>
@@ -827,7 +895,7 @@ export function ExamDetailPage({
                       <div className="flex items-center justify-center gap-1">
                         <AlertCircle className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium">
-                          {statisticsLoading ? '...' : statistics.totalStudentsInvited - statistics.totalAttempts - examDetails.activeAttempts}
+                          {enrollmentsLoading ? '...' : participationStatus.pending}
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground">Pending</p>
@@ -1198,15 +1266,26 @@ export function ExamDetailPage({
                   <CardDescription>Breakdown of student performance</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={scoreDistribution}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="range" />
-                      <YAxis />
-                      <RechartsTooltip />
-                      <Bar dataKey="count" fill="hsl(var(--primary))" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {scoreDistributionLoading ? (
+                    <div className="text-center py-8 text-muted-foreground">Loading score distribution...</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={scoreDistribution} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="range" />
+                        <YAxis 
+                          label={{ value: 'Percentage (%)', angle: -90, position: 'insideLeft' }}
+                        />
+                        <RechartsTooltip 
+                          formatter={(value: number, name: string, props: any) => [
+                            `${value}% (${props.payload.count} students)`,
+                            'Percentage'
+                          ]}
+                        />
+                        <Bar dataKey="percentage" fill="hsl(var(--primary))" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
                 </CardContent>
               </Card>
 
