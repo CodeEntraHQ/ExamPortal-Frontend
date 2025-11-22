@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../shared/components/ui/card';
 import { Badge } from '../../../shared/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../shared/components/ui/tabs';
@@ -7,6 +7,8 @@ import { Button } from '../../../shared/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../shared/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from '../../../shared/components/ui/dialog';
+import { useAuth } from '../../../features/auth/providers/AuthProvider';
+import { examApi } from '../../../services/api/exam';
 import { 
   BarChart, 
   Bar, 
@@ -63,12 +65,127 @@ interface AnalyticsDashboardProps {
 }
 
 export function AnalyticsDashboard({ currentEntity }: AnalyticsDashboardProps) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [dateRange, setDateRange] = useState('last30days');
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [showInsightsModal, setShowInsightsModal] = useState(false);
   const [insights, setInsights] = useState<any>(null);
   const { success } = useNotifications();
+  
+  // State for backend statistics
+  const [statistics, setStatistics] = useState({
+    activeExams: 0,
+    totalStudentsInvited: 0,
+    averageCompletion: 0,
+  });
+  const [statisticsLoading, setStatisticsLoading] = useState(false);
+  
+  // State for score distribution
+  const [scoreDistribution, setScoreDistribution] = useState([
+    { name: 'Excellent (90-100)', value: 0, percentage: 0, color: '#10B981' },
+    { name: 'Good (80-89)', value: 0, percentage: 0, color: '#059669' },
+    { name: 'Average (70-79)', value: 0, percentage: 0, color: '#F59E0B' },
+    { name: 'Below Average (60-69)', value: 0, percentage: 0, color: '#EF4444' },
+    { name: 'Poor (<60)', value: 0, percentage: 0, color: '#DC2626' }
+  ]);
+  const [scoreDistributionLoading, setScoreDistributionLoading] = useState(false);
+  
+  // State for exam performance
+  const [examPerformance, setExamPerformance] = useState<Array<{
+    examName: string;
+    avgScore: number;
+    exams: number;
+    students: number;
+  }>>([]);
+  const [examPerformanceLoading, setExamPerformanceLoading] = useState(false);
+  
+  // Fetch statistics from backend
+  useEffect(() => {
+    const fetchStatistics = async () => {
+      // Only fetch statistics for ADMIN and SUPERADMIN
+      if (user?.role !== 'ADMIN' && user?.role !== 'SUPERADMIN') {
+        return;
+      }
+
+      try {
+        setStatisticsLoading(true);
+        const response = await examApi.getExamStatistics(
+          user?.role === 'SUPERADMIN' ? currentEntity : undefined
+        );
+        setStatistics({
+          activeExams: response.payload.activeExams,
+          totalStudentsInvited: response.payload.totalStudentsInvited,
+          averageCompletion: response.payload.averageCompletion,
+        });
+      } catch (err) {
+        console.error('Error fetching statistics:', err);
+        // Don't show error to user, just use default values
+      } finally {
+        setStatisticsLoading(false);
+      }
+    };
+
+    fetchStatistics();
+  }, [currentEntity, user?.role]);
+
+  // Fetch score distribution from backend
+  useEffect(() => {
+    const fetchScoreDistribution = async () => {
+      // Only fetch for ADMIN and SUPERADMIN
+      if (user?.role !== 'ADMIN' && user?.role !== 'SUPERADMIN') {
+        return;
+      }
+
+      try {
+        setScoreDistributionLoading(true);
+        const response = await examApi.getScoreDistribution(
+          user?.role === 'SUPERADMIN' ? currentEntity : undefined
+        );
+        if (response.payload?.distribution) {
+          // Map backend data to include colors for chart
+          const colors = ['#10B981', '#059669', '#F59E0B', '#EF4444', '#DC2626'];
+          const distributionWithColors = response.payload.distribution.map((item, index) => ({
+            ...item,
+            color: colors[index] || '#10B981'
+          }));
+          setScoreDistribution(distributionWithColors);
+        }
+      } catch (error) {
+        console.error('Error fetching score distribution:', error);
+      } finally {
+        setScoreDistributionLoading(false);
+      }
+    };
+
+    fetchScoreDistribution();
+  }, [currentEntity, user?.role]);
+
+  // Fetch exam performance from backend
+  useEffect(() => {
+    const fetchExamPerformance = async () => {
+      // Only fetch for ADMIN and SUPERADMIN
+      if (user?.role !== 'ADMIN' && user?.role !== 'SUPERADMIN') {
+        return;
+      }
+
+      try {
+        setExamPerformanceLoading(true);
+        const response = await examApi.getExamPerformance(
+          user?.role === 'SUPERADMIN' ? currentEntity : undefined
+        );
+        if (response.payload?.performance) {
+          setExamPerformance(response.payload.performance);
+        }
+      } catch (error) {
+        console.error('Error fetching exam performance:', error);
+      } finally {
+        setExamPerformanceLoading(false);
+      }
+    };
+
+    fetchExamPerformance();
+  }, [currentEntity, user?.role]);
 
   // Mock data for analytics
   const performanceData = [
@@ -80,22 +197,24 @@ export function AnalyticsDashboard({ currentEntity }: AnalyticsDashboardProps) {
     { month: 'Jun', exams: 20, students: 450, avgScore: 84, passRate: 89 }
   ];
 
-  const scoreDistribution = [
-    { name: 'Excellent (90-100)', value: 25, color: '#10B981' },
-    { name: 'Good (80-89)', value: 35, color: '#059669' },
-    { name: 'Average (70-79)', value: 25, color: '#F59E0B' },
-    { name: 'Below Average (60-69)', value: 10, color: '#EF4444' },
-    { name: 'Poor (<60)', value: 5, color: '#DC2626' }
-  ];
+  // Commented out - using backend data now
+  // const scoreDistribution = [
+  //   { name: 'Excellent (90-100)', value: 25, color: '#10B981' },
+  //   { name: 'Good (80-89)', value: 35, color: '#059669' },
+  //   { name: 'Average (70-79)', value: 25, color: '#F59E0B' },
+  //   { name: 'Below Average (60-69)', value: 10, color: '#EF4444' },
+  //   { name: 'Poor (<60)', value: 5, color: '#DC2626' }
+  // ];
 
-  const categoryPerformance = [
-    { subject: 'Mathematics', avgScore: 85, exams: 15, students: 234 },
-    { subject: 'Programming', avgScore: 82, exams: 18, students: 312 },
-    { subject: 'Database', avgScore: 78, exams: 12, students: 189 },
-    { subject: 'Web Dev', avgScore: 88, exams: 14, students: 267 },
-    { subject: 'Algorithms', avgScore: 76, exams: 10, students: 156 },
-    { subject: 'Networks', avgScore: 81, exams: 8, students: 134 }
-  ];
+  // Commented out - using backend data now (exam-wise performance)
+  // const categoryPerformance = [
+  //   { subject: 'Mathematics', avgScore: 85, exams: 15, students: 234 },
+  //   { subject: 'Programming', avgScore: 82, exams: 18, students: 312 },
+  //   { subject: 'Database', avgScore: 78, exams: 12, students: 189 },
+  //   { subject: 'Web Dev', avgScore: 88, exams: 14, students: 267 },
+  //   { subject: 'Algorithms', avgScore: 76, exams: 10, students: 156 },
+  //   { subject: 'Networks', avgScore: 81, exams: 8, students: 134 }
+  // ];
 
   const examCompletionTrend = [
     { date: '2024-02-01', completed: 45, started: 52, enrolled: 60 },
@@ -120,39 +239,41 @@ export function AnalyticsDashboard({ currentEntity }: AnalyticsDashboardProps) {
     { timeRange: '120+ min', count: 15, percentage: 5 }
   ];
 
+  // Real-time stats from backend
   const realtimeStats = [
     {
       title: 'Active Exams',
-      value: '23',
-      change: '+3',
-      changeType: 'positive',
+      value: statisticsLoading ? '...' : statistics.activeExams.toString(),
+      change: '+3', // Keep mock change for now
+      changeType: 'positive' as const,
       icon: BookOpen,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100 dark:bg-blue-900/30'
     },
     {
       title: 'Students Online',
-      value: '156',
-      change: '+12',
-      changeType: 'positive',
+      value: statisticsLoading ? '...' : statistics.totalStudentsInvited.toString(),
+      change: '+12', // Keep mock change for now
+      changeType: 'positive' as const,
       icon: Users,
       color: 'text-green-600',
       bgColor: 'bg-green-100 dark:bg-green-900/30'
     },
-    {
-      title: 'Avg. Score Today',
-      value: '84.2%',
-      change: '+2.1%',
-      changeType: 'positive',
-      icon: Target,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100 dark:bg-purple-900/30'
-    },
+    // Commented out - Avg. Score Today (not available from backend)
+    // {
+    //   title: 'Avg. Score Today',
+    //   value: '84.2%',
+    //   change: '+2.1%',
+    //   changeType: 'positive',
+    //   icon: Target,
+    //   color: 'text-purple-600',
+    //   bgColor: 'bg-purple-100 dark:bg-purple-900/30'
+    // },
     {
       title: 'Completion Rate',
-      value: '91.5%',
-      change: '+1.2%',
-      changeType: 'positive',
+      value: statisticsLoading ? '...' : `${statistics.averageCompletion.toFixed(1)}%`,
+      change: '+1.2%', // Keep mock change for now
+      changeType: 'positive' as const,
       icon: CheckCircle,
       color: 'text-orange-600',
       bgColor: 'bg-orange-100 dark:bg-orange-900/30'
@@ -350,84 +471,113 @@ export function AnalyticsDashboard({ currentEntity }: AnalyticsDashboardProps) {
                 <CardDescription>Student performance breakdown</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={scoreDistribution}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      dataKey="value"
-                      label={({ name, value }) => `${value}%`}
-                      labelLine={false}
-                    >
-                      {scoreDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      contentStyle={{
-                        backgroundColor: 'hsl(var(--popover))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px'
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="mt-4 space-y-2">
-                  {scoreDistribution.map((item, index) => (
-                    <div key={index} className="flex items-center justify-between text-sm">
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-3 h-3 rounded-full" 
-                          style={{ backgroundColor: item.color }}
+                {scoreDistributionLoading ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading score distribution...</div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={scoreDistribution}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          dataKey="value"
+                          label={({ name, percentage }) => `${percentage}%`}
+                          labelLine={false}
+                        >
+                          {scoreDistribution.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--popover))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }}
                         />
-                        <span>{item.name}</span>
-                      </div>
-                      <span className="font-medium">{item.value}%</span>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="mt-4 space-y-2">
+                      {scoreDistribution.map((item, index) => (
+                        <div key={index} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: item.color }}
+                            />
+                            <span>{item.name}</span>
+                          </div>
+                          <span className="font-medium">{item.percentage}%</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Category Performance */}
+          {/* Exam Performance */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-primary" />
-                Subject Performance
+                Exam Performance
               </CardTitle>
-              <CardDescription>Performance analysis by subject category</CardDescription>
+              <CardDescription>Performance analysis by exam (average score percentage)</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={categoryPerformance} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis 
-                    dataKey="subject" 
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                  />
-                  <YAxis 
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                  />
-                  <Tooltip 
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--popover))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px'
-                    }}
-                  />
-                  <Bar 
-                    dataKey="avgScore" 
-                    fill="hsl(var(--chart-1))"
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              {examPerformanceLoading ? (
+                <div className="text-center py-8 text-muted-foreground">Loading exam performance...</div>
+              ) : examPerformance.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No exam performance data available</div>
+              ) : (
+                <div className="w-full" style={{ minHeight: '300px' }}>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart 
+                      data={examPerformance} 
+                      margin={{ top: 20, right: 30, left: 60, bottom: 40 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis 
+                        dataKey="examName" 
+                        stroke="hsl(var(--muted-foreground))"
+                        fontSize={12}
+                        angle={0}
+                        textAnchor="middle"
+                        height={40}
+                        interval={0}
+                      />
+                      <YAxis 
+                        stroke="hsl(var(--muted-foreground))"
+                        fontSize={12}
+                        width={50}
+                        label={{ 
+                          value: 'Average Score (%)', 
+                          angle: -90, 
+                          position: 'left',
+                          style: { textAnchor: 'middle' }
+                        }}
+                      />
+                      <Tooltip 
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--popover))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                        formatter={(value: number) => `${value}%`}
+                      />
+                      <Bar 
+                        dataKey="avgScore" 
+                        fill="hsl(var(--chart-1))"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

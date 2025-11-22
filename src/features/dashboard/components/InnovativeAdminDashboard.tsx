@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../shared/components/ui/card';
 import { Badge } from '../../../shared/components/ui/badge';
 import { Progress } from '../../../shared/components/ui/progress';
@@ -29,6 +29,9 @@ import {
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { motion } from 'motion/react';
+import { getRecentLogins, RecentLogin } from '../../../services/api/user';
+import { examApi, ExamTypeDistributionItem } from '../../../services/api/exam';
+import { getEntities, ApiEntity } from '../../../services/api/entity';
 
 interface InnovativeAdminDashboardProps {
   currentEntity?: string;
@@ -47,8 +50,80 @@ export function InnovativeAdminDashboard({
 }: InnovativeAdminDashboardProps) {
   const { user } = useAuth();
   const [selectedTimeframe, setSelectedTimeframe] = useState('7d');
+  
+  // State for backend data
+  const [recentLogins, setRecentLogins] = useState<RecentLogin[]>([]);
+  const [examTypeDistribution, setExamTypeDistribution] = useState<ExamTypeDistributionItem[]>([]);
+  const [entityPerformance, setEntityPerformance] = useState<ApiEntity[]>([]);
+  const [loadingRecentLogins, setLoadingRecentLogins] = useState(false);
+  const [loadingExamTypes, setLoadingExamTypes] = useState(false);
+  const [loadingEntities, setLoadingEntities] = useState(false);
 
-  // Enhanced mock data for admin dashboard
+  // Fetch recent logins from backend
+  useEffect(() => {
+    const fetchRecentLogins = async () => {
+      try {
+        setLoadingRecentLogins(true);
+        const response = await getRecentLogins();
+        if (response.payload?.recentLogins) {
+          setRecentLogins(response.payload.recentLogins);
+        }
+      } catch (error) {
+        console.error('Error fetching recent logins:', error);
+      } finally {
+        setLoadingRecentLogins(false);
+      }
+    };
+
+    fetchRecentLogins();
+  }, []);
+
+  // Fetch exam type distribution from backend
+  useEffect(() => {
+    const fetchExamTypeDistribution = async () => {
+      try {
+        setLoadingExamTypes(true);
+        const response = await examApi.getExamTypeDistribution();
+        if (response.payload?.distribution) {
+          // Map backend data to include colors for chart
+          const colors = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+          const distributionWithColors = response.payload.distribution.map((item, index) => ({
+            ...item,
+            color: colors[index % colors.length]
+          }));
+          setExamTypeDistribution(distributionWithColors);
+        }
+      } catch (error) {
+        console.error('Error fetching exam type distribution:', error);
+      } finally {
+        setLoadingExamTypes(false);
+      }
+    };
+
+    fetchExamTypeDistribution();
+  }, []);
+
+  // Fetch entity performance from backend
+  useEffect(() => {
+    const fetchEntityPerformance = async () => {
+      try {
+        setLoadingEntities(true);
+        const response = await getEntities(1, 10); // Fetch first 10 entities
+        if (response.payload?.entities) {
+          setEntityPerformance(response.payload.entities);
+        }
+      } catch (error) {
+        console.error('Error fetching entity performance:', error);
+      } finally {
+        setLoadingEntities(false);
+      }
+    };
+
+    fetchEntityPerformance();
+  }, []);
+
+  // Enhanced mock data for admin dashboard (commented out - using backend data now)
+  // Note: systemStats is still used in some places, keeping it for now
   const systemStats = {
     totalUsers: 1247,
     activeExams: 23,
@@ -84,28 +159,28 @@ export function InnovativeAdminDashboard({
     ]
   };
 
-  const entityPerformance = [
-    { name: 'University A', students: 1234, exams: 45, avgScore: 87, growth: 12 },
-    { name: 'College B', students: 987, exams: 38, avgScore: 84, growth: 8 },
-    { name: 'Institute C', students: 756, exams: 29, avgScore: 91, growth: 15 },
-    { name: 'Academy D', students: 543, exams: 22, avgScore: 82, growth: -3 },
-    { name: 'School E', students: 432, exams: 18, avgScore: 89, growth: 7 }
-  ];
+  // const entityPerformance = [
+  //   { name: 'University A', students: 1234, exams: 45, avgScore: 87, growth: 12 },
+  //   { name: 'College B', students: 987, exams: 38, avgScore: 84, growth: 8 },
+  //   { name: 'Institute C', students: 756, exams: 29, avgScore: 91, growth: 15 },
+  //   { name: 'Academy D', students: 543, exams: 22, avgScore: 82, growth: -3 },
+  //   { name: 'School E', students: 432, exams: 18, avgScore: 89, growth: 7 }
+  // ];
 
-  const examTypeDistribution = [
-    { name: 'MCQ', value: 45, color: '#10B981' },
-    { name: 'Essay', value: 25, color: '#3B82F6' },
-    { name: 'Mixed', value: 20, color: '#F59E0B' },
-    { name: 'Practical', value: 10, color: '#EF4444' }
-  ];
+  // const examTypeDistribution = [
+  //   { name: 'MCQ', value: 45, color: '#10B981' },
+  //   { name: 'Essay', value: 25, color: '#3B82F6' },
+  //   { name: 'Mixed', value: 20, color: '#F59E0B' },
+  //   { name: 'Practical', value: 10, color: '#EF4444' }
+  // ];
 
-  const recentActivities = [
-    { id: 1, type: 'exam_created', user: 'Dr. Smith', entity: 'University A', time: '2 minutes ago', icon: Plus },
-    { id: 2, type: 'user_registered', user: 'Jane Doe', entity: 'College B', time: '5 minutes ago', icon: Users },
-    { id: 3, type: 'exam_completed', user: 'Mathematics Final', entity: 'Institute C', time: '12 minutes ago', icon: CheckCircle },
-    { id: 4, type: 'system_alert', user: 'High CPU Usage', entity: 'System', time: '15 minutes ago', icon: AlertCircle },
-    { id: 5, type: 'data_export', user: 'Prof. Johnson', entity: 'Academy D', time: '1 hour ago', icon: Download }
-  ];
+  // const recentActivities = [
+  //   { id: 1, type: 'exam_created', user: 'Dr. Smith', entity: 'University A', time: '2 minutes ago', icon: Plus },
+  //   { id: 2, type: 'user_registered', user: 'Jane Doe', entity: 'College B', time: '5 minutes ago', icon: Users },
+  //   { id: 3, type: 'exam_completed', user: 'Mathematics Final', entity: 'Institute C', time: '12 minutes ago', icon: CheckCircle },
+  //   { id: 4, type: 'system_alert', user: 'High CPU Usage', entity: 'System', time: '15 minutes ago', icon: AlertCircle },
+  //   { id: 5, type: 'data_export', user: 'Prof. Johnson', entity: 'Academy D', time: '1 hour ago', icon: Download }
+  // ];
 
   const quickActions = [
     { title: 'Create Exam', description: 'Design new examination', icon: Plus, color: 'bg-primary', action: onNavigateToExams },
@@ -300,40 +375,39 @@ export function InnovativeAdminDashboard({
                 <CardDescription>Top performing organizations</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {entityPerformance.map((entity, index) => (
-                    <motion.div
-                      key={entity.name}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.1 }}
-                      className="flex items-center justify-between p-4 rounded-lg border bg-gradient-to-r from-card to-muted/20 hover:shadow-md transition-all duration-300"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                          <Building className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <h4 className="font-medium">{entity.name}</h4>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>{entity.students.toLocaleString()} students</span>
-                            <span>{entity.exams} exams</span>
-                            <span>{entity.avgScore}% avg score</span>
+                {loadingEntities ? (
+                  <div className="text-center py-4 text-muted-foreground">Loading entities...</div>
+                ) : entityPerformance.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">No entities found</div>
+                ) : (
+                  <div className="space-y-4">
+                    {entityPerformance.map((entity, index) => (
+                      <motion.div
+                        key={entity.id || entity.name}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.1 }}
+                        className="flex items-center justify-between p-4 rounded-lg border bg-gradient-to-r from-card to-muted/20 hover:shadow-md transition-all duration-300"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                            <Building className="h-5 w-5 text-primary" />
                           </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className={`flex items-center gap-1 ${entity.growth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {entity.growth >= 0 ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-                          <span className="text-sm font-medium">{Math.abs(entity.growth)}%</span>
+                          <div>
+                            <h4 className="font-medium">{entity.name}</h4>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <span>{(entity.total_students || 0).toLocaleString()} students</span>
+                              <span>{entity.total_exams || 0} exams</span>
+                            </div>
+                          </div>
                         </div>
                         <Button variant="ghost" size="sm">
                           <Eye className="h-4 w-4" />
                         </Button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
@@ -382,35 +456,43 @@ export function InnovativeAdminDashboard({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie
-                      data={examTypeDistribution}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={40}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {examTypeDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                {loadingExamTypes ? (
+                  <div className="text-center py-4 text-muted-foreground">Loading exam types...</div>
+                ) : examTypeDistribution.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">No exam types found</div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <PieChart>
+                        <Pie
+                          data={examTypeDistribution}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={40}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                        >
+                          {examTypeDistribution.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color || '#10B981'} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="grid grid-cols-2 gap-2 mt-4">
+                      {examTypeDistribution.map((type) => (
+                        <div key={type.name} className="flex items-center gap-2">
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: type.color || '#10B981' }}
+                          />
+                          <span className="text-xs">{type.name}</span>
+                        </div>
                       ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="grid grid-cols-2 gap-2 mt-4">
-                  {examTypeDistribution.map((type) => (
-                    <div key={type.name} className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full" 
-                        style={{ backgroundColor: type.color }}
-                      />
-                      <span className="text-xs">{type.name}</span>
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
           </motion.div>
@@ -429,26 +511,51 @@ export function InnovativeAdminDashboard({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {recentActivities.map((activity, index) => (
-                    <motion.div
-                      key={activity.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.1 }}
-                      className="flex items-start gap-3"
-                    >
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <activity.icon className="h-4 w-4 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{activity.user}</p>
-                        <p className="text-xs text-muted-foreground">{activity.entity}</p>
-                        <p className="text-xs text-muted-foreground">{activity.time}</p>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
+                {loadingRecentLogins ? (
+                  <div className="text-center py-4 text-muted-foreground">Loading recent logins...</div>
+                ) : recentLogins.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground">No recent logins found</div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentLogins.map((login, index) => {
+                      // Format time ago from last_login_at
+                      const getTimeAgo = (dateString: string) => {
+                        const date = new Date(dateString);
+                        const now = new Date();
+                        const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+                        
+                        if (diffInSeconds < 60) return `${diffInSeconds} seconds ago`;
+                        const diffInMinutes = Math.floor(diffInSeconds / 60);
+                        if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
+                        const diffInHours = Math.floor(diffInMinutes / 60);
+                        if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+                        const diffInDays = Math.floor(diffInHours / 24);
+                        return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+                      };
+
+                      return (
+                        <motion.div
+                          key={login.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: index * 0.1 }}
+                          className="flex items-start gap-3"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <Users className="h-4 w-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{login.name || login.email}</p>
+                            <p className="text-xs text-muted-foreground">{login.entity_name || 'N/A'}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {login.last_login_at ? getTimeAgo(login.last_login_at) : 'Never'}
+                            </p>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>

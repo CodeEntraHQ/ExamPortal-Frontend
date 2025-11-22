@@ -146,6 +146,56 @@ export interface GetExamLeaderboardResponse {
   };
 }
 
+export interface ExamTypeDistributionItem {
+  name: string;
+  value: number;
+  percentage: number;
+}
+
+export interface GetExamTypeDistributionResponse {
+  payload: {
+    distribution: ExamTypeDistributionItem[];
+    total: number;
+  };
+}
+
+export interface ScoreDistributionItem {
+  name: string;
+  value: number;
+  percentage: number;
+}
+
+export interface GetScoreDistributionResponse {
+  payload: {
+    distribution: ScoreDistributionItem[];
+  };
+}
+
+export interface ExamPerformanceItem {
+  examName: string;
+  avgScore: number;
+  exams: number;
+  students: number;
+}
+
+export interface GetExamPerformanceResponse {
+  payload: {
+    performance: ExamPerformanceItem[];
+  };
+}
+
+export interface ExamScoreDistributionItem {
+  range: string;
+  count: number;
+  percentage: number;
+}
+
+export interface GetExamScoreDistributionResponse {
+  payload: {
+    distribution: ExamScoreDistributionItem[];
+  };
+}
+
 export interface StudentEnrollment {
   id: string;
   exam_id: string;
@@ -604,6 +654,62 @@ export async function inviteRepresentatives(payload: InviteRepresentativesPayloa
 }
 
 /**
+ * Get exam type distribution
+ */
+export async function getExamTypeDistribution(): Promise<GetExamTypeDistributionResponse> {
+  const response = await authenticatedFetch(getApiUrl('/v1/exams/type-distribution'), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
+ * Get score distribution
+ */
+export async function getScoreDistribution(entityId?: string): Promise<GetScoreDistributionResponse> {
+  const params = new URLSearchParams();
+  if (entityId) {
+    params.append('entity_id', entityId);
+  }
+
+  const url = `/v1/exams/score-distribution${params.toString() ? `?${params.toString()}` : ''}`;
+  const response = await authenticatedFetch(getApiUrl(url), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
+ * Get exam performance (exam-wise average scores)
+ */
+export async function getExamPerformance(entityId?: string): Promise<GetExamPerformanceResponse> {
+  const params = new URLSearchParams();
+  if (entityId) {
+    params.append('entity_id', entityId);
+  }
+
+  const url = `/v1/exams/performance${params.toString() ? `?${params.toString()}` : ''}`;
+  const response = await authenticatedFetch(getApiUrl(url), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
+ * Get score distribution for a specific exam
+ */
+export async function getExamScoreDistribution(examId: string): Promise<GetExamScoreDistributionResponse> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}/score-distribution`), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
  * Exam API object for convenience
  */
 export const examApi = {
@@ -628,5 +734,9 @@ export const examApi = {
   getExamStatistics,
   getExamDetailStatistics,
   getExamLeaderboard,
+  getExamTypeDistribution,
+  getScoreDistribution,
+  getExamPerformance,
+  getExamScoreDistribution,
 };
 
