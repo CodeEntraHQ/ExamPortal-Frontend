@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '../../../shared/components/ui/button';
 import { Input } from '../../../shared/components/ui/input';
 import { Label } from '../../../shared/components/ui/label';
@@ -17,6 +17,8 @@ interface PasswordResetProps {
 
 export function PasswordReset({ onBackToLogin, resetToken }: PasswordResetProps) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const effectiveResetToken = resetToken || searchParams.get('token') || '';
   
   const handleBackToLogin = () => {
     if (onBackToLogin) {
@@ -56,7 +58,7 @@ export function PasswordReset({ onBackToLogin, resetToken }: PasswordResetProps)
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       // In real app, validate reset token and update password
-      if (!resetToken) {
+      if (!effectiveResetToken) {
         throw new Error('Invalid or expired reset token');
       }
 
