@@ -31,10 +31,12 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ImageWithFallback } from '../../../shared/components/common/ImageWithFallback';
+import { envConfig } from '@/config/env';
 
 export function ProfileManagement() {
   const { user, setUser } = useAuth();
   const { theme } = useTheme();
+  const appName = envConfig.appName;
   const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -607,7 +609,7 @@ export function ProfileManagement() {
                 Display Preferences
               </CardTitle>
               <CardDescription>
-                Customize your ExamEntra experience
+                Customize your {appName} experience
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">

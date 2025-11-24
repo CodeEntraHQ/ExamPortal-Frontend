@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
 import { AlertCircle, Loader2, GraduationCap, ArrowLeft, Moon, Sun, Eye, EyeOff } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useTheme } from '../../../shared/providers/ThemeProvider';
+import { envConfig } from '@/config/env';
 
 interface ResetPasswordConfirmProps {
   onPasswordResetSuccess?: () => void;
@@ -36,6 +37,7 @@ export function ResetPasswordConfirm({ onPasswordResetSuccess }: ResetPasswordCo
   const [isLoading, setIsLoading] = useState(false);
   const [token, setToken] = useState('');
   const { theme, toggleTheme } = useTheme();
+  const appName = envConfig.appName;
 
   useEffect(() => {
     // Try to get token from URL params, search params, or route params
@@ -109,7 +111,7 @@ export function ResetPasswordConfirm({ onPasswordResetSuccess }: ResetPasswordCo
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-2 mb-4">
               <GraduationCap className="h-8 w-8 text-primary" />
-              <span className="text-xl font-semibold">ExamEntra</span>
+              <span className="text-xl font-semibold">{appName}</span>
             </div>
             <CardTitle>Set New Password</CardTitle>
             <CardDescription>

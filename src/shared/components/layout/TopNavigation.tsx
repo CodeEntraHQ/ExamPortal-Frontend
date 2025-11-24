@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { ImageWithFallback } from '../common/ImageWithFallback';
+import { envConfig } from '@/config/env';
 
 interface BreadcrumbItem {
   label: string;
@@ -43,6 +44,7 @@ interface TopNavigationProps {
 export function TopNavigation({ currentView, setCurrentView, breadcrumbItems = [], onBack }: TopNavigationProps) {
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const appName = envConfig.appName;
 
   const getNavigationItems = () => {
     const baseItems = [
@@ -113,7 +115,7 @@ export function TopNavigation({ currentView, setCurrentView, breadcrumbItems = [
               <GraduationCap className="h-6 w-6 text-primary" />
             </motion.div>
             <span className="text-xl font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              ExamEntra
+              {appName}
             </span>
           </div>
 

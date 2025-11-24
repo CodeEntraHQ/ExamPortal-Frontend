@@ -1,9 +1,26 @@
 
-  import { defineConfig } from 'vite';
-  import react from '@vitejs/plugin-react-swc';
-  import path from 'path';
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import path from 'path';
 
-  export default defineConfig({
+const toNumber = (value: string | undefined, fallback: number): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toBoolean = (value: string | undefined, fallback: boolean): boolean => {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+  return fallback;
+};
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+
+  return {
     plugins: [react()],
     resolve: {
       extensions: ['.js', '.jsx', '.ts', '.tsx', '.json'],
@@ -51,10 +68,12 @@
     },
     build: {
       target: 'esnext',
-      outDir: 'build',
+      outDir: env.VITE_BUILD_OUT_DIR || 'build',
+      sourcemap: toBoolean(env.VITE_BUILD_SOURCEMAP, true),
     },
     server: {
-      port: 3000,
-      open: true,
+      port: toNumber(env.VITE_DEV_PORT, 3000),
+      open: toBoolean(env.VITE_DEV_OPEN_BROWSER, true),
     },
-  });
+  };
+});

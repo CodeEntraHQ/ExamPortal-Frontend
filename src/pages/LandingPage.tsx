@@ -17,6 +17,7 @@ import {
   TrendingUp
 } from 'lucide-react';
 import { useTheme } from '../shared/providers/ThemeProvider';
+import { envConfig } from '@/config/env';
 
 interface LandingPageProps {
   onLoginClick?: () => void;
@@ -25,6 +26,7 @@ interface LandingPageProps {
 export function LandingPage({ onLoginClick }: LandingPageProps) {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const appName = envConfig.appName;
 
   const handleLoginClick = () => {
     if (onLoginClick) {
@@ -81,7 +83,7 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <GraduationCap className="h-8 w-8 text-primary" />
-            <span className="text-xl font-semibold">ExamEntra</span>
+            <span className="text-xl font-semibold">{appName}</span>
           </div>
           <div className="flex items-center gap-4">
             <Button
@@ -191,7 +193,7 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
             Ready to Revolutionize Your Exams?
           </h2>
           <p className="text-xl mb-8 text-primary-foreground/90">
-            Join thousands of educational institutions already using ExamEntra to deliver 
+            Join thousands of educational institutions already using {appName} to deliver 
             exceptional exam experiences.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">

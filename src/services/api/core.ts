@@ -3,7 +3,9 @@
  * Provides authenticated fetch wrapper and API URL helper
  */
 
-const API_BASE_URL = 'http://localhost:8000';
+import { envConfig } from '@/config/env';
+
+const API_BASE_URL = envConfig.apiBaseUrl;
 
 /**
  * Get the full API URL for an endpoint

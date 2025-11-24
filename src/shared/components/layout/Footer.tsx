@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { GraduationCap, Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
+import { envConfig } from '@/config/env';
 
 export function Footer() {
   const [contactOpen, setContactOpen] = useState(false);
   const currentYear = new Date().getFullYear();
+  const appName = envConfig.appName;
 
   const socialLinks = [
     { icon: Instagram, href: 'https://www.instagram.com/codeentra', label: 'Instagram', color: 'hover:text-pink-500' },
@@ -60,7 +62,7 @@ export function Footer() {
           <DialogHeader>
             <DialogTitle>Contact Us</DialogTitle>
             <DialogDescription>
-              CodeEntra (ExamEntra Product Division)
+              CodeEntra ({appName} Product Division)
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 text-sm">
