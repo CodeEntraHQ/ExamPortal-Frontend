@@ -57,6 +57,14 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/reset-password',
+    element: (
+      <div className="min-h-screen flex flex-col">
+        <PasswordReset />
+      </div>
+    ),
+  },
+  {
     path: '/password-reset',
     element: (
       <div className="min-h-screen flex flex-col">
