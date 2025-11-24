@@ -150,6 +150,7 @@ export interface ExamTypeDistributionItem {
   name: string;
   value: number;
   percentage: number;
+  color?: string;
 }
 
 export interface GetExamTypeDistributionResponse {

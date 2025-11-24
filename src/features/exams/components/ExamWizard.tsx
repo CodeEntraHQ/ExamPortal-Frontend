@@ -533,7 +533,7 @@ export function ExamWizard({ isOpen, onClose, examId, onSave }: ExamWizardProps)
                     sections={sections}
                     selectedSection={selectedSection}
                     onAddQuestion={addQuestion}
-                    onEditQuestion={(question) => {
+                    onEditQuestion={(question: Question) => {
                       setEditingQuestion(question);
                       setShowQuestionDialog(true);
                     }}

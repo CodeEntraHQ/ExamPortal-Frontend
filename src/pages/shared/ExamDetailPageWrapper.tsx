@@ -29,6 +29,7 @@ export function ExamDetailPageWrapper() {
       STUDENT: '/student',
       ADMIN: '/admin',
       SUPERADMIN: '/superadmin',
+      REPRESENTATIVE: '/representative',
     }[user?.role || 'STUDENT'];
 
     return {

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { cva, type VariantProps } from "class-variance-authority@0.7.1";
+import { cva, type VariantProps } from "class-variance-authority";
 import { Button } from './button';
 import { X } from "lucide-react";
 
@@ -34,7 +34,7 @@ function Alert({
   variant,
   duration = 7000,
   ...props
-}: React.ComponentProps<"div"> & VariantProps<typeof alertVariants>) {
+}: AlertProps) {
   const [visible, setVisible] = React.useState(true);
 
   React.useEffect(() => {
