@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
 import { useTheme } from '../../../shared/providers/ThemeProvider';
 import { Moon, Sun, ArrowLeft, GraduationCap, AlertCircle, Eye, EyeOff, Loader2, CheckCircle } from 'lucide-react';
 import { motion } from 'motion/react';
+import { envConfig } from '@/config/env';
 
 interface PasswordResetProps {
   onBackToLogin?: () => void;
@@ -32,6 +33,7 @@ export function PasswordReset({ onBackToLogin, resetToken }: PasswordResetProps)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [resetComplete, setResetComplete] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const appName = envConfig.appName;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,7 +149,7 @@ export function PasswordReset({ onBackToLogin, resetToken }: PasswordResetProps)
           <CardHeader className="text-center">
             <div className="flex items-center justify-center gap-2 mb-4">
               <GraduationCap className="h-8 w-8 text-primary" />
-              <span className="text-xl font-semibold">ExamEntra</span>
+              <span className="text-xl font-semibold">{appName}</span>
             </div>
             <CardTitle>Set New Password</CardTitle>
             <CardDescription>

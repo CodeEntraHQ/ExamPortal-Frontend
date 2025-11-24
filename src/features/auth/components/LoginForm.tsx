@@ -13,6 +13,7 @@ import { CaptchaComponent } from '../../../shared/components/common/CaptchaCompo
 import { authAPI, forgotPassword } from '../../../services/api';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
+import { envConfig } from '@/config/env';
 
 interface LoginFormProps {
   onBackToHome?: () => void;
@@ -37,6 +38,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
   
   const { login, verify2FA, user } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const appName = envConfig.appName;
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -209,7 +211,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
             <CardHeader className="text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
                 <GraduationCap className="h-8 w-8 text-primary" />
-                <span className="text-xl font-semibold">ExamEntra</span>
+                <span className="text-xl font-semibold">{appName}</span>
               </div>
               <CardTitle>Two-Factor Authentication</CardTitle>
               <CardDescription>
@@ -288,7 +290,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
             <CardHeader className="text-center">
               <div className="flex items-center justify-center gap-2 mb-4">
                 <GraduationCap className="h-8 w-8 text-primary" />
-                <span className="text-xl font-semibold">ExamEntra</span>
+                <span className="text-xl font-semibold">{appName}</span>
               </div>
               <CardTitle>Reset Password</CardTitle>
               <CardDescription>
@@ -388,7 +390,7 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
           <CardHeader className="text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <GraduationCap className="h-8 w-8 text-primary" />
-            <span className="text-xl font-semibold">ExamEntra</span>
+            <span className="text-xl font-semibold">{appName}</span>
           </div>
           <CardTitle>Welcome Back</CardTitle>
           <CardDescription>

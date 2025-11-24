@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { envConfig } from '@/config/env';
 
 type Theme = 'light' | 'dark';
 
@@ -9,20 +10,34 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const resolveTheme = (value: string | null | undefined, fallback: Theme): Theme => {
+  return value === 'dark' ? 'dark' : value === 'light' ? 'light' : fallback;
+};
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('light');
+  const defaultTheme = resolveTheme(envConfig.defaultTheme, 'light');
+  const storageKey = envConfig.themeStorageKey;
+  const [theme, setTheme] = useState<Theme>(defaultTheme);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') as Theme;
-    if (savedTheme) {
-      setTheme(savedTheme);
+    try {
+      const savedTheme = localStorage.getItem(storageKey) as Theme | null;
+      if (savedTheme) {
+        setTheme(resolveTheme(savedTheme, defaultTheme));
+      }
+    } catch (error) {
+      console.warn('Unable to read theme from storage', error);
     }
-  }, []);
+  }, [storageKey, defaultTheme]);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    try {
+      localStorage.setItem(storageKey, theme);
+    } catch (error) {
+      console.warn('Unable to persist theme to storage', error);
+    }
+  }, [theme, storageKey]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');

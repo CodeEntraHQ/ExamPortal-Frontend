@@ -13,6 +13,7 @@ import { Separator } from '../ui/separator';
 import { QrCode, Copy, CheckCircle2, Smartphone, Info, KeyRound, Loader2, ShieldCheck } from 'lucide-react';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '../ui/input-otp';
 import { motion, AnimatePresence } from 'motion/react';
+import { envConfig } from '@/config/env';
 
 interface QRCodeModalProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ export function QRCodeModal({
   onVerify,
   qrCode,
   manualCode,
-  appName = 'ExamEntra',
+  appName = envConfig.appName,
 }: QRCodeModalProps) {
   const [copied, setCopied] = useState(false);
   const [otp, setOtp] = useState('');
