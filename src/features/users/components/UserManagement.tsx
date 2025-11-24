@@ -321,23 +321,25 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                 Add User
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
               <DialogHeader>
                 <DialogTitle>Create New User</DialogTitle>
                 <DialogDescription>
                   Create a new user account and assign appropriate permissions
                 </DialogDescription>
               </DialogHeader>
-              <CreateUserForm 
-                onClose={() => setIsCreateDialogOpen(false)}
-                onSuccess={async () => {
-                  setIsCreateDialogOpen(false);
-                  await fetchUsers();
-                }}
-                currentEntity={currentEntity}
-                entities={entities}
-                currentUser={currentUser}
-              />
+              <div className="flex-1 overflow-y-auto pr-2">
+                <CreateUserForm 
+                  onClose={() => setIsCreateDialogOpen(false)}
+                  onSuccess={async () => {
+                    setIsCreateDialogOpen(false);
+                    await fetchUsers();
+                  }}
+                  currentEntity={currentEntity}
+                  entities={entities}
+                  currentUser={currentUser}
+                />
+              </div>
             </DialogContent>
           </Dialog>
         </div>
