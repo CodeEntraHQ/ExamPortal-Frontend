@@ -117,7 +117,9 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
       if (formData.type === 'MCQ' || formData.type === 'MULTIPLE_CORRECT') {
         const options = formData.metadata?.options || [];
         const correctAnswers = formData.metadata?.correct_answers || [];
-        const validOptions = options.filter(opt => opt.text && opt.text.trim());
+        const validOptions = options.filter(
+          (opt: { text?: string }) => typeof opt.text === 'string' && opt.text.trim().length > 0
+        );
         
         if (validOptions.length < 2) {
           error('MCQ questions must have at least 2 options');
@@ -159,7 +161,9 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
       if (formData.type === 'MCQ' || formData.type === 'MULTIPLE_CORRECT') {
         const options = formData.metadata?.options || [];
         const correctAnswers = formData.metadata?.correct_answers || [];
-        const validOptions = options.filter(opt => opt.text && opt.text.trim());
+        const validOptions = options.filter(
+          (opt: { text?: string }) => typeof opt.text === 'string' && opt.text.trim().length > 0
+        );
         
         if (validOptions.length < 2) {
           error('MCQ questions must have at least 2 options');
@@ -511,7 +515,11 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                     Add Option
                   </Button>
                 </div>
-                {(formData.metadata?.options || []).map((option, index) => (
+                {(formData.metadata?.options || []).map(
+                  (
+                    option: { text?: string; isCorrect?: boolean },
+                    index: number
+                  ) => (
                   <div key={index} className="flex gap-2 items-center">
                     <div className="flex-1">
                       <Input
@@ -543,7 +551,8 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                       )}
                     </div>
                   </div>
-                ))}
+                  ),
+                )}
                 <p className="text-xs text-muted-foreground">
                   * At least 2 options required, and at least one must be marked as correct
                   {!isMultipleCorrect && ' (Single correct answer mode - only one option can be correct)'}
@@ -642,7 +651,11 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                     Add Option
                   </Button>
                 </div>
-                {(formData.metadata?.options || []).map((option, index) => (
+                {(formData.metadata?.options || []).map(
+                  (
+                    option: { text?: string; isCorrect?: boolean },
+                    index: number
+                  ) => (
                   <div key={index} className="flex gap-2 items-center">
                     <div className="flex-1">
                       <Input
@@ -674,7 +687,8 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                       )}
                     </div>
                   </div>
-                ))}
+                  ),
+                )}
                 <p className="text-xs text-muted-foreground">
                   * At least 2 options required, and at least one must be marked as correct
                   {!isMultipleCorrect && ' (Single correct answer mode - only one option can be correct)'}

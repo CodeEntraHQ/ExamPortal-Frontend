@@ -21,6 +21,7 @@ export function ExamCreationWrapper() {
       STUDENT: '/student',
       ADMIN: '/admin',
       SUPERADMIN: '/superadmin',
+      REPRESENTATIVE: '/representative',
     }[user?.role || 'STUDENT'];
 
     if (user?.role === 'ADMIN') {

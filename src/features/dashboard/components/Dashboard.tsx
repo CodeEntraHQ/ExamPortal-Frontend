@@ -57,10 +57,14 @@ interface DashboardProps {
 
 export function Dashboard({ currentEntity, onNavigateToAdministration, onViewExamDetails, onStartExam, onViewResults }: DashboardProps) {
   const { user } = useAuth();
+  const role = user?.role;
+  const headerSubtitle = role === 'SUPERADMIN'
+    ? 'System overview and management'
+    : `Managing ${user?.entityName || 'your system'}`;
 
   // Redirect ADMIN users to their entity management page (fallback for manual navigation)
   React.useEffect(() => {
-    if (user?.role === 'ADMIN' && user?.entityId && onNavigateToAdministration) {
+    if (role === 'ADMIN' && user?.entityId && onNavigateToAdministration) {
       // Small delay to ensure navigation state is ready
       const timer = setTimeout(() => {
         onNavigateToAdministration();
@@ -69,12 +73,12 @@ export function Dashboard({ currentEntity, onNavigateToAdministration, onViewExa
     }
   }, [user?.role, user?.id, user?.entityId, onNavigateToAdministration]);
 
-  if (user?.role === 'STUDENT') {
+  if (role === 'STUDENT') {
     return <EnhancedStudentDashboard onStartExam={onStartExam} onViewResults={onViewResults} />;
   }
 
   // Only SUPERADMIN should see the innovative dashboard
-  if (user?.role === 'SUPERADMIN') {
+  if (role === 'SUPERADMIN') {
     return (
       <InnovativeAdminDashboard 
         currentEntity={currentEntity}
@@ -95,7 +99,7 @@ export function Dashboard({ currentEntity, onNavigateToAdministration, onViewExa
   }
 
   // For ADMIN, show a loading state while redirecting
-  if (user?.role === 'ADMIN') {
+  if (role === 'ADMIN') {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
@@ -118,9 +122,7 @@ export function Dashboard({ currentEntity, onNavigateToAdministration, onViewExa
         <div>
           <h1 className="text-3xl font-bold text-foreground">Welcome back, {user?.name}!</h1>
           <p className="text-muted-foreground mt-1">
-            {user?.role === 'SUPERADMIN' 
-              ? 'System overview and management' 
-              : `Managing ${user?.entityName || 'your system'}`}
+            {headerSubtitle}
             {currentEntity && (
               <span className="ml-2 text-primary">
                 • {currentEntity}

@@ -3,7 +3,7 @@ import { login as apiLogin, logout as apiLogout } from '../../../services/api';
 import { clearAuthStorage } from '../../../services/api/storage';
 import { getToken, removeToken } from '../../../services/api/core';
 
-type UserRole = 'SUPERADMIN' | 'ADMIN' | 'STUDENT';
+type UserRole = 'SUPERADMIN' | 'ADMIN' | 'STUDENT' | 'REPRESENTATIVE';
 
 interface User {
   id: string;
