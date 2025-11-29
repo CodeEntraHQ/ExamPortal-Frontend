@@ -66,7 +66,6 @@ export interface InviteUserResponse {
 
 export interface CreateUserPayload {
   email: string;
-  password: string;
   name?: string;
   role: 'ADMIN' | 'STUDENT' | 'REPRESENTATIVE';
   entity_id?: string;
@@ -189,6 +188,24 @@ export async function activateUser(userId: string): Promise<void> {
   });
 
   await response.json();
+}
+
+/**
+ * Register user (set password) using invitation token
+ */
+export async function registerUser(token: string, password: string): Promise<{ responseCode: string; responseMessage?: string }> {
+  const response = await authenticatedFetch(getApiUrl('/v1/users/register'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      password,
+    }),
+  });
+
+  return response.json();
 }
 
 /**

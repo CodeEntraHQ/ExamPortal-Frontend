@@ -10,6 +10,8 @@ import { LandingPage } from '../pages/LandingPage';
 import { LoginForm } from '../features/auth/components/LoginForm';
 import { PasswordReset } from '../features/auth/components/PasswordReset';
 import { ResetPasswordConfirm } from '../features/auth/components/ResetPasswordConfirm';
+import { UserRegistration } from '../features/auth/components/UserRegistration';
+import { SetPassword } from '../features/auth/components/SetPassword';
 import { Footer } from '../shared/components/layout/Footer';
 
 // Student Pages
@@ -85,6 +87,30 @@ export const router = createBrowserRouter([
     element: (
       <div className="min-h-screen flex flex-col">
         <ResetPasswordConfirm />
+      </div>
+    ),
+  },
+  {
+    path: '/register',
+    element: (
+      <div className="min-h-screen flex flex-col">
+        <UserRegistration />
+      </div>
+    ),
+  },
+  {
+    path: '/register/:token',
+    element: (
+      <div className="min-h-screen flex flex-col">
+        <UserRegistration />
+      </div>
+    ),
+  },
+  {
+    path: '/set-password',
+    element: (
+      <div className="min-h-screen flex flex-col">
+        <SetPassword />
       </div>
     ),
   },

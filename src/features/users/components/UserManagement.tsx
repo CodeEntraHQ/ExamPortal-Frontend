@@ -1038,8 +1038,6 @@ interface CreateUserFormProps {
 function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUser }: CreateUserFormProps) {
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
-    confirmPassword: '',
     name: '',
     role: '' as '' | 'ADMIN' | 'STUDENT',
     entityId: currentEntity || '',
@@ -1081,16 +1079,6 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
       return;
     }
 
-    if (!formData.password || formData.password.length < 8) {
-      showError('Password must be at least 8 characters long');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      showError('Passwords do not match');
-      return;
-    }
-
     if (isStudent && !formData.roll_number.trim()) {
       showError('Roll number is required for student users');
       return;
@@ -1100,7 +1088,6 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
     try {
       const payload: any = {
         email: formData.email,
-        password: formData.password,
         role: formData.role,
         entity_id: formData.entityId || undefined,
       };
@@ -1124,7 +1111,8 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
       if (formData.roll_number) payload.roll_number = formData.roll_number.trim();
 
       await createUser(payload);
-      success('User created successfully.');
+      const roleName = formData.role === 'STUDENT' ? 'Student' : formData.role === 'ADMIN' ? 'Admin' : 'User';
+      success(`${roleName} created successfully. An email with a password setup link has been sent to the user.`);
       await onSuccess();
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to create user';
@@ -1174,32 +1162,6 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="Enter email address"
-              required
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="password">Password *</Label>
-            <Input
-              id="password"
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              placeholder="Enter password"
-              required
-            />
-            <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password *</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={formData.confirmPassword}
-              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-              placeholder="Re-enter password"
               required
             />
           </div>
@@ -1343,8 +1305,6 @@ interface CreateRepresentativeFormProps {
 function CreateRepresentativeForm({ onClose, onSuccess }: CreateRepresentativeFormProps) {
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
-    confirmPassword: '',
     name: '',
     phone_number: '',
     address: '',
@@ -1362,21 +1322,10 @@ function CreateRepresentativeForm({ onClose, onSuccess }: CreateRepresentativeFo
       return;
     }
 
-    if (!formData.password || formData.password.length < 8) {
-      showError('Password must be at least 8 characters long');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      showError('Passwords do not match');
-      return;
-    }
-
     setLoading(true);
     try {
       const payload: any = {
         email: formData.email,
-        password: formData.password,
         role: 'REPRESENTATIVE',
         // Don't send entity_id for representatives - backend will set it to null
       };
@@ -1399,7 +1348,7 @@ function CreateRepresentativeForm({ onClose, onSuccess }: CreateRepresentativeFo
       if (formData.gender) payload.gender = formData.gender;
 
       await createUser(payload);
-      success('Representative created successfully.');
+      success('Representative created successfully. An email with a password setup link has been sent to the user.');
       await onSuccess();
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to create representative';
@@ -1431,32 +1380,6 @@ function CreateRepresentativeForm({ onClose, onSuccess }: CreateRepresentativeFo
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               placeholder="Enter email address"
-              required
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="rep-password">Password *</Label>
-            <Input
-              id="rep-password"
-              type="password"
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              placeholder="Enter password"
-              required
-            />
-            <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="rep-confirmPassword">Confirm Password *</Label>
-            <Input
-              id="rep-confirmPassword"
-              type="password"
-              value={formData.confirmPassword}
-              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-              placeholder="Re-enter password"
               required
             />
           </div>
