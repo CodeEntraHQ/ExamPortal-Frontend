@@ -346,6 +346,179 @@ export function ExamDetailPage({
     fetchLeaderboard();
   }, [examId, canManageQuestions]);
 
+  // Function to generate and download PDF with all students exam score data using browser's print-to-PDF
+  const downloadLeaderboardPDF = () => {
+    try {
+      // Calculate summary statistics
+      const totalStudents = leaderboard.length;
+      const passedStudents = leaderboard.filter(e => e.passed).length;
+      const failedStudents = totalStudents - passedStudents;
+      const avgScore = leaderboard.length > 0 
+        ? (leaderboard.reduce((sum, e) => sum + e.score, 0) / leaderboard.length).toFixed(2)
+        : '0.00';
+
+      // Create HTML content for printing
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Exam Results Report - ${examName}</title>
+            <style>
+              @media print {
+                @page {
+                  margin: 1cm;
+                  size: A4;
+                }
+                body {
+                  margin: 0;
+                  padding: 20px;
+                  font-family: Arial, sans-serif;
+                }
+              }
+              body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+              }
+              .header {
+                text-align: center;
+                margin-bottom: 30px;
+                border-bottom: 2px solid #333;
+                padding-bottom: 15px;
+              }
+              .header h1 {
+                margin: 0 0 10px 0;
+                font-size: 24px;
+                color: #333;
+              }
+              .header h2 {
+                margin: 5px 0;
+                font-size: 18px;
+                color: #666;
+                font-weight: normal;
+              }
+              .header p {
+                margin: 5px 0;
+                font-size: 12px;
+                color: #999;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 30px;
+                font-size: 11px;
+              }
+              th {
+                background-color: #f5f5f5;
+                border: 1px solid #ddd;
+                padding: 10px 8px;
+                text-align: left;
+                font-weight: bold;
+              }
+              td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: left;
+              }
+              tr:nth-child(even) {
+                background-color: #f9f9f9;
+              }
+              .score {
+                font-weight: bold;
+                color: #333;
+              }
+              .pass {
+                color: #22c55e;
+                font-weight: bold;
+              }
+              .fail {
+                color: #ef4444;
+                font-weight: bold;
+              }
+              .summary {
+                margin-top: 30px;
+                padding: 15px;
+                background-color: #f5f5f5;
+                border-radius: 5px;
+              }
+              .summary h3 {
+                margin: 0 0 10px 0;
+                font-size: 16px;
+                color: #333;
+              }
+              .summary p {
+                margin: 5px 0;
+                font-size: 12px;
+                color: #666;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>Exam Results Report</h1>
+              <h2>${examName}</h2>
+              <p>Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+            </div>
+            
+            <table>
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Student Name</th>
+                  <th>Email</th>
+                  <th>Score</th>
+                  <th>Status</th>
+                  <th>Correct Answers</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${leaderboard.map((entry, index) => `
+                  <tr>
+                    <td>${index + 1}</td>
+                    <td>${entry.name || entry.email}</td>
+                    <td>${entry.email}</td>
+                    <td class="score">${entry.score.toFixed(2)}</td>
+                    <td class="${entry.passed ? 'pass' : 'fail'}">${entry.passed ? 'Pass' : 'Fail'}</td>
+                    <td>${entry.correctAnswers}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            
+            <div class="summary">
+              <h3>Summary</h3>
+              <p><strong>Total Students:</strong> ${totalStudents}</p>
+              <p><strong>Passed:</strong> ${passedStudents}</p>
+              <p><strong>Failed:</strong> ${failedStudents}</p>
+              <p><strong>Average Score:</strong> ${avgScore}</p>
+            </div>
+          </body>
+        </html>
+      `;
+
+      // Create a new window with the HTML content
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        error('Please allow popups to download the PDF');
+        return;
+      }
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+
+      // Wait for content to load, then trigger print dialog
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+          success('PDF download dialog opened. Select "Save as PDF" in the print dialog.');
+        }, 250);
+      };
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      error('Failed to generate PDF report');
+    }
+  };
+
   // Fetch score distribution from backend
   useEffect(() => {
     const fetchScoreDistribution = async () => {
@@ -1293,28 +1466,40 @@ export function ExamDetailPage({
               <Card>
                 <CardHeader>
                   <CardTitle>Performance Breakdown</CardTitle>
-                  <CardDescription>Pass/Fail distribution</CardDescription>
+                  <CardDescription>Pass/Fail distribution based on actual results</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: 'Pass', value: Math.round(statistics.totalAttempts * (examDetails.passRate / 100)), color: 'hsl(var(--success))' },
-                          { name: 'Fail', value: statistics.totalAttempts - Math.round(statistics.totalAttempts * (examDetails.passRate / 100)), color: 'hsl(var(--destructive))' }
-                        ]}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
-                      >
-                        <Cell fill="hsl(var(--success))" />
-                        <Cell fill="hsl(var(--destructive))" />
-                      </Pie>
-                      <RechartsTooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  {leaderboardLoading ? (
+                    <div className="text-center py-8 text-muted-foreground">Loading performance data...</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { 
+                              name: 'Pass', 
+                              value: leaderboard.filter(e => e.passed).length, 
+                              color: 'hsl(var(--success))' 
+                            },
+                            { 
+                              name: 'Fail', 
+                              value: leaderboard.filter(e => !e.passed).length, 
+                              color: 'hsl(var(--destructive))' 
+                            }
+                          ]}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          dataKey="value"
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          <Cell fill="hsl(var(--success))" />
+                          <Cell fill="hsl(var(--destructive))" />
+                        </Pie>
+                        <RechartsTooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -1326,7 +1511,7 @@ export function ExamDetailPage({
                   <Trophy className="h-5 w-5 text-yellow-500" />
                   Leaderboard
                 </CardTitle>
-                <CardDescription>Top performers ranked by correct answers</CardDescription>
+                <CardDescription>Top performers ranked by score</CardDescription>
               </CardHeader>
               <CardContent>
                 {leaderboardLoading ? (
@@ -1370,8 +1555,19 @@ export function ExamDetailPage({
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-lg font-bold text-primary">{entry.correctAnswers}</p>
-                            <p className="text-xs text-muted-foreground">correct answers</p>
+                            <div className="flex items-center gap-2 justify-end mb-1">
+                              <p className="text-lg font-bold text-primary">{entry.score.toFixed(2)}</p>
+                              {entry.passed ? (
+                                <span className="px-2 py-0.5 text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded">
+                                  Pass
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded">
+                                  Fail
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">{entry.correctAnswers} correct answers</p>
                             <p className="text-xs text-muted-foreground mt-1">
                               {new Date(entry.completedAt).toLocaleDateString()}
                             </p>
@@ -1389,10 +1585,26 @@ export function ExamDetailPage({
             <Card>
               <CardHeader>
                 <CardTitle>Export & Download</CardTitle>
-                <CardDescription>Download exam responses and reports</CardDescription>
+                <CardDescription>Download all students exam score data in PDF format</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex justify-center">
+                  <Button 
+                    variant="outline" 
+                    className="h-20 flex-col gap-2 min-w-[200px]"
+                    onClick={downloadLeaderboardPDF}
+                    disabled={leaderboard.length === 0 || leaderboardLoading}
+                  >
+                    <FileText className="h-6 w-6" />
+                    <div className="text-center">
+                      <div className="font-medium">Download Exam Results</div>
+                      <div className="text-xs text-muted-foreground">PDF Format</div>
+                    </div>
+                  </Button>
+                </div>
+                
+                {/* Commented out other download options */}
+                {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Button 
                     variant="outline" 
                     className="h-20 flex-col gap-2"
@@ -1449,7 +1661,7 @@ export function ExamDetailPage({
                       <div className="text-xs text-muted-foreground">CSV Format</div>
                     </div>
                   </Button>
-                </div>
+                </div> */}
               </CardContent>
             </Card>
           </TabsContent>

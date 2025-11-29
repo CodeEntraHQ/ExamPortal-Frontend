@@ -46,7 +46,7 @@ export type {
 } from './entity';
 
 // User API
-export { updateUserProfile, changePassword, getUsers, inviteUser, createUser, deregisterUser, activateUser } from './user';
+export { updateUserProfile, changePassword, getUsers, inviteUser, createUser, deregisterUser, activateUser, registerUser } from './user';
 export type { UserProfile, ApiUser, GetUsersResponse, InviteUserPayload, InviteUserResponse, CreateUserPayload, CreateUserResponse } from './user';
 
 // Two Factor Auth API
