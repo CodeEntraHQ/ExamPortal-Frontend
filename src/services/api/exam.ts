@@ -137,6 +137,8 @@ export interface LeaderboardEntry {
   email: string;
   name: string;
   correctAnswers: number;
+  score: number;
+  passed: boolean;
   completedAt: string;
 }
 
