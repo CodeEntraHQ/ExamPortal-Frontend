@@ -1466,28 +1466,40 @@ export function ExamDetailPage({
               <Card>
                 <CardHeader>
                   <CardTitle>Performance Breakdown</CardTitle>
-                  <CardDescription>Pass/Fail distribution</CardDescription>
+                  <CardDescription>Pass/Fail distribution based on actual results</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                      <Pie
-                        data={[
-                          { name: 'Pass', value: Math.round(statistics.totalAttempts * (examDetails.passRate / 100)), color: 'hsl(var(--success))' },
-                          { name: 'Fail', value: statistics.totalAttempts - Math.round(statistics.totalAttempts * (examDetails.passRate / 100)), color: 'hsl(var(--destructive))' }
-                        ]}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        dataKey="value"
-                        label={({ name, value }) => `${name}: ${value}`}
-                      >
-                        <Cell fill="hsl(var(--success))" />
-                        <Cell fill="hsl(var(--destructive))" />
-                      </Pie>
-                      <RechartsTooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  {leaderboardLoading ? (
+                    <div className="text-center py-8 text-muted-foreground">Loading performance data...</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { 
+                              name: 'Pass', 
+                              value: leaderboard.filter(e => e.passed).length, 
+                              color: 'hsl(var(--success))' 
+                            },
+                            { 
+                              name: 'Fail', 
+                              value: leaderboard.filter(e => !e.passed).length, 
+                              color: 'hsl(var(--destructive))' 
+                            }
+                          ]}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          dataKey="value"
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          <Cell fill="hsl(var(--success))" />
+                          <Cell fill="hsl(var(--destructive))" />
+                        </Pie>
+                        <RechartsTooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
                 </CardContent>
               </Card>
             </div>
