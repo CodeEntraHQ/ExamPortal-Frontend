@@ -28,7 +28,7 @@ export interface BackendQuestion {
   id: string;
   exam_id?: string;
   question_text: string;
-  type: 'MCQ' | 'MULTIPLE_CORRECT' | 'ONE_WORD' | 'SUBJECTIVE';
+  type: 'MCQ_SINGLE' | 'MCQ_MULTIPLE' | 'SINGLE_WORD';
   options?: string[];
   correct_answer?: string | string[];
   marks?: number;
@@ -41,7 +41,7 @@ export interface BackendQuestion {
 export interface CreateQuestionPayload {
   exam_id: string;
   question_text: string;
-  type: 'MCQ' | 'MULTIPLE_CORRECT' | 'ONE_WORD' | 'SUBJECTIVE';
+  type: 'MCQ_SINGLE' | 'MCQ_MULTIPLE' | 'SINGLE_WORD';
   options?: string[];
   correct_answer?: string | string[];
   marks?: number;
@@ -52,7 +52,7 @@ export interface CreateQuestionPayload {
 export interface UpdateQuestionPayload {
   question_id: string;
   question_text?: string;
-  type?: 'MCQ' | 'MULTIPLE_CORRECT' | 'ONE_WORD' | 'SUBJECTIVE';
+  type?: 'MCQ_SINGLE' | 'MCQ_MULTIPLE' | 'SINGLE_WORD';
   options?: string[];
   correct_answer?: string | string[];
   marks?: number;
@@ -62,13 +62,12 @@ export interface UpdateQuestionPayload {
 
 export interface CreateExamPayload {
   title: string;
-  type: 'QUIZ' | 'MCQ' | 'ONE_WORD' | 'DESCRIPTIVE' | 'HYBRID' | 'OTHER';
+  type: 'QUIZ' | 'OTHER';
   duration_seconds: number;
   metadata?: {
     totalMarks?: number;
     passingMarks?: number;
     instructions?: string[];
-    isMultipleCorrect?: boolean;
     [key: string]: any;
   };
   results_visible?: boolean;
@@ -77,7 +76,7 @@ export interface CreateExamPayload {
 
 export interface UpdateExamPayload {
   title?: string;
-  type?: 'QUIZ' | 'MCQ' | 'ONE_WORD' | 'DESCRIPTIVE' | 'HYBRID' | 'OTHER' | 'EXAM' | string;
+  type?: 'QUIZ' | 'OTHER' | 'EXAM' | string;
   duration_seconds?: number;
   active?: boolean;
   results_visible?: boolean;
@@ -85,7 +84,6 @@ export interface UpdateExamPayload {
     totalMarks?: number;
     passingMarks?: number;
     instructions?: string | string[];
-    isMultipleCorrect?: boolean;
     [key: string]: any;
   };
 }
