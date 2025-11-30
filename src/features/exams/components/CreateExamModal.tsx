@@ -188,6 +188,8 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
             ? { isMultipleCorrect: formData.metadata.isMultipleCorrect }
             : {}),
         },
+        // Results visible is disabled by default when creating exam
+        results_visible: false,
         // Only include entity_id for SUPERADMIN users with a valid non-empty string
         ...(user?.role === 'SUPERADMIN' && formData.entity_id && formData.entity_id.trim().length > 0
           ? { entity_id: formData.entity_id.trim() }

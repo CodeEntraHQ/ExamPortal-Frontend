@@ -46,6 +46,7 @@ type ExamFormData = {
   duration_seconds: number;
   metadata: MetadataField;
   active: boolean;
+  results_visible: boolean;
 };
 
 export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalProps) => {
@@ -73,6 +74,7 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
         duration_seconds: exam.duration_seconds || 3600,
         metadata,
         active: exam.active !== undefined ? exam.active : true,
+        results_visible: exam.results_visible ?? false,
       };
     }
     return {
@@ -81,6 +83,7 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
       duration_seconds: 3600,
       metadata: {},
       active: true,
+      results_visible: false,
     };
   };
 
@@ -186,6 +189,7 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
         type: formData.type,
         duration_seconds: formData.duration_seconds,
         active: formData.active,
+        results_visible: formData.results_visible,
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       };
       
@@ -342,6 +346,28 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
                     <SelectItem value="inactive">Inactive</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Results Visibility Toggle */}
+              <div className="grid gap-2 p-4 border rounded-lg bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="resultsVisible">Enable Results Visibility</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Allow students to view their exam results
+                    </p>
+                  </div>
+                  <Switch
+                    id="resultsVisible"
+                    checked={formData.results_visible || false}
+                    onCheckedChange={(checked) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        results_visible: checked
+                      }));
+                    }}
+                  />
+                </div>
               </div>
             </div>
 

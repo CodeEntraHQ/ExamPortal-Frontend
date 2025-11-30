@@ -20,7 +20,8 @@ import {
   Search,
   Eye,
   Play,
-  Star
+  Star,
+  Download
 } from 'lucide-react';
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { getStudentEnrollments, StudentEnrollment } from '../../../services/api/exam';
@@ -81,6 +82,8 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
       score: result ? (metadata.totalMarks ? Math.round((result.score / metadata.totalMarks) * 100) : result.score) : undefined,
       timeSpent: result?.metadata?.timeSpent ? Math.floor(result.metadata.timeSpent / 60) : undefined,
       correctAnswers: result?.metadata?.correctAnswers || undefined,
+      resultsVisible: exam.results_visible ?? false,
+      enrollment: enrollment, // Keep full enrollment for access to result data
     };
   };
 
@@ -308,7 +311,7 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -330,6 +333,8 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
             </Card>
           </motion.div>
 
+          {/* Average Score - Commented out */}
+          {/* 
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -350,6 +355,7 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
               </CardContent>
             </Card>
           </motion.div>
+          */}
 
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -372,6 +378,8 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
             </Card>
           </motion.div>
 
+          {/* Class Rank - Commented out */}
+          {/* 
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -392,15 +400,15 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
               </CardContent>
             </Card>
           </motion.div>
+          */}
         </div>
 
         {/* Main Content Tabs */}
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="exams">My Exams</TabsTrigger>
             <TabsTrigger value="performance">Performance</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
@@ -431,10 +439,18 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                     <div className="p-3 rounded-full bg-primary/10">
                       <Calendar className="h-6 w-6 text-primary" />
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <h3 className="font-medium">Next Exam</h3>
-                      <p className="text-sm text-muted-foreground">Mathematics Final</p>
-                      <p className="text-xs text-muted-foreground">Feb 15, 2024</p>
+                      {upcomingExams.length > 0 ? (
+                        <>
+                          <p className="text-sm text-muted-foreground truncate">{upcomingExams[0].name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(upcomingExams[0].date).toLocaleDateString()}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Not Available</p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -446,10 +462,26 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                     <div className="p-3 rounded-full bg-success/10">
                       <TrendingUp className="h-6 w-6 text-success" />
                     </div>
-                    <div>
-                      <h3 className="font-medium">Best Subject</h3>
-                      <p className="text-sm text-muted-foreground">Biology</p>
-                      <p className="text-xs text-muted-foreground">92% average</p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium">Best Exam</h3>
+                      {(() => {
+                        // Find exam with max marks from completed exams with results_visible enabled
+                        const examsWithScores = completedExams.filter(exam => 
+                          exam.score !== undefined && exam.resultsVisible && exam.enrollment?.result
+                        );
+                        if (examsWithScores.length === 0) {
+                          return <p className="text-sm text-muted-foreground">Not Available</p>;
+                        }
+                        const bestExam = examsWithScores.reduce((best, current) => 
+                          (current.score || 0) > (best.score || 0) ? current : best
+                        );
+                        return (
+                          <>
+                            <p className="text-sm text-muted-foreground truncate">{bestExam.name}</p>
+                            <p className="text-xs text-muted-foreground">{bestExam.score?.toFixed(1)}%</p>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </CardContent>
@@ -461,10 +493,32 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                     <div className="p-3 rounded-full bg-orange-100 dark:bg-orange-900/30">
                       <Target className="h-6 w-6 text-orange-600 dark:text-orange-400" />
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <h3 className="font-medium">Study Focus</h3>
-                      <p className="text-sm text-muted-foreground">Computer Science</p>
-                      <p className="text-xs text-muted-foreground">Needs attention</p>
+                      {(() => {
+                        // Find exams with marks below 60% and results_visible enabled
+                        const lowScoreExams = completedExams.filter(exam => 
+                          exam.score !== undefined && 
+                          exam.score < 60 && 
+                          exam.resultsVisible && 
+                          exam.enrollment?.result
+                        );
+                        if (lowScoreExams.length === 0) {
+                          return <p className="text-sm text-muted-foreground">Not Available</p>;
+                        }
+                        // Show the exam with the lowest score
+                        const focusExam = lowScoreExams.reduce((lowest, current) => 
+                          (current.score || 0) < (lowest.score || 0) ? current : lowest
+                        );
+                        return (
+                          <>
+                            <p className="text-sm text-muted-foreground truncate">{focusExam.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Score: {focusExam.score?.toFixed(1)}% - Needs attention
+                            </p>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </CardContent>
@@ -784,7 +838,8 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
           </TabsContent>
 
           <TabsContent value="performance" className="space-y-6">
-            {/* Subject Performance */}
+            {/* Commented out original performance content */}
+            {/* 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card>
                 <CardHeader>
@@ -833,7 +888,6 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
               </Card>
             </div>
 
-            {/* Performance Metrics */}
             <Card>
               <CardHeader>
                 <CardTitle>Performance Radar</CardTitle>
@@ -856,112 +910,374 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                 </ResponsiveContainer>
               </CardContent>
             </Card>
+            */}
+
+            {/* Show only exams with results_visible enabled */}
+            {(() => {
+              // Filter completed exams that have results_visible enabled and have results
+              const visibleResults = completedExams.filter(
+                exam => exam.resultsVisible && exam.enrollment?.result
+              );
+
+              if (visibleResults.length === 0) {
+                return (
+                  <Card>
+                    <CardContent className="p-8 text-center">
+                      <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="font-medium mb-2">No Results Available</h3>
+                      <p className="text-muted-foreground">
+                        Results for your completed exams will appear here once they are made visible by your instructor.
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              return (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Exam Results</CardTitle>
+                    <CardDescription>View and download your exam results</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {visibleResults.map((exam) => {
+                        const enrollment = exam.enrollment as StudentEnrollment;
+                        const result = enrollment.result;
+                        const metadata = enrollment.exam.metadata || {};
+                        const totalMarks = metadata.totalMarks || 100;
+                        const passingMarks = metadata.passingMarks || 0;
+                        const score = result?.score || 0;
+                        const percentage = totalMarks > 0 ? Math.round((score / totalMarks) * 100) : 0;
+                        const passed = score >= passingMarks;
+                        const resultMetadata = result?.metadata || {};
+                        const correctAnswers = resultMetadata.correct_answer || 0;
+                        const incorrectAnswers = resultMetadata.incorrect_answer || 0;
+                        const noAnswers = resultMetadata.no_answers || 0;
+                        const totalQuestions = resultMetadata.total_questions || 0;
+
+                        const handleDownload = () => {
+                          // Create HTML content for PDF
+                          const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Exam Results - ${exam.name}</title>
+  <style>
+    @media print {
+      @page {
+        margin: 1cm;
+      }
+      body {
+        margin: 0;
+        padding: 20px;
+      }
+    }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      color: #333;
+    }
+    .brand-header {
+      text-align: center;
+      background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+      color: white;
+      padding: 25px 20px;
+      margin: -20px -20px 30px -20px;
+      border-radius: 0;
+    }
+    .brand-header h1 {
+      margin: 0;
+      font-size: 32px;
+      font-weight: bold;
+      color: white;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .brand-header p {
+      margin: 8px 0 0 0;
+      font-size: 14px;
+      opacity: 0.95;
+    }
+    .header {
+      text-align: center;
+      border-bottom: 3px solid #2980b9;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+    .header h2 {
+      color: #2980b9;
+      margin: 0;
+      font-size: 24px;
+    }
+    .section {
+      margin-bottom: 25px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #2c3e50;
+      margin-bottom: 15px;
+      border-bottom: 2px solid #ecf0f1;
+      padding-bottom: 5px;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #ecf0f1;
+    }
+    .info-label {
+      font-weight: 600;
+      color: #7f8c8d;
+    }
+    .info-value {
+      color: #2c3e50;
+    }
+    .status {
+      display: inline-block;
+      padding: 5px 15px;
+      border-radius: 20px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .status.passed {
+      background-color: #27ae60;
+      color: white;
+    }
+    .status.failed {
+      background-color: #e74c3c;
+      color: white;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      margin-top: 15px;
+    }
+    .stat-box {
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .stat-box.correct {
+      background-color: #d5f4e6;
+      border: 2px solid #27ae60;
+    }
+    .stat-box.incorrect {
+      background-color: #fadbd8;
+      border: 2px solid #e74c3c;
+    }
+    .stat-box.unanswered {
+      background-color: #ebedef;
+      border: 2px solid #95a5a6;
+    }
+    .stat-value {
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .stat-label {
+      font-size: 14px;
+      color: #7f8c8d;
+    }
+    .footer {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #ecf0f1;
+      text-align: center;
+      font-size: 12px;
+      color: #95a5a6;
+    }
+    .brand-footer {
+      margin-top: 40px;
+      padding: 20px;
+      background-color: #f8f9fa;
+      border-top: 3px solid #4facfe;
+      text-align: center;
+      font-size: 11px;
+      color: #7f8c8d;
+    }
+    .brand-footer strong {
+      color: #2980b9;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="brand-header">
+    <h1>ExamEntra</h1>
+    <p>Secure Online Examination Platform</p>
+  </div>
+  
+  <div class="header">
+    <h2>EXAM RESULTS REPORT</h2>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Exam Information</div>
+    <div class="info-row">
+      <span class="info-label">Exam Name:</span>
+      <span class="info-value">${exam.name}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Date:</span>
+      <span class="info-value">${new Date(exam.date).toLocaleDateString()}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Duration:</span>
+      <span class="info-value">${exam.duration} minutes</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Score Summary</div>
+    <div class="info-row">
+      <span class="info-label">Total Score:</span>
+      <span class="info-value"><strong>${score.toFixed(2)} / ${totalMarks}</strong></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Percentage:</span>
+      <span class="info-value"><strong>${percentage}%</strong></span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Status:</span>
+      <span class="info-value">
+        <span class="status ${passed ? 'passed' : 'failed'}">
+          ${passed ? 'PASSED' : 'FAILED'}
+        </span>
+      </span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Passing Marks:</span>
+      <span class="info-value">${passingMarks} / ${totalMarks}</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Question Breakdown</div>
+    <div class="info-row">
+      <span class="info-label">Total Questions:</span>
+      <span class="info-value"><strong>${totalQuestions}</strong></span>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-box correct">
+        <div class="stat-value" style="color: #27ae60;">${correctAnswers}</div>
+        <div class="stat-label">Correct Answers</div>
+      </div>
+      <div class="stat-box incorrect">
+        <div class="stat-value" style="color: #e74c3c;">${incorrectAnswers}</div>
+        <div class="stat-label">Incorrect Answers</div>
+      </div>
+      <div class="stat-box unanswered">
+        <div class="stat-value" style="color: #95a5a6;">${noAnswers}</div>
+        <div class="stat-label">Unanswered</div>
+      </div>
+      <div class="stat-box" style="background-color: #ebf5fb; border: 2px solid #3498db;">
+        <div class="stat-value" style="color: #3498db;">${totalQuestions}</div>
+        <div class="stat-label">Total Questions</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="brand-footer">
+    <div style="margin-bottom: 10px;">
+      <strong>ExamEntra</strong> - A secure and modern platform for conducting scholarship exams online
+    </div>
+    <div>
+      Generated on: ${new Date().toLocaleString()} | This is an official document generated by ExamEntra Platform
+    </div>
+  </div>
+</body>
+</html>
+                          `;
+
+                          // Create a new window with the HTML content
+                          const printWindow = window.open('', '_blank');
+                          if (!printWindow) {
+                            alert('Please allow popups to download the PDF');
+                            return;
+                          }
+
+                          printWindow.document.write(htmlContent);
+                          printWindow.document.close();
+
+                          // Wait for content to load, then trigger print dialog
+                          printWindow.onload = () => {
+                            setTimeout(() => {
+                              printWindow.print();
+                            }, 250);
+                          };
+                        };
+
+                        return (
+                          <div
+                            key={exam.id}
+                            className="border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <h3 className="font-semibold text-lg">{exam.name}</h3>
+                                  <Badge variant={passed ? "default" : "destructive"}>
+                                    {passed ? 'Passed' : 'Failed'}
+                                  </Badge>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+                                  <div>
+                                    <p className="text-sm text-muted-foreground">Score</p>
+                                    <p className="text-lg font-semibold">
+                                      {score.toFixed(2)} / {totalMarks}
+                                    </p>
+                                    <p className="text-sm text-muted-foreground">({percentage}%)</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-muted-foreground">Correct</p>
+                                    <p className="text-lg font-semibold text-green-600">
+                                      {correctAnswers} / {totalQuestions}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-muted-foreground">Incorrect</p>
+                                    <p className="text-lg font-semibold text-red-600">
+                                      {incorrectAnswers}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-sm text-muted-foreground">Unanswered</p>
+                                    <p className="text-lg font-semibold text-muted-foreground">
+                                      {noAnswers}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="mt-3">
+                                  <p className="text-sm text-muted-foreground">
+                                    Completed: {new Date(result?.created_at || exam.date).toLocaleString()}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleDownload}
+                                className="ml-4"
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
           </TabsContent>
 
-          <TabsContent value="analytics" className="space-y-6">
-            {/* Advanced Analytics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Study Efficiency</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-primary mb-2">87%</div>
-                  <p className="text-sm text-muted-foreground">Time utilization rate</p>
-                  <Progress value={87} className="mt-3" />
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Improvement Rate</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-success mb-2">+12%</div>
-                  <p className="text-sm text-muted-foreground">Over last 5 exams</p>
-                  <div className="flex items-center mt-3 text-success">
-                    <TrendingUp className="h-4 w-4 mr-1" />
-                    <span className="text-sm">Trending up</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Consistency</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-orange-600 mb-2">±8%</div>
-                  <p className="text-sm text-muted-foreground">Score variation</p>
-                  <div className="flex items-center mt-3 text-orange-600">
-                    <Activity className="h-4 w-4 mr-1" />
-                    <span className="text-sm">Moderate</span>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Detailed Performance Metrics */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Detailed Performance Metrics</CardTitle>
-                <CardDescription>Comprehensive analysis of your exam performance</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={performanceData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="score" stroke="hsl(var(--chart-1))" name="Score %" />
-                    <Line type="monotone" dataKey="accuracy" stroke="hsl(var(--chart-2))" name="Accuracy %" />
-                    <Line type="monotone" dataKey="timeEfficiency" stroke="hsl(var(--chart-3))" name="Time Efficiency %" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
-            {/* Recommendations */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Performance Insights & Recommendations</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
-                    <div>
-                      <h4 className="font-medium text-green-800 dark:text-green-400">Strong Performance</h4>
-                      <p className="text-sm text-green-700 dark:text-green-300">
-                        You're excelling in Biology and English. Keep up the excellent work!
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start gap-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                    <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
-                    <div>
-                      <h4 className="font-medium text-orange-800 dark:text-orange-400">Area for Improvement</h4>
-                      <p className="text-sm text-orange-700 dark:text-orange-300">
-                        Consider spending more time on Computer Science topics. Practice coding problems regularly.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <Star className="h-5 w-5 text-blue-600 mt-0.5" />
-                    <div>
-                      <h4 className="font-medium text-blue-800 dark:text-blue-400">Study Tip</h4>
-                      <p className="text-sm text-blue-700 dark:text-blue-300">
-                        Your time management is excellent! Continue reviewing flagged questions before exams.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </motion.div>
     </div>
