@@ -16,7 +16,7 @@ export function Footer() {
   ];
 
   return (
-    <footer className="bg-card border-t border-border mt-auto">
+    <footer className="bg-card border-t border-border mt-auto sticky bottom-0 z-40">
       <div className="container mx-auto px-4 py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3 text-sm text-muted-foreground whitespace-nowrap">
           <div className="p-2 rounded-lg bg-primary/10">

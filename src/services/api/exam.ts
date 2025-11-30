@@ -27,6 +27,8 @@ export interface BackendQuestion {
   id: string;
   exam_id?: string;
   question_text: string;
+  question_image_id?: string | null;
+  question_image_link?: string | null;
   type: 'MCQ' | 'MULTIPLE_CORRECT' | 'ONE_WORD' | 'SUBJECTIVE';
   options?: string[];
   correct_answer?: string | string[];
@@ -305,32 +307,126 @@ export async function getQuestions(
 /**
  * Create a question
  */
-export async function createQuestion(payload: CreateQuestionPayload): Promise<{ payload: BackendQuestion }> {
-  const response = await authenticatedFetch(getApiUrl('/v1/exams/question'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+export async function createQuestion(
+  payload: CreateQuestionPayload,
+  questionImage?: File | null,
+  optionImages?: { [key: number]: File }
+): Promise<{ payload: BackendQuestion }> {
+  // Check if we need to send FormData (if there are images)
+  const hasImages = questionImage || (optionImages && Object.keys(optionImages).length > 0);
 
-  return response.json();
+  if (hasImages) {
+    // Use FormData for file uploads
+    const formData = new FormData();
+    
+    // Add question image if present
+    if (questionImage) {
+      formData.append('question_image', questionImage);
+    }
+
+    // Add option images if present
+    if (optionImages) {
+      Object.keys(optionImages).forEach((index) => {
+        const file = optionImages[parseInt(index)];
+        if (file) {
+          formData.append(`option_image_${index}`, file);
+        }
+      });
+    }
+
+    // Add other fields
+    formData.append('exam_id', payload.exam_id);
+    if (payload.question_text) {
+      formData.append('question_text', payload.question_text);
+    }
+    formData.append('type', payload.type);
+    if (payload.metadata) {
+      formData.append('metadata', JSON.stringify(payload.metadata));
+    }
+
+    const response = await authenticatedFetch(getApiUrl('/v1/exams/question'), {
+      method: 'POST',
+      body: formData,
+      // Don't set Content-Type header - browser will set it with boundary for FormData
+    });
+
+    return response.json();
+  } else {
+    // Use JSON for regular requests
+    const response = await authenticatedFetch(getApiUrl('/v1/exams/question'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return response.json();
+  }
 }
 
 /**
  * Update a question
  */
-export async function updateQuestion(payload: UpdateQuestionPayload): Promise<{ payload: BackendQuestion }> {
+export async function updateQuestion(
+  payload: UpdateQuestionPayload,
+  questionImage?: File | null,
+  optionImages?: { [key: number]: File }
+): Promise<{ payload: BackendQuestion }> {
   const { question_id, ...updateData } = payload;
-  const response = await authenticatedFetch(getApiUrl(`/v1/exams/question/${question_id}`), {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(updateData),
-  });
+  
+  // Check if we need to send FormData (if there are images)
+  const hasImages = questionImage || (optionImages && Object.keys(optionImages).length > 0);
 
-  return response.json();
+  if (hasImages) {
+    // Use FormData for file uploads
+    const formData = new FormData();
+    
+    // Add question image if present
+    if (questionImage) {
+      formData.append('question_image', questionImage);
+    }
+
+    // Add option images if present
+    if (optionImages) {
+      Object.keys(optionImages).forEach((index) => {
+        const file = optionImages[parseInt(index)];
+        if (file) {
+          formData.append(`option_image_${index}`, file);
+        }
+      });
+    }
+
+    // Add other fields
+    if (updateData.question_text !== undefined) {
+      formData.append('question_text', updateData.question_text);
+    }
+    if (updateData.type) {
+      formData.append('type', updateData.type);
+    }
+    if (updateData.metadata) {
+      formData.append('metadata', JSON.stringify(updateData.metadata));
+    }
+
+    const response = await authenticatedFetch(getApiUrl(`/v1/exams/question/${question_id}`), {
+      method: 'PATCH',
+      body: formData,
+      // Don't set Content-Type header - browser will set it with boundary for FormData
+    });
+
+    return response.json();
+  } else {
+    // Use JSON for regular requests
+    const response = await authenticatedFetch(getApiUrl(`/v1/exams/question/${question_id}`), {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updateData),
+    });
+
+    return response.json();
+  }
 }
 
 /**
@@ -364,7 +460,7 @@ export async function startExam(examId: string): Promise<{ payload: { started_at
 /**
  * Save an answer
  */
-export async function saveAnswer(examId: string, questionId: string, answer: string): Promise<void> {
+export async function saveAnswer(examId: string, questionId: string, answer: string | number | number[]): Promise<void> {
   const response = await authenticatedFetch(getApiUrl('/v1/submissions/answer'), {
     method: 'POST',
     headers: {

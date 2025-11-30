@@ -170,14 +170,14 @@ export function RoleBasedLayout({ role }: RoleBasedLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col h-screen overflow-hidden">
       <TopNavigation
         currentView={getCurrentView()}
         setCurrentView={handleNavigationChange}
         breadcrumbItems={getBreadcrumbItems()}
         onBack={getBackHandler()}
       />
-      <main className="flex-1 p-6 overflow-auto">
+      <main className="flex-1 p-6 overflow-y-auto overflow-x-hidden">
         <Outlet />
       </main>
       <Footer />

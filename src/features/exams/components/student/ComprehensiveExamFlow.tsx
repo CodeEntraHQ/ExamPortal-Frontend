@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getExamById, getQuestions, BackendExam, BackendQuestion, startExam, saveAnswer, submitExam, getSubmissions } from '../../../../services/api/exam';
+import { authenticatedFetch } from '../../../../services/api/core';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../shared/components/ui/card';
 import { Button } from '../../../../shared/components/ui/button';
 import { Progress } from '../../../../shared/components/ui/progress';
@@ -43,14 +44,203 @@ import { motion, AnimatePresence } from 'motion/react';
 
 const QUESTIONS_PAGE_SIZE = 10;
 
+// Component to fetch and display question/option images
+function QuestionImage({ src }: { src: string }) {
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!src) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchImage = async () => {
+      try {
+        const response = await authenticatedFetch(src);
+        const data = await response.json();
+        if (data.payload?.media) {
+          // Media is stored as BLOB in the database
+          // Sequelize returns BLOB as Buffer, which when JSON stringified becomes {type: 'Buffer', data: [...]}
+          const mediaData = data.payload.media;
+          let buffer: Uint8Array;
+          
+          if (mediaData && typeof mediaData === 'object') {
+            if (mediaData.type === 'Buffer' && Array.isArray(mediaData.data)) {
+              // Buffer object from JSON.stringify
+              buffer = new Uint8Array(mediaData.data);
+            } else if (Array.isArray(mediaData.data)) {
+              // Object with data array
+              buffer = new Uint8Array(mediaData.data);
+            } else if (Array.isArray(mediaData)) {
+              // Direct array
+              buffer = new Uint8Array(mediaData);
+            } else {
+              // Try to get values if it's an object
+              const values = Object.values(mediaData);
+              if (values.length > 0 && Array.isArray(values[0])) {
+                buffer = new Uint8Array(values[0] as number[]);
+              } else {
+                buffer = new Uint8Array(Object.values(mediaData) as number[]);
+              }
+            }
+          } else {
+            console.error('Unexpected media data format:', mediaData);
+            setError(true);
+            setLoading(false);
+            return;
+          }
+          
+          const blob = new Blob([buffer], { type: 'image/jpeg' });
+          const dataUrl = URL.createObjectURL(blob);
+          setImgSrc(dataUrl);
+        }
+      } catch (err) {
+        console.error('Failed to fetch question image:', err);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchImage();
+
+    // Cleanup blob URL on unmount
+    return () => {
+      if (imgSrc) {
+        URL.revokeObjectURL(imgSrc);
+      }
+    };
+  }, [src]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-8 border rounded-lg">
+        <div className="text-muted-foreground">Loading image...</div>
+      </div>
+    );
+  }
+
+  if (error || !imgSrc) {
+    return null;
+  }
+
+  return (
+    <div className="flex justify-center">
+      <img 
+        src={imgSrc} 
+        alt="Question" 
+        className="max-w-full max-h-[600px] h-auto rounded-lg border object-contain"
+        style={{ maxWidth: '100%', height: 'auto' }}
+      />
+    </div>
+  );
+}
+
+// Component to fetch and display option images
+function OptionImage({ src }: { src: string }) {
+  const [imgSrc, setImgSrc] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (!src) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchImage = async () => {
+      try {
+        const response = await authenticatedFetch(src);
+        const data = await response.json();
+        if (data.payload?.media) {
+          // Media is stored as BLOB in the database
+          // Sequelize returns BLOB as Buffer, which when JSON stringified becomes {type: 'Buffer', data: [...]}
+          const mediaData = data.payload.media;
+          let buffer: Uint8Array;
+          
+          if (mediaData && typeof mediaData === 'object') {
+            if (mediaData.type === 'Buffer' && Array.isArray(mediaData.data)) {
+              // Buffer object from JSON.stringify
+              buffer = new Uint8Array(mediaData.data);
+            } else if (Array.isArray(mediaData.data)) {
+              // Object with data array
+              buffer = new Uint8Array(mediaData.data);
+            } else if (Array.isArray(mediaData)) {
+              // Direct array
+              buffer = new Uint8Array(mediaData);
+            } else {
+              // Try to get values if it's an object
+              const values = Object.values(mediaData);
+              if (values.length > 0 && Array.isArray(values[0])) {
+                buffer = new Uint8Array(values[0] as number[]);
+              } else {
+                buffer = new Uint8Array(Object.values(mediaData) as number[]);
+              }
+            }
+          } else {
+            console.error('Unexpected media data format:', mediaData);
+            setError(true);
+            setLoading(false);
+            return;
+          }
+          
+          const blob = new Blob([buffer], { type: 'image/jpeg' });
+          const dataUrl = URL.createObjectURL(blob);
+          setImgSrc(dataUrl);
+        }
+      } catch (err) {
+        console.error('Failed to fetch option image:', err);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchImage();
+
+    // Cleanup blob URL on unmount
+    return () => {
+      if (imgSrc) {
+        URL.revokeObjectURL(imgSrc);
+      }
+    };
+  }, [src]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center p-4 border rounded">
+        <div className="text-xs text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  if (error || !imgSrc) {
+    return null;
+  }
+
+  return (
+    <div className="flex justify-center">
+      <img 
+        src={imgSrc} 
+        alt="Option" 
+        className="max-w-full max-h-48 h-auto rounded-lg border object-contain"
+        style={{ maxWidth: '100%', height: 'auto' }}
+      />
+    </div>
+  );
+}
+
 interface Question {
   id: string;
   type: string;
   title: string;
   content: string;
+  questionImageLink?: string | null;
   points: number;
   timeLimit?: number;
-  options?: { id: string; text: string }[];
+  options?: { id: string; text: string; imageLink?: string | null }[];
   metadata?: any;
   answer?: any;
   flagged: boolean;
@@ -212,12 +402,14 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
             id: q.id,
             type: q.type === 'MCQ' ? (isMultipleCorrect ? 'mcq-multiple' : 'mcq-single') : 'short-answer',
             title: `Question ${index + 1}`,
-            content: q.question_text,
+            content: q.question_text || '',
+            questionImageLink: (q as any).question_image_link || null,
             points: qMetadata.points || 10,
             timeLimit: qMetadata.timeLimit,
             options: options.map((opt: any, optIndex: number) => ({
               id: String.fromCharCode(97 + optIndex), // a, b, c, d, etc.
               text: opt.text || opt.toString(),
+              imageLink: opt.image_link || null,
             })),
             metadata: qMetadata,
             answer: undefined,
@@ -586,63 +778,48 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   };
 
   // Helper function to convert option ID to option text
-  const getOptionTextById = (questionId: string, optionId: string): string | null => {
-    if (!examConfig) return null;
-    const question = examConfig.questions.find(q => q.id === questionId);
-    if (!question) return null;
-    const option = question.options?.find(opt => opt.id === optionId);
-    return option?.text || null;
-  };
-
-  // Helper function to convert option text to option ID (for display)
-  const getOptionIdByText = (questionId: string, optionText: string): string | null => {
-    if (!examConfig) return null;
-    const question = examConfig.questions.find(q => q.id === questionId);
-    if (!question) return null;
-    const option = question.options?.find(opt => opt.text === optionText);
-    return option?.id || null;
-  };
-
-  // Helper function to convert answer (ID or array of IDs) to text (or array of texts)
-  const convertAnswerToText = (questionId: string, answer: any): any => {
-    if (!answer) return answer;
-    
-    // For multiple choice (array of IDs)
-    if (Array.isArray(answer)) {
-      return answer.map(id => getOptionTextById(questionId, id)).filter(text => text !== null);
-    }
-    
-    // For single choice (single ID) or true/false
-    // For true/false, keep as is (it's already text)
-    if (answer === 'true' || answer === 'false') {
-      return answer;
-    }
-    
-    // For single choice MCQ, convert ID to text
-    const text = getOptionTextById(questionId, answer);
-    return text || answer; // Fallback to original if not found
-  };
-
-
   const handleAnswerChange = async (questionId: string, answer: any) => {
     // Find the question to determine its type
     const question = examConfig?.questions.find(q => q.id === questionId);
     if (!question) return;
 
-    // Convert answer from ID to text for saving
-    const answerToSave = convertAnswerToText(questionId, answer);
+    // Convert answer from option ID (a, b, c, d) to index (0, 1, 2, 3) for saving
+    const convertAnswerToIndex = (questionId: string, answer: any): number | number[] | any => {
+      const question = examConfig?.questions.find(q => q.id === questionId);
+      if (!question || !question.options) return answer;
+
+      // For multiple choice (array of IDs)
+      if (Array.isArray(answer)) {
+        return answer.map((id: string) => {
+          // Convert "a", "b", "c", "d" to 0, 1, 2, 3
+          const index = question.options?.findIndex(opt => opt.id === id);
+          return index !== undefined && index !== -1 ? index : id;
+        }).filter((idx: any) => typeof idx === 'number');
+      }
+      
+      // For single choice MCQ, convert ID to index
+      if (question.type === 'mcq-single' || question.type === 'mcq-multiple') {
+        const index = question.options?.findIndex(opt => opt.id === answer);
+        return index !== undefined && index !== -1 ? index : answer;
+      }
+      
+      // For other types (true/false, short-answer, etc.), keep as is
+      return answer;
+    };
+
+    const answerToSave = convertAnswerToIndex(questionId, answer);
     
     // Update local state with the ID (for display purposes)
-    // We keep IDs in local state for UI, but save text to backend
+    // We keep IDs in local state for UI, but save index to backend
     setExamState(prev => ({
       ...prev,
       answers: { ...prev.answers, [questionId]: answer }
     }));
 
-    // Auto-save to backend if exam is active (save as text)
+    // Auto-save to backend if exam is active (save as index)
     if (examConfig && examState.phase === 'active') {
       try {
-        await saveAnswer(examId, questionId, answerToSave); // Save text instead of ID
+        await saveAnswer(examId, questionId, answerToSave); // Save index instead of ID
       } catch (error) {
         console.error('Failed to save answer:', error);
         // Don't show error to user for auto-save failures
@@ -1149,12 +1326,16 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
             value={answer || ''} 
             onValueChange={(value) => onAnswerChange(currentQuestion.id, value)}
           >
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {currentQuestion.options?.map((option: any) => (
-                <div key={option.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                  <RadioGroupItem value={option.id} id={option.id} />
-                  <Label htmlFor={option.id} className="flex-1 cursor-pointer">
-                    {option.text}
+                <div key={option.id} className="flex items-start space-x-2 p-3 rounded-lg hover:bg-muted/50 transition-colors border">
+                  <RadioGroupItem value={option.id} id={option.id} className="mt-1" />
+                  <Label htmlFor={option.id} className="flex-1 cursor-pointer space-y-2">
+                    {option.imageLink ? (
+                      <OptionImage src={option.imageLink} />
+                    ) : (
+                      option.text && <span>{option.text}</span>
+                    )}
                   </Label>
                 </div>
               ))}
@@ -1164,12 +1345,12 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
 
       case 'mcq-multiple':
         return (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {currentQuestion.options?.map((option: any) => {
               // Check if this option ID is in the answer array
               const isChecked = Array.isArray(answer) && answer.includes(option.id);
               return (
-                <div key={option.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                <div key={option.id} className="flex items-start space-x-2 p-3 rounded-lg hover:bg-muted/50 transition-colors border">
                   <Checkbox
                     id={option.id}
                     checked={isChecked}
@@ -1181,9 +1362,14 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
                         onAnswerChange(currentQuestion.id, newAnswer.filter((id: string) => id !== option.id));
                       }
                     }}
+                    className="mt-1"
                   />
-                  <Label htmlFor={option.id} className="flex-1 cursor-pointer">
-                    {option.text}
+                  <Label htmlFor={option.id} className="flex-1 cursor-pointer space-y-2">
+                    {option.imageLink ? (
+                      <OptionImage src={option.imageLink} />
+                    ) : (
+                      option.text && <span>{option.text}</span>
+                    )}
                   </Label>
                 </div>
               );
@@ -1365,16 +1551,16 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Question Navigation Sidebar */}
-          <div className="lg:col-span-1">
+      <div className="w-full px-4 py-6">
+        <div className="flex gap-6 max-w-[98vw]">
+          {/* Question Navigation Sidebar - Left */}
+          <div className="flex-shrink-0 w-64">
             <Card className="sticky top-24">
               <CardHeader>
                 <CardTitle className="text-lg">Questions</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-5 lg:grid-cols-4 gap-2">
+                <div className="grid grid-cols-4 gap-2">
                   {examConfig.questions.map((_: any, index: number) => (
                     <Button
                       key={index}
@@ -1416,8 +1602,8 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
             </Card>
           </div>
 
-          {/* Main Question Area */}
-          <div className="lg:col-span-3">
+          {/* Main Question Area - Takes remaining space on left */}
+          <div className="flex-1 min-w-0">
             <motion.div
               key={examState.currentQuestion}
               initial={{ opacity: 0, x: 20 }}
@@ -1454,8 +1640,13 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="prose dark:prose-invert max-w-none">
-                    <p>{currentQuestion.content}</p>
+                  <div className="prose dark:prose-invert max-w-none space-y-4">
+                    {currentQuestion.content && (
+                      <p>{currentQuestion.content}</p>
+                    )}
+                    {currentQuestion.questionImageLink && (
+                      <QuestionImage src={currentQuestion.questionImageLink} />
+                    )}
                   </div>
                   
                   {renderQuestionContent()}

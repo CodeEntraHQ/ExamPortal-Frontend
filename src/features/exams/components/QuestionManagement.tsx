@@ -15,12 +15,107 @@ import {
   Trash2, 
   Search,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
+import { authenticatedFetch } from '../../../services/api/core';
 
 // Export Question type alias for use in other components
 export type Question = BackendQuestion;
+
+// Helper function to fetch image from backend and convert to data URL
+const fetchImageAsDataUrl = async (imageLink: string | null | undefined): Promise<string | null> => {
+  if (!imageLink) return null;
+  
+  try {
+    const response = await authenticatedFetch(imageLink);
+    const data = await response.json();
+    if (data.payload?.media) {
+      const mediaData = data.payload.media;
+      let buffer: Uint8Array;
+      
+      if (mediaData && typeof mediaData === 'object') {
+        if (mediaData.type === 'Buffer' && Array.isArray(mediaData.data)) {
+          buffer = new Uint8Array(mediaData.data);
+        } else if (Array.isArray(mediaData.data)) {
+          buffer = new Uint8Array(mediaData.data);
+        } else if (Array.isArray(mediaData)) {
+          buffer = new Uint8Array(mediaData);
+        } else {
+          const values = Object.values(mediaData);
+          if (values.length > 0 && Array.isArray(values[0])) {
+            buffer = new Uint8Array(values[0] as number[]);
+          } else {
+            buffer = new Uint8Array(Object.values(mediaData) as number[]);
+          }
+        }
+      } else {
+        console.error('Unexpected media data format:', mediaData);
+        return null;
+      }
+      
+      const blob = new Blob([buffer], { type: 'image/jpeg' });
+      return URL.createObjectURL(blob);
+    }
+    return null;
+  } catch (error) {
+    console.error('Failed to fetch image:', error);
+    return null;
+  }
+};
+
+// Helper function to validate image dimensions
+const validateImageDimensions = (
+  file: File,
+  maxWidth: number,
+  maxHeight: number,
+  minWidth: number = 100,
+  minHeight: number = 100
+): Promise<{ valid: boolean; width?: number; height?: number; error?: string }> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const { width, height } = img;
+      
+      if (width < minWidth || height < minHeight) {
+        resolve({
+          valid: false,
+          width,
+          height,
+          error: `Image dimensions are too small. Minimum size: ${minWidth}x${minHeight}px. Current: ${width}x${height}px. Please resize and upload again.`
+        });
+        return;
+      }
+      
+      if (width > maxWidth || height > maxHeight) {
+        resolve({
+          valid: false,
+          width,
+          height,
+          error: `Image dimensions are too large. Maximum size: ${maxWidth}x${maxHeight}px. Current: ${width}x${height}px. Please resize and upload again.`
+        });
+        return;
+      }
+      
+      resolve({ valid: true, width, height });
+    };
+    
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({
+        valid: false,
+        error: 'Failed to load image for validation. Please ensure the file is a valid image.'
+      });
+    };
+    
+    img.src = objectUrl;
+  });
+};
 
 interface QuestionManagementProps {
   examId: string;
@@ -54,6 +149,15 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
       correct_answers: []
     }
   });
+
+  // Image state for question and options
+  const [questionImage, setQuestionImage] = useState<File | null>(null);
+  const [questionImagePreview, setQuestionImagePreview] = useState<string | null>(null);
+  const [optionImages, setOptionImages] = useState<{ [key: number]: File }>({});
+  const [optionImagePreviews, setOptionImagePreviews] = useState<{ [key: number]: string }>({});
+  
+  // Toggle state for options (text vs image) - questions can have both
+  const [optionModes, setOptionModes] = useState<{ [key: number]: 'text' | 'image' }>({});
 
   // Fetch exam data to get isMultipleCorrect
   const fetchExamData = async () => {
@@ -110,19 +214,157 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
     return matchesSearch && matchesType;
   });
 
+  // Handle question image upload
+  const handleQuestionImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.match(/^image\/(jpeg|png)$/)) {
+        error('Invalid file type. Only JPEG and PNG images are allowed.');
+        // Reset file input
+        e.target.value = '';
+        return;
+      }
+      
+      // Validate file size (250KB max)
+      if (file.size > 256000) {
+        error('Image size is too large. Maximum size: 250KB. Please compress or resize the image and try again.');
+        // Reset file input
+        e.target.value = '';
+        return;
+      }
+      
+      // Validate minimum file size (at least 1KB to avoid corrupted images)
+      if (file.size < 1024) {
+        error('Image file is too small. Please use a valid image file.');
+        // Reset file input
+        e.target.value = '';
+        return;
+      }
+      
+      // Validate image dimensions
+      // Question images: max 1920x1080, min 200x200
+      const dimensionValidation = await validateImageDimensions(file, 1920, 1080, 200, 200);
+      if (!dimensionValidation.valid) {
+        error(dimensionValidation.error || 'Image dimensions are not accurate. Please resize and upload again.');
+        // Reset file input
+        e.target.value = '';
+        return;
+      }
+      
+      // Clean up old blob URL if it exists
+      if (questionImagePreview && questionImagePreview.startsWith('blob:')) {
+        URL.revokeObjectURL(questionImagePreview);
+      }
+      
+      setQuestionImage(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setQuestionImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Handle option image upload
+  const handleOptionImageChange = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.match(/^image\/(jpeg|png)$/)) {
+        error('Invalid file type. Only JPEG and PNG images are allowed.');
+        // Reset file input
+        e.target.value = '';
+        return;
+      }
+      
+      // Validate file size (250KB max)
+      if (file.size > 256000) {
+        error('Image size is too large. Maximum size: 250KB. Please compress or resize the image and try again.');
+        // Reset file input
+        e.target.value = '';
+        return;
+      }
+      
+      // Validate minimum file size (at least 1KB to avoid corrupted images)
+      if (file.size < 1024) {
+        error('Image file is too small. Please use a valid image file.');
+        // Reset file input
+        e.target.value = '';
+        return;
+      }
+      
+      // Validate image dimensions
+      // Option images: max 800x600, min 100x100 (smaller than question images)
+      const dimensionValidation = await validateImageDimensions(file, 800, 600, 100, 100);
+      if (!dimensionValidation.valid) {
+        error(dimensionValidation.error || 'Image dimensions are not accurate. Please resize and upload again.');
+        // Reset file input
+        e.target.value = '';
+        return;
+      }
+      
+      // Clean up old blob URL if it exists
+      const oldPreview = optionImagePreviews[index];
+      if (oldPreview && oldPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(oldPreview);
+      }
+      
+      setOptionImages({ ...optionImages, [index]: file });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setOptionImagePreviews({ ...optionImagePreviews, [index]: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Remove question image
+  const removeQuestionImage = () => {
+    // Clean up object URL if it exists
+    if (questionImagePreview && questionImagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(questionImagePreview);
+    }
+    setQuestionImage(null);
+    setQuestionImagePreview(null);
+  };
+
+  // Remove option image
+  const removeOptionImage = (index: number) => {
+    // Clean up object URL if it exists
+    const preview = optionImagePreviews[index];
+    if (preview && preview.startsWith('blob:')) {
+      URL.revokeObjectURL(preview);
+    }
+    const newOptionImages = { ...optionImages };
+    const newPreviews = { ...optionImagePreviews };
+    delete newOptionImages[index];
+    delete newPreviews[index];
+    setOptionImages(newOptionImages);
+    setOptionImagePreviews(newPreviews);
+  };
+
   // Handle add question
   const handleAddQuestion = async () => {
     try {
+      // Validate that at least question_text or question_image is provided
+      if (!formData.question_text.trim() && !questionImage && !questionImagePreview) {
+        error('Either question text or question image must be provided');
+        return;
+      }
+
       // Validate MCQ questions
       if (formData.type === 'MCQ' || formData.type === 'MULTIPLE_CORRECT') {
         const options = formData.metadata?.options || [];
         const correctAnswers = formData.metadata?.correct_answers || [];
         const validOptions = options.filter(
-          (opt: { text?: string }) => typeof opt.text === 'string' && opt.text.trim().length > 0
+          (opt: { text?: string; image_id?: string }) => 
+            (typeof opt.text === 'string' && opt.text.trim().length > 0) || 
+            optionImages[options.indexOf(opt)] !== undefined
         );
         
         if (validOptions.length < 2) {
-          error('MCQ questions must have at least 2 options');
+          error('MCQ questions must have at least 2 options (with text or image)');
           return;
         }
         
@@ -132,13 +374,8 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
         }
       }
 
-      if (!formData.question_text.trim()) {
-        error('Question text is required');
-        return;
-      }
-
       setLoading(true);
-      await examApi.createQuestion(formData);
+      await examApi.createQuestion(formData, questionImage, optionImages);
       success('Question created successfully!');
       setShowAddModal(false);
       resetForm();
@@ -157,16 +394,25 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
     if (!selectedQuestion) return;
 
     try {
+      // Validate that at least question_text or question_image is provided
+      if (!formData.question_text.trim() && !questionImage && !questionImagePreview) {
+        error('Either question text or question image must be provided');
+        return;
+      }
+
       // Validate MCQ questions
       if (formData.type === 'MCQ' || formData.type === 'MULTIPLE_CORRECT') {
         const options = formData.metadata?.options || [];
         const correctAnswers = formData.metadata?.correct_answers || [];
         const validOptions = options.filter(
-          (opt: { text?: string }) => typeof opt.text === 'string' && opt.text.trim().length > 0
+          (opt: { text?: string; image_id?: string }) => 
+            (typeof opt.text === 'string' && opt.text.trim().length > 0) || 
+            optionImages[options.indexOf(opt)] !== undefined ||
+            optionImagePreviews[options.indexOf(opt)] !== undefined
         );
         
         if (validOptions.length < 2) {
-          error('MCQ questions must have at least 2 options');
+          error('MCQ questions must have at least 2 options (with text or image)');
           return;
         }
         
@@ -176,11 +422,6 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
         }
       }
 
-      if (!formData.question_text.trim()) {
-        error('Question text is required');
-        return;
-      }
-
       setLoading(true);
       const updatePayload: UpdateQuestionPayload = {
         question_id: selectedQuestion.id,
@@ -188,7 +429,7 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
         type: formData.type,
         metadata: formData.metadata
       };
-      await examApi.updateQuestion(updatePayload);
+      await examApi.updateQuestion(updatePayload, questionImage, optionImages);
       success('Question updated successfully!');
       setShowEditModal(false);
       setSelectedQuestion(null);
@@ -224,22 +465,66 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
   };
 
   // Open edit modal
-  const openEditModal = (question: BackendQuestion) => {
+  const openEditModal = async (question: BackendQuestion) => {
     setSelectedQuestion(question);
     setFormData({
       exam_id: examId,
-      question_text: question.question_text,
+      question_text: question.question_text || '',
       type: question.type,
       metadata: question.metadata || {
         options: [],
         correct_answers: []
       }
     });
+    
+    // Reset image states
+    setQuestionImage(null);
+    setOptionImages({});
+    
+    // Fetch and set question image preview
+    if (question.question_image_link) {
+      const questionPreview = await fetchImageAsDataUrl(question.question_image_link);
+      setQuestionImagePreview(questionPreview);
+    } else {
+      setQuestionImagePreview(null);
+    }
+    
+    // Fetch and set option image previews from existing question
+    const previews: { [key: number]: string } = {};
+    const modes: { [key: number]: 'text' | 'image' } = {};
+    if (question.metadata?.options) {
+      await Promise.all(
+        question.metadata.options.map(async (opt: any, index: number) => {
+          if (opt.image_link || opt.image_id) {
+            const preview = await fetchImageAsDataUrl(opt.image_link);
+            if (preview) {
+              previews[index] = preview;
+            }
+            modes[index] = 'image';
+          } else {
+            modes[index] = 'text';
+          }
+        })
+      );
+    }
+    setOptionImagePreviews(previews);
+    setOptionModes(modes);
+    
     setShowEditModal(true);
   };
 
   // Reset form
   const resetForm = () => {
+    // Clean up object URLs before resetting
+    if (questionImagePreview && questionImagePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(questionImagePreview);
+    }
+    Object.values(optionImagePreviews).forEach(preview => {
+      if (preview && preview.startsWith('blob:')) {
+        URL.revokeObjectURL(preview);
+      }
+    });
+    
     setFormData({
       exam_id: examId,
       question_text: '',
@@ -254,6 +539,11 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
         correct_answers: []
       }
     });
+    setQuestionImage(null);
+    setQuestionImagePreview(null);
+    setOptionImages({});
+    setOptionImagePreviews({});
+    setOptionModes({});
   };
 
   // Handle MCQ option changes
@@ -291,6 +581,7 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
   // Add new option for MCQ
   const addOption = () => {
     const options = [...(formData.metadata?.options || [])];
+    const newIndex = options.length;
     options.push({ text: '', isCorrect: false });
     setFormData({
       ...formData,
@@ -299,6 +590,8 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
         options
       }
     });
+    // Default new option to text mode
+    setOptionModes({ ...optionModes, [newIndex]: 'text' });
   };
 
   // Remove option for MCQ
@@ -452,25 +745,80 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
         setShowAddModal(open);
         if (!open) resetForm();
       }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add New Question</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="fullscreen w-screen h-screen overflow-y-auto">
+          <DialogHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 pb-4 border-b mb-4 -mx-6 px-6 pt-6 -mt-6">
+            <DialogTitle className="text-2xl">Add New Question</DialogTitle>
+            <DialogDescription className="text-base">
               Create a new question for "{examTitle}"
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-6 py-4 max-w-7xl mx-auto">
+            {/* Question Text Input */}
             <div className="grid gap-2">
-              <Label htmlFor="question-text">Question Text *</Label>
+              <Label htmlFor="question-text">Question Text</Label>
               <Textarea
                 id="question-text"
                 value={formData.question_text}
                 onChange={(e) => setFormData({ ...formData, question_text: e.target.value })}
-                placeholder="Enter the question text..."
+                placeholder="Enter the question text (optional if image is provided)..."
                 rows={4}
-                required
               />
+            </div>
+
+            {/* Question Image Upload */}
+            <div className="grid gap-2">
+              <Label htmlFor="question-image">Question Image</Label>
+              {questionImagePreview ? (
+                <div className="flex items-start gap-3">
+                  <div className="border rounded-lg p-4 flex-1">
+                    <img 
+                      src={questionImagePreview} 
+                      alt="Question preview" 
+                      className="max-h-48 max-w-full mx-auto rounded object-contain"
+                      style={{ maxWidth: '100%', height: 'auto' }}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={removeQuestionImage}
+                    className="mt-4"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                  <input
+                    type="file"
+                    id="question-image"
+                    accept="image/jpeg,image/png"
+                    onChange={handleQuestionImageChange}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="question-image"
+                    className="cursor-pointer flex flex-col items-center gap-2"
+                  >
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      Click to upload question image (optional)
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      JPEG or PNG, max 250KB
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Dimensions: 200x200 to 1920x1080px
+                    </span>
+                  </label>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                * At least one of question text or question image must be provided
+              </p>
             </div>
 
             <div className="grid gap-2">
@@ -507,53 +855,137 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
 
             {/* MCQ Options */}
             {(formData.type === 'MCQ' || formData.type === 'MULTIPLE_CORRECT') && (
-              <div className="space-y-4 border-t pt-4">
+              <div className="space-y-4 border-t pt-6">
                 <div className="flex items-center justify-between">
-                  <Label>Options *</Label>
+                  <Label className="text-base font-semibold">Options *</Label>
                   <Button type="button" variant="outline" size="sm" onClick={addOption}>
                     <Plus className="h-4 w-4 mr-1" />
                     Add Option
                   </Button>
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto pr-2">
                 {(formData.metadata?.options || []).map(
                   (
                     option: { text?: string; isCorrect?: boolean },
                     index: number
-                  ) => (
-                  <div key={index} className="flex gap-2 items-center">
-                    <div className="flex-1">
-                      <Input
-                        value={option.text}
-                        onChange={(e) => handleOptionChange(index, 'text', e.target.value)}
-                        placeholder={`Option ${index + 1}`}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Label className="text-sm">
-                        <input
-                          type={isMultipleCorrect ? "checkbox" : "radio"}
-                          checked={option.isCorrect || false}
-                          onChange={(e) => handleOptionChange(index, 'isCorrect', isMultipleCorrect ? e.target.checked : true)}
-                          name={isMultipleCorrect ? undefined : `correct-answer-add`}
-                          className="mr-1"
-                        />
-                        Correct
-                      </Label>
-                      {(formData.metadata?.options || []).length > 2 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeOption(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  ),
+                  ) => {
+                    const optionMode = optionModes[index] || 'text';
+                    return (
+                      <div key={index} className="space-y-2 border rounded-lg p-3">
+                        <div className="flex gap-2 items-center">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm font-medium">Option {index + 1}</span>
+                              <div className="flex gap-1 ml-auto">
+                                <Button
+                                  type="button"
+                                  variant={optionMode === 'text' ? 'default' : 'outline'}
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => setOptionModes({ ...optionModes, [index]: 'text' })}
+                                >
+                                  Text
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant={optionMode === 'image' ? 'default' : 'outline'}
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => setOptionModes({ ...optionModes, [index]: 'image' })}
+                                >
+                                  Image
+                                </Button>
+                              </div>
+                            </div>
+                            {optionMode === 'text' ? (
+                              <Input
+                                value={option.text || ''}
+                                onChange={(e) => handleOptionChange(index, 'text', e.target.value)}
+                                placeholder={`Enter option ${index + 1} text...`}
+                              />
+                            ) : (
+                              <div>
+                                {optionImagePreviews[index] ? (
+                                  <div className="flex items-start gap-2">
+                                    <div className="border rounded-lg p-2 flex-1">
+                                      <img 
+                                        src={optionImagePreviews[index]} 
+                                        alt={`Option ${index + 1} preview`} 
+                                        className="max-h-32 max-w-full mx-auto rounded object-contain"
+                                        style={{ maxWidth: '100%', height: 'auto' }}
+                                      />
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => removeOptionImage(index)}
+                                      className="mt-2"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="border-2 border-dashed rounded-lg p-3 text-center">
+                                    <input
+                                      type="file"
+                                      id={`option-image-${index}`}
+                                      accept="image/jpeg,image/png"
+                                      onChange={(e) => handleOptionImageChange(index, e)}
+                                      className="hidden"
+                                    />
+                                    <label
+                                      htmlFor={`option-image-${index}`}
+                                      className="cursor-pointer flex flex-col items-center gap-1"
+                                    >
+                                      <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                                      <span className="text-xs text-muted-foreground">
+                                        Upload option image
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        Max 250KB, 100x100 to 800x600px
+                                      </span>
+                                    </label>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Label className="text-sm">
+                              <input
+                                type={isMultipleCorrect ? "checkbox" : "radio"}
+                                checked={option.isCorrect || false}
+                                onChange={(e) => handleOptionChange(index, 'isCorrect', isMultipleCorrect ? e.target.checked : true)}
+                                name={isMultipleCorrect ? undefined : `correct-answer-add`}
+                                className="mr-1"
+                              />
+                              Correct
+                            </Label>
+                            {(formData.metadata?.options || []).length > 2 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  removeOption(index);
+                                  removeOptionImage(index);
+                                  const newModes = { ...optionModes };
+                                  delete newModes[index];
+                                  setOptionModes(newModes);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
                 )}
-                <p className="text-xs text-muted-foreground">
+                </div>
+                <p className="text-xs text-muted-foreground pt-2">
                   * At least 2 options required, and at least one must be marked as correct
                   {!isMultipleCorrect && ' (Single correct answer mode - only one option can be correct)'}
                   {isMultipleCorrect && ' (Multiple correct answers mode - multiple options can be correct)'}
@@ -562,11 +994,11 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddModal(false)}>
+          <DialogFooter className="sticky bottom-0 bg-background z-10 pt-4 border-t mt-6 max-w-7xl mx-auto w-full">
+            <Button variant="outline" onClick={() => setShowAddModal(false)} size="lg">
               Cancel
             </Button>
-            <Button onClick={handleAddQuestion} disabled={loading}>
+            <Button onClick={handleAddQuestion} disabled={loading} size="lg">
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -588,25 +1020,77 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
           resetForm();
         }
       }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Question</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="fullscreen w-screen h-screen overflow-y-auto">
+          <DialogHeader className="sticky top-0 bg-background/95 backdrop-blur-sm z-10 pb-4 border-b mb-4 -mx-6 px-6 pt-6 -mt-6">
+            <DialogTitle className="text-2xl">Edit Question</DialogTitle>
+            <DialogDescription className="text-base">
               Update question details
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-6 py-4 max-w-7xl mx-auto">
+            {/* Question Text Input for Edit */}
             <div className="grid gap-2">
-              <Label htmlFor="edit-question-text">Question Text *</Label>
+              <Label htmlFor="edit-question-text">Question Text</Label>
               <Textarea
                 id="edit-question-text"
                 value={formData.question_text}
                 onChange={(e) => setFormData({ ...formData, question_text: e.target.value })}
-                placeholder="Enter the question text..."
+                placeholder="Enter the question text (optional if image is provided)..."
                 rows={4}
-                required
               />
+            </div>
+
+            {/* Question Image Upload for Edit */}
+            <div className="grid gap-2">
+              <Label htmlFor="edit-question-image">Question Image</Label>
+              {questionImagePreview ? (
+                <div className="flex items-start gap-3">
+                  <div className="border rounded-lg p-4 flex-1">
+                    <img 
+                      src={questionImagePreview} 
+                      alt="Question preview" 
+                      className="max-h-48 max-w-full mx-auto rounded object-contain"
+                      style={{ maxWidth: '100%', height: 'auto' }}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={removeQuestionImage}
+                    className="mt-4"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                  <input
+                    type="file"
+                    id="edit-question-image"
+                    accept="image/jpeg,image/png"
+                    onChange={handleQuestionImageChange}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="edit-question-image"
+                    className="cursor-pointer flex flex-col items-center gap-2"
+                  >
+                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      Click to upload question image (optional)
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      JPEG or PNG, max 250KB
+                    </span>
+                  </label>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                * At least one of question text or question image must be provided
+              </p>
             </div>
 
             <div className="grid gap-2">
@@ -643,53 +1127,137 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
 
             {/* MCQ Options */}
             {(formData.type === 'MCQ' || formData.type === 'MULTIPLE_CORRECT') && (
-              <div className="space-y-4 border-t pt-4">
+              <div className="space-y-4 border-t pt-6">
                 <div className="flex items-center justify-between">
-                  <Label>Options *</Label>
+                  <Label className="text-base font-semibold">Options *</Label>
                   <Button type="button" variant="outline" size="sm" onClick={addOption}>
                     <Plus className="h-4 w-4 mr-1" />
                     Add Option
                   </Button>
                 </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto pr-2">
                 {(formData.metadata?.options || []).map(
                   (
                     option: { text?: string; isCorrect?: boolean },
                     index: number
-                  ) => (
-                  <div key={index} className="flex gap-2 items-center">
-                    <div className="flex-1">
-                      <Input
-                        value={option.text}
-                        onChange={(e) => handleOptionChange(index, 'text', e.target.value)}
-                        placeholder={`Option ${index + 1}`}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Label className="text-sm">
-                        <input
-                          type={isMultipleCorrect ? "checkbox" : "radio"}
-                          checked={option.isCorrect || false}
-                          onChange={(e) => handleOptionChange(index, 'isCorrect', isMultipleCorrect ? e.target.checked : true)}
-                          name={isMultipleCorrect ? undefined : `correct-answer-edit-${selectedQuestion?.id}`}
-                          className="mr-1"
-                        />
-                        Correct
-                      </Label>
-                      {(formData.metadata?.options || []).length > 2 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeOption(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                  ),
+                  ) => {
+                    const optionMode = optionModes[index] || 'text';
+                    return (
+                      <div key={index} className="space-y-2 border rounded-lg p-3">
+                        <div className="flex gap-2 items-center">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm font-medium">Option {index + 1}</span>
+                              <div className="flex gap-1 ml-auto">
+                                <Button
+                                  type="button"
+                                  variant={optionMode === 'text' ? 'default' : 'outline'}
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => setOptionModes({ ...optionModes, [index]: 'text' })}
+                                >
+                                  Text
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant={optionMode === 'image' ? 'default' : 'outline'}
+                                  size="sm"
+                                  className="h-7 text-xs"
+                                  onClick={() => setOptionModes({ ...optionModes, [index]: 'image' })}
+                                >
+                                  Image
+                                </Button>
+                              </div>
+                            </div>
+                            {optionMode === 'text' ? (
+                              <Input
+                                value={option.text || ''}
+                                onChange={(e) => handleOptionChange(index, 'text', e.target.value)}
+                                placeholder={`Enter option ${index + 1} text...`}
+                              />
+                            ) : (
+                              <div>
+                                {optionImagePreviews[index] ? (
+                                  <div className="flex items-start gap-2">
+                                    <div className="border rounded-lg p-2 flex-1">
+                                      <img 
+                                        src={optionImagePreviews[index]} 
+                                        alt={`Option ${index + 1} preview`} 
+                                        className="max-h-32 max-w-full mx-auto rounded object-contain"
+                                        style={{ maxWidth: '100%', height: 'auto' }}
+                                      />
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="destructive"
+                                      size="sm"
+                                      onClick={() => removeOptionImage(index)}
+                                      className="mt-2"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="border-2 border-dashed rounded-lg p-3 text-center">
+                                    <input
+                                      type="file"
+                                      id={`edit-option-image-${index}`}
+                                      accept="image/jpeg,image/png"
+                                      onChange={(e) => handleOptionImageChange(index, e)}
+                                      className="hidden"
+                                    />
+                                    <label
+                                      htmlFor={`edit-option-image-${index}`}
+                                      className="cursor-pointer flex flex-col items-center gap-1"
+                                    >
+                                      <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                                      <span className="text-xs text-muted-foreground">
+                                        Upload option image
+                                      </span>
+                                      <span className="text-xs text-muted-foreground">
+                                        Max 250KB, 100x100 to 800x600px
+                                      </span>
+                                    </label>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Label className="text-sm">
+                              <input
+                                type={isMultipleCorrect ? "checkbox" : "radio"}
+                                checked={option.isCorrect || false}
+                                onChange={(e) => handleOptionChange(index, 'isCorrect', isMultipleCorrect ? e.target.checked : true)}
+                                name={isMultipleCorrect ? undefined : `correct-answer-edit-${selectedQuestion?.id}`}
+                                className="mr-1"
+                              />
+                              Correct
+                            </Label>
+                            {(formData.metadata?.options || []).length > 2 && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  removeOption(index);
+                                  removeOptionImage(index);
+                                  const newModes = { ...optionModes };
+                                  delete newModes[index];
+                                  setOptionModes(newModes);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
                 )}
-                <p className="text-xs text-muted-foreground">
+                </div>
+                <p className="text-xs text-muted-foreground pt-2">
                   * At least 2 options required, and at least one must be marked as correct
                   {!isMultipleCorrect && ' (Single correct answer mode - only one option can be correct)'}
                   {isMultipleCorrect && ' (Multiple correct answers mode - multiple options can be correct)'}
@@ -698,11 +1266,11 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
             )}
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditModal(false)}>
+          <DialogFooter className="sticky bottom-0 bg-background z-10 pt-4 border-t mt-6 max-w-7xl mx-auto w-full">
+            <Button variant="outline" onClick={() => setShowEditModal(false)} size="lg">
               Cancel
             </Button>
-            <Button onClick={handleEditQuestion} disabled={loading}>
+            <Button onClick={handleEditQuestion} disabled={loading} size="lg">
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
