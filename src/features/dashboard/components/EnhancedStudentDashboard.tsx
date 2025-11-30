@@ -24,7 +24,7 @@ import {
   Download
 } from 'lucide-react';
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
-import { getStudentEnrollments, StudentEnrollment } from '../../../services/api/exam';
+import { getStudentEnrollments, StudentEnrollment, examApi } from '../../../services/api/exam';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { motion } from 'motion/react';
 
@@ -41,6 +41,7 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
   const [enrollments, setEnrollments] = useState<StudentEnrollment[]>([]);
   const [loading, setLoading] = useState(true);
   const [enrollmentTab, setEnrollmentTab] = useState<'ongoing' | 'upcoming' | 'completed'>('ongoing');
+  const [questionCounts, setQuestionCounts] = useState<Record<string, number>>({});
 
   // Fetch enrollments on component mount
   useEffect(() => {
@@ -50,6 +51,25 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
         const response = await getStudentEnrollments();
         if (response.payload && response.payload.all) {
           setEnrollments(response.payload.all);
+          
+          // Fetch question counts for exams without results
+          const examsWithoutResults = response.payload.all.filter(
+            (enrollment) => !enrollment.result || !enrollment.result.metadata?.total_questions
+          );
+          
+          const counts: Record<string, number> = {};
+          await Promise.all(
+            examsWithoutResults.map(async (enrollment) => {
+              try {
+                const questionsResponse = await examApi.getQuestions(enrollment.exam.id, 1, 1);
+                counts[enrollment.exam.id] = questionsResponse.payload.total || 0;
+              } catch (error) {
+                console.error(`Failed to fetch question count for exam ${enrollment.exam.id}:`, error);
+                counts[enrollment.exam.id] = 0;
+              }
+            })
+          );
+          setQuestionCounts(counts);
         }
       } catch (error) {
         console.error('Failed to fetch enrollments:', error);
@@ -68,6 +88,12 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
     const metadata = exam.metadata || {};
     const result = enrollment.result;
     
+    // Get totalQuestions from result metadata if available, otherwise from fetched question counts, otherwise try exam metadata, otherwise 0
+    const totalQuestions = result?.metadata?.total_questions 
+      || questionCounts[exam.id]
+      || metadata.totalQuestions 
+      || 0;
+    
     return {
       id: exam.id,
       name: exam.title,
@@ -77,11 +103,11 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
       subject: metadata.subject || 'General',
       instructor: metadata.instructor || 'Instructor',
       difficulty: metadata.difficulty || 'Medium',
-      totalQuestions: metadata.totalQuestions || 0,
+      totalQuestions: totalQuestions,
       passingScore: metadata.passingMarks ? Math.round((metadata.passingMarks / (metadata.totalMarks || 100)) * 100) : 70,
       score: result ? (metadata.totalMarks ? Math.round((result.score / metadata.totalMarks) * 100) : result.score) : undefined,
       timeSpent: result?.metadata?.timeSpent ? Math.floor(result.metadata.timeSpent / 60) : undefined,
-      correctAnswers: result?.metadata?.correctAnswers || undefined,
+      correctAnswers: result?.metadata?.correct_answer || undefined,
       resultsVisible: exam.results_visible ?? false,
       enrollment: enrollment, // Keep full enrollment for access to result data
     };
@@ -983,7 +1009,7 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
     }
     .brand-header {
       text-align: center;
-      background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+      background: linear-gradient(90deg, #10b981 0%, #059669 100%);
       color: white;
       padding: 25px 20px;
       margin: -20px -20px 30px -20px;
@@ -1003,12 +1029,12 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
     }
     .header {
       text-align: center;
-      border-bottom: 3px solid #2980b9;
+      border-bottom: 3px solid #10b981;
       padding-bottom: 20px;
       margin-bottom: 30px;
     }
     .header h2 {
-      color: #2980b9;
+      color: #059669;
       margin: 0;
       font-size: 24px;
     }
@@ -1095,13 +1121,13 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
       margin-top: 40px;
       padding: 20px;
       background-color: #f8f9fa;
-      border-top: 3px solid #4facfe;
+      border-top: 3px solid #10b981;
       text-align: center;
       font-size: 11px;
       color: #7f8c8d;
     }
     .brand-footer strong {
-      color: #2980b9;
+      color: #059669;
       font-size: 13px;
     }
   </style>
@@ -1110,6 +1136,7 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
   <div class="brand-header">
     <h1>ExamEntra</h1>
     <p>Secure Online Examination Platform</p>
+    ${user?.entity_name || user?.entityName ? `<p style="margin-top: 10px; font-size: 16px; font-weight: 500;">${user.entity_name || user.entityName}</p>` : ''}
   </div>
   
   <div class="header">
@@ -1118,6 +1145,12 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
 
   <div class="section">
     <div class="section-title">Exam Information</div>
+    ${user?.entity_name || user?.entityName ? `
+    <div class="info-row">
+      <span class="info-label">Entity:</span>
+      <span class="info-value">${user.entity_name || user.entityName}</span>
+    </div>
+    ` : ''}
     <div class="info-row">
       <span class="info-label">Exam Name:</span>
       <span class="info-value">${exam.name}</span>
@@ -1175,8 +1208,8 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
         <div class="stat-value" style="color: #95a5a6;">${noAnswers}</div>
         <div class="stat-label">Unanswered</div>
       </div>
-      <div class="stat-box" style="background-color: #ebf5fb; border: 2px solid #3498db;">
-        <div class="stat-value" style="color: #3498db;">${totalQuestions}</div>
+      <div class="stat-box" style="background-color: #d1fae5; border: 2px solid #10b981;">
+        <div class="stat-value" style="color: #059669;">${totalQuestions}</div>
         <div class="stat-label">Total Questions</div>
       </div>
     </div>

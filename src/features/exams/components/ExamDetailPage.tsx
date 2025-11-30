@@ -127,6 +127,21 @@ export function ExamDetailPage({
   const [deEnrollInFlight, setDeEnrollInFlight] = useState<string | null>(null);
   const [resultsVisible, setResultsVisible] = useState<boolean>(false);
   const [updatingResultsVisible, setUpdatingResultsVisible] = useState<boolean>(false);
+  
+  // Score summary state
+  const [scoreSummary, setScoreSummary] = useState<{
+    highestScore: number;
+    lowestScore: number;
+    averageScore: number;
+    passRate: number;
+    totalAttempts: number;
+  }>({
+    highestScore: 0,
+    lowestScore: 0,
+    averageScore: 0,
+    passRate: 0,
+    totalAttempts: 0,
+  });
 
   const { students: studentEnrollments, representatives: representativeEnrollments } = useMemo(() => {
     return enrolledStudents.reduce(
@@ -349,6 +364,7 @@ export function ExamDetailPage({
     fetchLeaderboard();
   }, [examId, canManageQuestions]);
 
+
   // Function to generate and download PDF with all students exam score data using browser's print-to-PDF
   const downloadLeaderboardPDF = () => {
     try {
@@ -386,8 +402,6 @@ export function ExamDetailPage({
               .header {
                 text-align: center;
                 margin-bottom: 30px;
-                border-bottom: 2px solid #333;
-                padding-bottom: 15px;
               }
               .header h1 {
                 margin: 0 0 10px 0;
@@ -412,8 +426,9 @@ export function ExamDetailPage({
                 font-size: 11px;
               }
               th {
-                background-color: #f5f5f5;
-                border: 1px solid #ddd;
+                background-color: #10b981;
+                color: white;
+                border: 1px solid #059669;
                 padding: 10px 8px;
                 text-align: left;
                 font-weight: bold;
@@ -441,13 +456,15 @@ export function ExamDetailPage({
               .summary {
                 margin-top: 30px;
                 padding: 15px;
-                background-color: #f5f5f5;
+                background-color: #d1fae5;
+                border: 2px solid #10b981;
                 border-radius: 5px;
               }
               .summary h3 {
                 margin: 0 0 10px 0;
                 font-size: 16px;
-                color: #333;
+                color: #059669;
+                font-weight: bold;
               }
               .summary p {
                 margin: 5px 0;
@@ -457,12 +474,18 @@ export function ExamDetailPage({
             </style>
           </head>
           <body>
-            <div class="header">
-              <h1>Exam Results Report</h1>
-              <h2>${examName}</h2>
-              <p>Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+            <div class="header" style="background: linear-gradient(90deg, #10b981 0%, #059669 100%); color: white; padding: 25px 20px; margin: -20px -20px 30px -20px; border-radius: 8px;">
+              <h1 style="color: white; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">ExamEntra</h1>
+              <h2 style="color: white; margin: 5px 0; font-size: 20px; font-weight: 500;">${examName}</h2>
+              ${entityName ? `<p style="color: rgba(255,255,255,0.95); margin: 10px 0 5px 0; font-size: 16px; font-weight: 500;">${entityName}</p>` : ''}
+              <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 12px;">Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
             </div>
             
+            ${entityName ? `
+            <div style="margin-bottom: 20px; padding: 10px; background-color: #f0fdf4; border-left: 4px solid #10b981; border-radius: 4px;">
+              <p style="margin: 0; font-size: 14px; color: #059669; font-weight: 600;">Entity: ${entityName}</p>
+            </div>
+            ` : ''}
             <table>
               <thead>
                 <tr>
@@ -545,6 +568,17 @@ export function ExamDetailPage({
           }));
           setScoreDistribution(distributionWithColors);
         }
+        
+        // Update score summary from the response
+        if (response.payload?.summary) {
+          setScoreSummary({
+            highestScore: response.payload.summary.highestScore,
+            lowestScore: response.payload.summary.lowestScore,
+            averageScore: response.payload.summary.averageScore,
+            passRate: response.payload.summary.passRate,
+            totalAttempts: response.payload.summary.totalAttempts,
+          });
+        }
       } catch (err) {
         console.error('Error fetching score distribution:', err);
       } finally {
@@ -599,6 +633,7 @@ export function ExamDetailPage({
 
   // Keep separate examDetails with mock data for other parts of the page (stats, analytics, etc.)
   // This maintains backward compatibility with existing components
+  // Score summary data is now fetched from backend
   const examDetails = {
     id: examId,
     name: examName,
@@ -614,10 +649,10 @@ export function ExamDetailPage({
     totalStudents: 245,
     completedAttempts: 189,
     activeAttempts: 12,
-    averageScore: 78.5,
-    passRate: 87.3,
-    highestScore: 98,
-    lowestScore: 45
+    averageScore: scoreSummary.averageScore,
+    passRate: scoreSummary.passRate,
+    highestScore: scoreSummary.highestScore,
+    lowestScore: scoreSummary.lowestScore
   };
 
   const stats = [
@@ -631,11 +666,11 @@ export function ExamDetailPage({
     },
     {
       title: 'Average Score',
-      value: `${examDetails.averageScore}%`,
+      value: scoreDistributionLoading ? '...' : `${examDetails.averageScore.toFixed(1)}%`,
       icon: Target,
       color: 'text-green-600',
       bgColor: 'bg-green-100 dark:bg-green-900/30',
-      subtext: `${examDetails.passRate}% pass rate`
+      subtext: scoreDistributionLoading ? 'Loading...' : `${examDetails.passRate.toFixed(1)}% pass rate`
     },
     {
       title: 'Completion Rate',
@@ -1126,26 +1161,42 @@ export function ExamDetailPage({
                   <CardDescription>Performance overview</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-4 bg-success/10 rounded-lg">
-                      <div className="text-2xl font-bold text-success">{examDetails.highestScore}%</div>
-                      <p className="text-sm text-muted-foreground">Highest Score</p>
+                  {scoreDistributionLoading ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">Loading score summary...</p>
                     </div>
-                    <div className="text-center p-4 bg-primary/10 rounded-lg">
-                      <div className="text-2xl font-bold text-primary">{examDetails.averageScore}%</div>
-                      <p className="text-sm text-muted-foreground">Average Score</p>
+                  ) : (scoreSummary.totalAttempts === 0 && statistics.totalAttempts === 0) ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">No attempts yet</p>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-4 bg-destructive/10 rounded-lg">
-                      <div className="text-2xl font-bold text-destructive">{examDetails.lowestScore}%</div>
-                      <p className="text-sm text-muted-foreground">Lowest Score</p>
+                  ) : scoreSummary.totalAttempts === 0 && statistics.totalAttempts > 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground">Calculating scores...</p>
                     </div>
-                    <div className="text-center p-4 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
-                      <div className="text-2xl font-bold text-orange-600">{examDetails.passRate}%</div>
-                      <p className="text-sm text-muted-foreground">Pass Rate</p>
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-4 bg-success/10 rounded-lg">
+                          <div className="text-2xl font-bold text-success">{scoreSummary.highestScore.toFixed(1)}%</div>
+                          <p className="text-sm text-muted-foreground">Highest Score</p>
+                        </div>
+                        <div className="text-center p-4 bg-primary/10 rounded-lg">
+                          <div className="text-2xl font-bold text-primary">{scoreSummary.averageScore.toFixed(1)}%</div>
+                          <p className="text-sm text-muted-foreground">Average Score</p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="text-center p-4 bg-destructive/10 rounded-lg">
+                          <div className="text-2xl font-bold text-destructive">{scoreSummary.lowestScore.toFixed(1)}%</div>
+                          <p className="text-sm text-muted-foreground">Lowest Score</p>
+                        </div>
+                        <div className="text-center p-4 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+                          <div className="text-2xl font-bold text-orange-600">{scoreSummary.passRate.toFixed(1)}%</div>
+                          <p className="text-sm text-muted-foreground">Pass Rate</p>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             </div>
