@@ -513,6 +513,7 @@ export function RoleAwareExamManagement({
           }
 
           // Fetch representatives in batches (backend limit is 10)
+          // Only fetch representatives from the same entity as the exam
           const allRepresentatives: ApiUser[] = [];
           let page = 1;
           let hasMore = true;
@@ -520,6 +521,7 @@ export function RoleAwareExamManagement({
           while (hasMore) {
             const response = await getUsers({ 
               role: 'REPRESENTATIVE',
+              entity_id: selectedExamForInvite.entity_id, // Only fetch representatives from the exam's entity
               limit: 10,
               page: page
             });

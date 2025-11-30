@@ -153,11 +153,11 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
       }
 
       // Fetch ADMIN, STUDENT, and REPRESENTATIVE users
-      // Representatives don't belong to any entity (entity_id is null), so don't pass entity_id for them
+      // Representatives are now bound to entities, so pass entity_id for them too
       const [adminResponse, studentResponse, representativeResponse] = await Promise.all([
         getUsers({ entity_id: entityId, role: 'ADMIN', page, limit: 10 }),
         getUsers({ entity_id: entityId, role: 'STUDENT', page, limit: 10 }),
-        getUsers({ role: 'REPRESENTATIVE', page, limit: 10 }).catch(() => ({
+        getUsers({ entity_id: entityId, role: 'REPRESENTATIVE', page, limit: 10 }).catch(() => ({
           payload: { users: [], total: 0, totalPages: 0 }
         })),
       ]);
@@ -302,10 +302,11 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
               <DialogHeader>
                 <DialogTitle>Create New Representative</DialogTitle>
                 <DialogDescription>
-                  Create a new representative account. Representatives do not belong to any specific entity.
+                  Create a new representative account. Representatives will be bound to the current entity.
                 </DialogDescription>
               </DialogHeader>
               <CreateRepresentativeForm 
+                entityId={currentEntity}
                 onClose={() => setIsCreateRepresentativeDialogOpen(false)}
                 onSuccess={async () => {
                   setIsCreateRepresentativeDialogOpen(false);
@@ -1298,11 +1299,12 @@ function CreateUserForm({ onClose, onSuccess, currentEntity, entities, currentUs
 }
 
 interface CreateRepresentativeFormProps {
+  entityId?: string;
   onClose: () => void;
   onSuccess: () => Promise<void>;
 }
 
-function CreateRepresentativeForm({ onClose, onSuccess }: CreateRepresentativeFormProps) {
+function CreateRepresentativeForm({ entityId, onClose, onSuccess }: CreateRepresentativeFormProps) {
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -1322,12 +1324,17 @@ function CreateRepresentativeForm({ onClose, onSuccess }: CreateRepresentativeFo
       return;
     }
 
+    if (!entityId) {
+      showError('Entity ID is required to create a representative');
+      return;
+    }
+
     setLoading(true);
     try {
       const payload: any = {
         email: formData.email,
         role: 'REPRESENTATIVE',
-        // Don't send entity_id for representatives - backend will set it to null
+        entity_id: entityId, // Representatives are now bound to entities
       };
 
       // Add optional fields only if they have values
