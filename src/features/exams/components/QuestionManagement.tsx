@@ -37,38 +37,22 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState<BackendQuestion | null>(null);
-  const [isMultipleCorrect, setIsMultipleCorrect] = useState<boolean>(false);
   
   // Form state for add/edit
   const [formData, setFormData] = useState<CreateQuestionPayload>({
     exam_id: examId,
     question_text: '',
-    type: 'MCQ',
+    type: 'MCQ_SINGLE',
     metadata: {
       options: [
-        { text: '', isCorrect: false },
-        { text: '', isCorrect: false },
-        { text: '', isCorrect: false },
-        { text: '', isCorrect: false }
+        { text: '' },
+        { text: '' },
+        { text: '' },
+        { text: '' }
       ],
       correct_answers: []
     }
   });
-
-  // Fetch exam data to get isMultipleCorrect
-  const fetchExamData = async () => {
-    try {
-      const cleanedExamId = examId.split(':')[0].trim();
-      const examResponse = await examApi.getExamById(cleanedExamId);
-      const exam = examResponse.payload;
-      const metadata = exam.metadata || {};
-      setIsMultipleCorrect(metadata.isMultipleCorrect || false);
-    } catch (err) {
-      console.error('Error fetching exam data:', err);
-      // Default to false if fetch fails
-      setIsMultipleCorrect(false);
-    }
-  };
 
   // Fetch questions from backend
   const fetchQuestions = async () => {
@@ -99,7 +83,6 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
   };
 
   useEffect(() => {
-    fetchExamData();
     fetchQuestions();
   }, [examId]);
 
@@ -114,7 +97,7 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
   const handleAddQuestion = async () => {
     try {
       // Validate MCQ questions
-      if (formData.type === 'MCQ' || formData.type === 'MULTIPLE_CORRECT') {
+      if (formData.type === 'MCQ_SINGLE' || formData.type === 'MCQ_MULTIPLE') {
         const options = formData.metadata?.options || [];
         const correctAnswers = formData.metadata?.correct_answers || [];
         const validOptions = options.filter(
@@ -128,6 +111,18 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
         
         if (correctAnswers.length === 0) {
           error('MCQ questions must have at least one correct answer');
+          return;
+        }
+        
+        // For MCQ_SINGLE, must have exactly one correct answer
+        if (formData.type === 'MCQ_SINGLE' && correctAnswers.length !== 1) {
+          error('MCQ_SINGLE questions must have exactly one correct answer');
+          return;
+        }
+      } else if (formData.type === 'SINGLE_WORD') {
+        const correctAnswer = formData.metadata?.correct_answer;
+        if (!correctAnswer || typeof correctAnswer !== 'string' || correctAnswer.trim().length === 0) {
+          error('SINGLE_WORD questions must have a correct answer');
           return;
         }
       }
@@ -158,7 +153,7 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
 
     try {
       // Validate MCQ questions
-      if (formData.type === 'MCQ' || formData.type === 'MULTIPLE_CORRECT') {
+      if (formData.type === 'MCQ_SINGLE' || formData.type === 'MCQ_MULTIPLE') {
         const options = formData.metadata?.options || [];
         const correctAnswers = formData.metadata?.correct_answers || [];
         const validOptions = options.filter(
@@ -172,6 +167,18 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
         
         if (correctAnswers.length === 0) {
           error('MCQ questions must have at least one correct answer');
+          return;
+        }
+        
+        // For MCQ_SINGLE, must have exactly one correct answer
+        if (formData.type === 'MCQ_SINGLE' && correctAnswers.length !== 1) {
+          error('MCQ_SINGLE questions must have exactly one correct answer');
+          return;
+        }
+      } else if (formData.type === 'SINGLE_WORD') {
+        const correctAnswer = formData.metadata?.correct_answer;
+        if (!correctAnswer || typeof correctAnswer !== 'string' || correctAnswer.trim().length === 0) {
+          error('SINGLE_WORD questions must have a correct answer');
           return;
         }
       }
@@ -226,14 +233,25 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
   // Open edit modal
   const openEditModal = (question: BackendQuestion) => {
     setSelectedQuestion(question);
+    // Convert old question format to new format if needed
+    let metadata = question.metadata || {};
+    if (question.type === 'MCQ_SINGLE' || question.type === 'MCQ_MULTIPLE') {
+      // Ensure options array exists and doesn't have isCorrect property
+      if (metadata.options) {
+        metadata.options = metadata.options.map((opt: any) => {
+          if (typeof opt === 'string') {
+            return { text: opt };
+          }
+          const { isCorrect, ...rest } = opt;
+          return rest;
+        });
+      }
+    }
     setFormData({
       exam_id: examId,
       question_text: question.question_text,
       type: question.type,
-      metadata: question.metadata || {
-        options: [],
-        correct_answers: []
-      }
+      metadata
     });
     setShowEditModal(true);
   };
@@ -243,13 +261,13 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
     setFormData({
       exam_id: examId,
       question_text: '',
-      type: 'MCQ',
+      type: 'MCQ_SINGLE',
       metadata: {
         options: [
-          { text: '', isCorrect: false },
-          { text: '', isCorrect: false },
-          { text: '', isCorrect: false },
-          { text: '', isCorrect: false }
+          { text: '' },
+          { text: '' },
+          { text: '' },
+          { text: '' }
         ],
         correct_answers: []
       }
@@ -261,37 +279,55 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
     const options = [...(formData.metadata?.options || [])];
     if (field === 'text') {
       options[index] = { ...options[index], text: value as string };
+      setFormData({
+        ...formData,
+        metadata: {
+          ...formData.metadata,
+          options
+        }
+      });
     } else {
-      // If single correct mode and this option is being marked as correct,
-      // unmark all other options
-      if (value === true && !isMultipleCorrect) {
-        options.forEach((opt, idx) => {
-          opt.isCorrect = idx === index;
+      // Handle correct answer selection
+      const currentCorrectAnswers = [...(formData.metadata?.correct_answers || [])];
+      
+      if (formData.type === 'MCQ_SINGLE') {
+        // For single correct, replace the array with just this index
+        setFormData({
+          ...formData,
+          metadata: {
+            ...formData.metadata,
+            correct_answers: value ? [index] : []
+          }
         });
-      } else {
-        options[index] = { ...options[index], isCorrect: value as boolean };
+      } else if (formData.type === 'MCQ_MULTIPLE') {
+        // For multiple correct, add or remove from array
+        if (value) {
+          if (!currentCorrectAnswers.includes(index)) {
+            setFormData({
+              ...formData,
+              metadata: {
+                ...formData.metadata,
+                correct_answers: [...currentCorrectAnswers, index]
+              }
+            });
+          }
+        } else {
+          setFormData({
+            ...formData,
+            metadata: {
+              ...formData.metadata,
+              correct_answers: currentCorrectAnswers.filter(idx => idx !== index)
+            }
+          });
+        }
       }
     }
-
-    // Update correct_answers array based on isCorrect flags
-    const correctAnswers = options
-      .map((opt, idx) => opt.isCorrect ? idx : null)
-      .filter(idx => idx !== null) as number[];
-
-    setFormData({
-      ...formData,
-      metadata: {
-        ...formData.metadata,
-        options,
-        correct_answers: correctAnswers
-      }
-    });
   };
 
   // Add new option for MCQ
   const addOption = () => {
     const options = [...(formData.metadata?.options || [])];
-    options.push({ text: '', isCorrect: false });
+    options.push({ text: '' });
     setFormData({
       ...formData,
       metadata: {
@@ -306,10 +342,10 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
     const options = [...(formData.metadata?.options || [])];
     options.splice(index, 1);
     
-    // Update correct_answers
-    const correctAnswers = options
-      .map((opt, idx) => opt.isCorrect ? idx : null)
-      .filter(idx => idx !== null) as number[];
+    // Update correct_answers - remove the deleted index and adjust other indices
+    const correctAnswers = (formData.metadata?.correct_answers || [])
+      .filter((idx: number) => idx !== index)
+      .map((idx: number) => idx > index ? idx - 1 : idx);
 
     setFormData({
       ...formData,
@@ -347,8 +383,9 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="MCQ">MCQ</SelectItem>
-                <SelectItem value="OTHER">Other</SelectItem>
+                <SelectItem value="MCQ_SINGLE">MCQ Single</SelectItem>
+                <SelectItem value="MCQ_MULTIPLE">MCQ Multiple</SelectItem>
+                <SelectItem value="SINGLE_WORD">Single Word</SelectItem>
               </SelectContent>
             </Select>
 
@@ -410,7 +447,7 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                     <TableCell>
                       <div className="max-w-2xl">
                         <p className="line-clamp-2">{question.question_text}</p>
-                        {question.type === 'MCQ' && question.metadata?.options && (
+                        {(question.type === 'MCQ_SINGLE' || question.type === 'MCQ_MULTIPLE') && question.metadata?.options && (
                           <p className="text-xs text-muted-foreground mt-1">
                             {question.metadata.options.length} options
                           </p>
@@ -477,36 +514,45 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
               <Label htmlFor="question-type">Question Type *</Label>
               <Select
                 value={formData.type}
-                onValueChange={(value: 'MCQ' | 'MULTIPLE_CORRECT' | 'ONE_WORD' | 'SUBJECTIVE') => {
-                  setFormData({
-                    ...formData,
-                    type: value,
-                    metadata: value === 'MCQ' || value === 'MULTIPLE_CORRECT' ? {
-                      options: [
-                        { text: '', isCorrect: false },
-                        { text: '', isCorrect: false },
-                        { text: '', isCorrect: false },
-                        { text: '', isCorrect: false }
-                      ],
-                      correct_answers: []
-                    } : {}
-                  });
+                onValueChange={(value: 'MCQ_SINGLE' | 'MCQ_MULTIPLE' | 'SINGLE_WORD') => {
+                  if (value === 'MCQ_SINGLE' || value === 'MCQ_MULTIPLE') {
+                    setFormData({
+                      ...formData,
+                      type: value,
+                      metadata: {
+                        options: [
+                          { text: '' },
+                          { text: '' },
+                          { text: '' },
+                          { text: '' }
+                        ],
+                        correct_answers: []
+                      }
+                    });
+                  } else if (value === 'SINGLE_WORD') {
+                    setFormData({
+                      ...formData,
+                      type: value,
+                      metadata: {
+                        correct_answer: ''
+                      }
+                    });
+                  }
                 }}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="MCQ">Multiple Choice (MCQ)</SelectItem>
-                  <SelectItem value="MULTIPLE_CORRECT">Multiple Correct</SelectItem>
-                  <SelectItem value="ONE_WORD">One Word</SelectItem>
-                  <SelectItem value="SUBJECTIVE">Subjective</SelectItem>
+                  <SelectItem value="MCQ_SINGLE">MCQ Single Correct</SelectItem>
+                  <SelectItem value="MCQ_MULTIPLE">MCQ Multiple Correct</SelectItem>
+                  <SelectItem value="SINGLE_WORD">Single Word Answer</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* MCQ Options */}
-            {(formData.type === 'MCQ' || formData.type === 'MULTIPLE_CORRECT') && (
+            {(formData.type === 'MCQ_SINGLE' || formData.type === 'MCQ_MULTIPLE') && (
               <div className="space-y-4 border-t pt-4">
                 <div className="flex items-center justify-between">
                   <Label>Options *</Label>
@@ -531,10 +577,10 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                     <div className="flex items-center gap-2">
                       <Label className="text-sm">
                         <input
-                          type={isMultipleCorrect ? "checkbox" : "radio"}
-                          checked={option.isCorrect || false}
-                          onChange={(e) => handleOptionChange(index, 'isCorrect', isMultipleCorrect ? e.target.checked : true)}
-                          name={isMultipleCorrect ? undefined : `correct-answer-add`}
+                          type={formData.type === 'MCQ_MULTIPLE' ? "checkbox" : "radio"}
+                          checked={(formData.metadata?.correct_answers || []).includes(index)}
+                          onChange={(e) => handleOptionChange(index, 'isCorrect', formData.type === 'MCQ_MULTIPLE' ? e.target.checked : true)}
+                          name={formData.type === 'MCQ_MULTIPLE' ? undefined : `correct-answer-add`}
                           className="mr-1"
                         />
                         Correct
@@ -555,8 +601,8 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                 )}
                 <p className="text-xs text-muted-foreground">
                   * At least 2 options required, and at least one must be marked as correct
-                  {!isMultipleCorrect && ' (Single correct answer mode - only one option can be correct)'}
-                  {isMultipleCorrect && ' (Multiple correct answers mode - multiple options can be correct)'}
+                  {formData.type === 'MCQ_SINGLE' && ' (Single correct answer - only one option can be correct)'}
+                  {formData.type === 'MCQ_MULTIPLE' && ' (Multiple correct answers - multiple options can be correct)'}
                 </p>
               </div>
             )}
@@ -613,36 +659,68 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
               <Label htmlFor="edit-question-type">Question Type *</Label>
               <Select
                 value={formData.type}
-                onValueChange={(value: 'MCQ' | 'MULTIPLE_CORRECT' | 'ONE_WORD' | 'SUBJECTIVE') => {
-                  setFormData({
-                    ...formData,
-                    type: value,
-                    metadata: value === 'MCQ' || value === 'MULTIPLE_CORRECT' ? (formData.metadata?.options ? formData.metadata : {
-                      options: [
-                        { text: '', isCorrect: false },
-                        { text: '', isCorrect: false },
-                        { text: '', isCorrect: false },
-                        { text: '', isCorrect: false }
-                      ],
-                      correct_answers: []
-                    }) : {}
-                  });
+                onValueChange={(value: 'MCQ_SINGLE' | 'MCQ_MULTIPLE' | 'SINGLE_WORD') => {
+                  if (value === 'MCQ_SINGLE' || value === 'MCQ_MULTIPLE') {
+                    setFormData({
+                      ...formData,
+                      type: value,
+                      metadata: formData.metadata?.options ? formData.metadata : {
+                        options: [
+                          { text: '' },
+                          { text: '' },
+                          { text: '' },
+                          { text: '' }
+                        ],
+                        correct_answers: []
+                      }
+                    });
+                  } else if (value === 'SINGLE_WORD') {
+                    setFormData({
+                      ...formData,
+                      type: value,
+                      metadata: {
+                        correct_answer: formData.metadata?.correct_answer || ''
+                      }
+                    });
+                  }
                 }}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="MCQ">Multiple Choice (MCQ)</SelectItem>
-                  <SelectItem value="MULTIPLE_CORRECT">Multiple Correct</SelectItem>
-                  <SelectItem value="ONE_WORD">One Word</SelectItem>
-                  <SelectItem value="SUBJECTIVE">Subjective</SelectItem>
+                  <SelectItem value="MCQ_SINGLE">MCQ Single Correct</SelectItem>
+                  <SelectItem value="MCQ_MULTIPLE">MCQ Multiple Correct</SelectItem>
+                  <SelectItem value="SINGLE_WORD">Single Word Answer</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
+            {/* SINGLE_WORD Answer */}
+            {formData.type === 'SINGLE_WORD' && (
+              <div className="grid gap-2">
+                <Label htmlFor="correct-answer">Correct Answer *</Label>
+                <Input
+                  id="correct-answer"
+                  value={formData.metadata?.correct_answer || ''}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    metadata: {
+                      ...formData.metadata,
+                      correct_answer: e.target.value
+                    }
+                  })}
+                  placeholder="Enter the correct answer..."
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  * Enter the correct single word answer (case-insensitive matching)
+                </p>
+              </div>
+            )}
+
             {/* MCQ Options */}
-            {(formData.type === 'MCQ' || formData.type === 'MULTIPLE_CORRECT') && (
+            {(formData.type === 'MCQ_SINGLE' || formData.type === 'MCQ_MULTIPLE') && (
               <div className="space-y-4 border-t pt-4">
                 <div className="flex items-center justify-between">
                   <Label>Options *</Label>
@@ -667,10 +745,10 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                     <div className="flex items-center gap-2">
                       <Label className="text-sm">
                         <input
-                          type={isMultipleCorrect ? "checkbox" : "radio"}
-                          checked={option.isCorrect || false}
-                          onChange={(e) => handleOptionChange(index, 'isCorrect', isMultipleCorrect ? e.target.checked : true)}
-                          name={isMultipleCorrect ? undefined : `correct-answer-edit-${selectedQuestion?.id}`}
+                          type={formData.type === 'MCQ_MULTIPLE' ? "checkbox" : "radio"}
+                          checked={(formData.metadata?.correct_answers || []).includes(index)}
+                          onChange={(e) => handleOptionChange(index, 'isCorrect', formData.type === 'MCQ_MULTIPLE' ? e.target.checked : true)}
+                          name={formData.type === 'MCQ_MULTIPLE' ? undefined : `correct-answer-edit-${selectedQuestion?.id}`}
                           className="mr-1"
                         />
                         Correct
@@ -691,8 +769,8 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
                 )}
                 <p className="text-xs text-muted-foreground">
                   * At least 2 options required, and at least one must be marked as correct
-                  {!isMultipleCorrect && ' (Single correct answer mode - only one option can be correct)'}
-                  {isMultipleCorrect && ' (Multiple correct answers mode - multiple options can be correct)'}
+                  {formData.type === 'MCQ_SINGLE' && ' (Single correct answer - only one option can be correct)'}
+                  {formData.type === 'MCQ_MULTIPLE' && ' (Multiple correct answers - multiple options can be correct)'}
                 </p>
               </div>
             )}
