@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useAuth } from '../../features/auth/providers/AuthProvider';
 import { Button } from '../../shared/components/ui/button';
@@ -7,7 +7,8 @@ import { Label } from '../../shared/components/ui/label';
 import { Textarea } from '../../shared/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../shared/components/ui/select';
 import { useNotifications } from '../../shared/providers/NotificationProvider';
-import { examApi, CreateQuestionPayload } from '../../services/api/exam';
+import { examApi, CreateQuestionPayload, BackendQuestion } from '../../services/api/exam';
+import { authenticatedFetch, getApiUrl } from '../../services/api/core';
 import { 
   Plus, 
   Trash2, 
@@ -20,6 +21,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { Alert, AlertDescription } from '../../shared/components/ui/alert';
+import { ImageWithFallback } from '../../shared/components/common/ImageWithFallback';
 
 interface ImagePreview {
   file: File;
@@ -31,11 +33,13 @@ interface ImagePreview {
 type OptionMode = 'text' | 'image';
 
 export function QuestionCreationPage() {
-  const { examId } = useParams<{ examId: string }>();
+  const { examId, questionId } = useParams<{ examId: string; questionId?: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const { success, error } = useNotifications();
+  
+  const isEditMode = !!questionId;
   
   const getBasePath = () => {
     if (location.pathname.includes('/superadmin/')) {
@@ -47,11 +51,17 @@ export function QuestionCreationPage() {
   const [questionText, setQuestionText] = useState('');
   const [questionType, setQuestionType] = useState<'MCQ_SINGLE' | 'MCQ_MULTIPLE' | 'SINGLE_WORD'>('MCQ_SINGLE');
   const [questionImage, setQuestionImage] = useState<ImagePreview | null>(null);
+  const [existingQuestionImageId, setExistingQuestionImageId] = useState<string | null>(null);
+  const [existingQuestionImageUrl, setExistingQuestionImageUrl] = useState<string | null>(null);
+  const [existingQuestionImageBlob, setExistingQuestionImageBlob] = useState<string | null>(null);
   const [options, setOptions] = useState<Array<{ 
     text: string; 
     image?: ImagePreview; 
     isCorrect: boolean;
     mode: OptionMode;
+    existingImageId?: string;
+    existingImageUrl?: string | null;
+    existingImageBlob?: string | null;
   }>>([
     { text: '', isCorrect: false, mode: 'text' },
     { text: '', isCorrect: false, mode: 'text' },
@@ -60,10 +70,144 @@ export function QuestionCreationPage() {
   ]);
   const [correctAnswer, setCorrectAnswer] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingQuestion, setLoadingQuestion] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   
   const questionImageInputRef = useRef<HTMLInputElement>(null);
   const optionImageInputRefs = useRef<Array<HTMLInputElement | null>>([]);
+
+  // Load question data when in edit mode
+  useEffect(() => {
+    const loadQuestion = async () => {
+      if (!isEditMode || !questionId || !examId) return;
+
+      try {
+        setLoadingQuestion(true);
+        
+        // Fetch questions with pagination until we find the one we need
+        let question: BackendQuestion | undefined;
+        let page = 1;
+        const limit = 10; // Backend limit
+        let hasMorePages = true;
+        
+        while (hasMorePages && !question) {
+          const response = await examApi.getQuestions(examId, page, limit);
+          question = response.payload.questions.find((q: BackendQuestion) => q.id === questionId);
+          
+          // Check if there are more pages
+          hasMorePages = page < response.payload.totalPages;
+          page++;
+          
+          // Safety limit to prevent infinite loops
+          if (page > 100) {
+            break;
+          }
+        }
+        
+        if (question) {
+          setQuestionText(question.question_text || '');
+          setQuestionType(question.type);
+          
+          // Handle question image - backend returns question_image_id as a URL
+          if (question.question_image_id) {
+            setExistingQuestionImageId(question.question_image_id);
+            setExistingQuestionImageUrl(question.question_image_id); // It's already a URL from backend
+            
+            // Fetch the image and convert to blob URL for display
+            try {
+              const imageResponse = await authenticatedFetch(question.question_image_id);
+              const imageData = await imageResponse.json();
+              if (imageData.payload?.media?.data) {
+                const buffer = new Uint8Array(imageData.payload.media.data);
+                const blob = new Blob([buffer], { type: 'image/jpeg' });
+                const blobUrl = URL.createObjectURL(blob);
+                setExistingQuestionImageBlob(blobUrl);
+              }
+            } catch (err) {
+              console.error('Failed to load question image:', err);
+            }
+          } else {
+            setExistingQuestionImageId(null);
+            setExistingQuestionImageUrl(null);
+            setExistingQuestionImageBlob(null);
+          }
+
+          if (question.type === 'MCQ_SINGLE' || question.type === 'MCQ_MULTIPLE') {
+            const questionOptions = question.metadata?.options || [];
+            const correctAnswers = question.metadata?.correct_answers || [];
+            
+            const loadedOptions = questionOptions.map((opt: any, idx: number) => {
+              const isCorrect = correctAnswers.includes(idx);
+              // Backend returns image_id and image_url for options with images
+              // image_id is the actual ID we need to preserve for updates
+              if (opt.image_id || opt.image_url) {
+                return {
+                  text: '',
+                  isCorrect,
+                  mode: 'image' as OptionMode,
+                  existingImageId: opt.image_id, // This is the actual media ID from backend
+                  existingImageUrl: opt.image_url || null, // URL from backend for display
+                  existingImageBlob: null, // Will be loaded separately
+                };
+              } else {
+                return {
+                  text: opt.text || '',
+                  isCorrect,
+                  mode: 'text' as OptionMode
+                };
+              }
+            });
+            
+            // Ensure at least 4 options
+            while (loadedOptions.length < 4) {
+              loadedOptions.push({ text: '', isCorrect: false, mode: 'text' as OptionMode });
+            }
+            
+            setOptions(loadedOptions);
+            
+            // Load option images asynchronously
+            loadedOptions.forEach(async (opt, idx) => {
+              if (opt.existingImageUrl && !opt.existingImageBlob) {
+                try {
+                  const imageResponse = await authenticatedFetch(opt.existingImageUrl);
+                  const imageData = await imageResponse.json();
+                  if (imageData.payload?.media?.data) {
+                    const buffer = new Uint8Array(imageData.payload.media.data);
+                    const blob = new Blob([buffer], { type: 'image/jpeg' });
+                    const blobUrl = URL.createObjectURL(blob);
+                    setOptions(prev => prev.map((o, i) => 
+                      i === idx ? { ...o, existingImageBlob: blobUrl } : o
+                    ));
+                  }
+                } catch (err) {
+                  console.error(`Failed to load image for option ${idx}:`, err);
+                }
+              }
+            });
+          } else if (question.type === 'SINGLE_WORD') {
+            setCorrectAnswer(question.metadata?.correct_answer || '');
+          }
+        } else {
+          error('Question not found');
+          // Navigate back if question not found
+          setTimeout(() => {
+            navigate(`${getBasePath()}/exam/${examId}`, { replace: true });
+          }, 2000);
+        }
+      } catch (err) {
+        error('Failed to load question data');
+        console.error('Error loading question:', err);
+        // Navigate back on error
+        setTimeout(() => {
+          navigate(`${getBasePath()}/exam/${examId}`, { replace: true });
+        }, 2000);
+      } finally {
+        setLoadingQuestion(false);
+      }
+    };
+
+    loadQuestion();
+  }, [isEditMode, questionId, examId, error]);
 
   const validateImage = (file: File): Promise<{ width: number; height: number }> => {
     return new Promise((resolve, reject) => {
@@ -254,7 +398,7 @@ export function QuestionCreationPage() {
         if (opt.mode === 'text') {
           return opt.text.trim().length > 0;
         } else {
-          return opt.image !== undefined;
+          return opt.image !== undefined || opt.existingImageId !== undefined || opt.existingImageUrl !== undefined;
         }
       });
       
@@ -275,7 +419,7 @@ export function QuestionCreationPage() {
         if (opt.mode === 'text' && !opt.text.trim()) {
           errors[`option${idx}`] = `Option ${idx + 1} must have text`;
         }
-        if (opt.mode === 'image' && !opt.image) {
+        if (opt.mode === 'image' && !opt.image && !opt.existingImageId && !opt.existingImageUrl) {
           errors[`option${idx}`] = `Option ${idx + 1} must have an image`;
         }
       });
@@ -298,7 +442,12 @@ export function QuestionCreationPage() {
       setLoading(true);
       
       const formData = new FormData();
-      formData.append('exam_id', examId);
+      
+      // Only append exam_id when creating, not when updating (backend doesn't accept it for updates)
+      if (!isEditMode) {
+        formData.append('exam_id', examId);
+      }
+      
       formData.append('question_text', questionText);
       formData.append('type', questionType);
 
@@ -314,14 +463,26 @@ export function QuestionCreationPage() {
         const imageFiles: File[] = [];
 
         options.forEach((opt) => {
-          const hasContent = opt.mode === 'text' ? opt.text.trim().length > 0 : opt.image !== undefined;
+          const hasContent = opt.mode === 'text' 
+            ? opt.text.trim().length > 0 
+            : (opt.image !== undefined || opt.existingImageId !== undefined || opt.existingImageUrl !== undefined);
           
           if (hasContent) {
             const processedIndex = processedOptions.length;
             
-            if (opt.mode === 'image' && opt.image) {
-              imageFiles.push(opt.image.file);
-              processedOptions.push({ image_id: 'placeholder' });
+            if (opt.mode === 'image') {
+              if (opt.image) {
+                // New image uploaded - send file
+                imageFiles.push(opt.image.file);
+                processedOptions.push({ image_id: 'placeholder' });
+              } else if (opt.existingImageId) {
+                // Keep existing image - send the actual image_id
+                // The backend will preserve this image
+                processedOptions.push({ image_id: opt.existingImageId });
+              } else {
+                // This shouldn't happen, but handle gracefully
+                console.warn(`Option ${processedIndex} is in image mode but has no image`);
+              }
             } else {
               processedOptions.push({ text: opt.text });
             }
@@ -348,21 +509,24 @@ export function QuestionCreationPage() {
 
       formData.append('metadata', JSON.stringify(metadata));
 
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/v1/exams/question`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+      const url = isEditMode 
+        ? getApiUrl(`/v1/exams/question/${questionId}`)
+        : getApiUrl('/v1/exams/question');
+      
+      const method = isEditMode ? 'PATCH' : 'POST';
+
+      const response = await authenticatedFetch(url, {
+        method,
+        // Don't set Content-Type header - let browser set it with boundary for FormData
         body: formData
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create question');
+        throw new Error(errorData.message || `Failed to ${isEditMode ? 'update' : 'create'} question`);
       }
 
-      success('Question created successfully!');
+      success(`Question ${isEditMode ? 'updated' : 'created'} successfully!`);
       navigate(`${getBasePath()}/exam/${examId}`, { replace: true });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to create question';
@@ -376,13 +540,30 @@ export function QuestionCreationPage() {
     if (questionImage?.preview) {
       URL.revokeObjectURL(questionImage.preview);
     }
+    if (existingQuestionImageBlob) {
+      URL.revokeObjectURL(existingQuestionImageBlob);
+    }
     options.forEach(opt => {
       if (opt.image?.preview) {
         URL.revokeObjectURL(opt.image.preview);
       }
+      if (opt.existingImageBlob) {
+        URL.revokeObjectURL(opt.existingImageBlob);
+      }
     });
     navigate(`${getBasePath()}/exam/${examId}`, { replace: true });
   };
+
+  if (loadingQuestion) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+          <p className="text-muted-foreground">Loading question...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -398,7 +579,9 @@ export function QuestionCreationPage() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <h1 className="text-2xl font-medium text-foreground">Create Question</h1>
+            <h1 className="text-2xl font-medium text-foreground">
+              {isEditMode ? 'Edit Question' : 'Create Question'}
+            </h1>
           </div>
           <div className="flex items-center gap-3">
             <Select
@@ -452,25 +635,64 @@ export function QuestionCreationPage() {
             {/* Question Image - Full Width */}
             <div className="space-y-2">
               {questionImage ? (
-                <div className="relative w-full group">
+                <div className="space-y-2">
                   <div className="relative w-full rounded-lg border border-border overflow-hidden bg-muted/30 dark:bg-muted/20">
                     <img
                       src={questionImage.preview}
                       alt="Question"
                       className="w-full h-auto max-h-96 object-contain"
                     />
-                    <button
-                      type="button"
-                      onClick={removeQuestionImage}
-                      className="absolute top-3 right-3 p-2 rounded-full bg-background/90 dark:bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity border border-border shadow-lg hover:bg-background"
-                    >
-                      <X className="h-4 w-4 text-foreground" />
-                    </button>
                   </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={removeQuestionImage}
+                    className="w-full"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Remove Image
+                  </Button>
+                </div>
+              ) : existingQuestionImageBlob || existingQuestionImageUrl ? (
+                <div className="space-y-2">
+                  <div className="relative w-full rounded-lg border border-border overflow-hidden bg-muted/30 dark:bg-muted/20">
+                    {existingQuestionImageBlob ? (
+                      <img
+                        src={existingQuestionImageBlob}
+                        alt="Question"
+                        className="w-full h-auto max-h-96 object-contain"
+                      />
+                    ) : (
+                      <ImageWithFallback
+                        src={existingQuestionImageUrl}
+                        fallback={<ImageIcon className="h-12 w-12 text-muted-foreground" />}
+                        alt="Question"
+                        className="w-full h-auto max-h-96 object-contain"
+                      />
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (existingQuestionImageBlob) {
+                        URL.revokeObjectURL(existingQuestionImageBlob);
+                      }
+                      setExistingQuestionImageId(null);
+                      setExistingQuestionImageUrl(null);
+                      setExistingQuestionImageBlob(null);
+                    }}
+                    className="w-full"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Remove Image
+                  </Button>
                 </div>
               ) : (
                 <div className="w-full">
-                  <Input
+                  <input
                     ref={questionImageInputRef}
                     type="file"
                     accept="image/jpeg,image/jpg,image/png"
@@ -607,25 +829,66 @@ export function QuestionCreationPage() {
                       ) : (
                         <div className="space-y-2">
                           {option.image ? (
-                            <div className="relative w-full group">
+                            <div className="space-y-2">
                               <div className="relative w-full rounded-lg border border-border overflow-hidden bg-muted/30 dark:bg-muted/20">
                                 <img
                                   src={option.image.preview}
                                   alt={`Option ${String.fromCharCode(65 + index)}`}
                                   className="w-full h-auto max-h-64 object-contain"
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() => removeOptionImage(index)}
-                                  className="absolute top-2 right-2 p-1.5 rounded-full bg-background/90 dark:bg-background/80 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity border border-border shadow-lg hover:bg-background"
-                                >
-                                  <X className="h-4 w-4 text-foreground" />
-                                </button>
                               </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => removeOptionImage(index)}
+                                className="w-full"
+                              >
+                                <X className="h-4 w-4 mr-2" />
+                                Remove Image
+                              </Button>
+                            </div>
+                          ) : option.existingImageBlob || option.existingImageUrl ? (
+                            <div className="space-y-2">
+                              <div className="relative w-full rounded-lg border border-border overflow-hidden bg-muted/30 dark:bg-muted/20">
+                                {option.existingImageBlob ? (
+                                  <img
+                                    src={option.existingImageBlob}
+                                    alt={`Option ${String.fromCharCode(65 + index)}`}
+                                    className="w-full h-auto max-h-64 object-contain"
+                                  />
+                                ) : (
+                                  <ImageWithFallback
+                                    src={option.existingImageUrl || null}
+                                    fallback={<ImageIcon className="h-8 w-8 text-muted-foreground" />}
+                                    alt={`Option ${String.fromCharCode(65 + index)}`}
+                                    className="w-full h-auto max-h-64 object-contain"
+                                  />
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  if (option.existingImageBlob) {
+                                    URL.revokeObjectURL(option.existingImageBlob);
+                                  }
+                                  setOptions(prev => prev.map((opt, idx) => 
+                                    idx === index 
+                                      ? { ...opt, existingImageId: undefined, existingImageUrl: null, existingImageBlob: null, mode: 'text' as OptionMode }
+                                      : opt
+                                  ));
+                                }}
+                                className="w-full"
+                              >
+                                <X className="h-4 w-4 mr-2" />
+                                Remove Image
+                              </Button>
                             </div>
                           ) : (
                             <div className="w-full">
-                              <Input
+                              <input
                                 ref={(el) => { optionImageInputRefs.current[index] = el; }}
                                 type="file"
                                 accept="image/jpeg,image/jpg,image/png"
@@ -696,16 +959,16 @@ export function QuestionCreationPage() {
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={loading}
+            disabled={loading || loadingQuestion}
             className="min-w-[140px]"
           >
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating...
+                {isEditMode ? 'Updating...' : 'Creating...'}
               </>
             ) : (
-              'Create Question'
+              isEditMode ? 'Update Question' : 'Create Question'
             )}
           </Button>
         </div>

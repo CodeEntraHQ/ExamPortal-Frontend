@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getExamById, getQuestions, BackendExam, BackendQuestion, startExam, saveAnswer, submitExam, getSubmissions } from '../../../../services/api/exam';
+import { getExamById, getQuestions, BackendExam, BackendQuestion, startExam, saveAnswer, deleteAnswer, submitExam, getSubmissions } from '../../../../services/api/exam';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../shared/components/ui/card';
 import { Button } from '../../../../shared/components/ui/button';
 import { Progress } from '../../../../shared/components/ui/progress';
@@ -8,10 +8,12 @@ import { Badge } from '../../../../shared/components/ui/badge';
 import { Input } from '../../../../shared/components/ui/input';
 import { Textarea } from '../../../../shared/components/ui/textarea';
 import { Checkbox } from '../../../../shared/components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '../../../../shared/components/ui/radio-group';
 import { Label } from '../../../../shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../../shared/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../../shared/components/ui/dialog';
+import { ImageWithFallback } from '../../../../shared/components/common/ImageWithFallback';
+import { Image as ImageIcon } from 'lucide-react';
+import { authenticatedFetch, getApiUrl } from '../../../../services/api/core';
 import { 
   Clock,
   Eye,
@@ -50,7 +52,9 @@ interface Question {
   content: string;
   points: number;
   timeLimit?: number;
-  options?: { id: string; text: string }[];
+  options?: { id: string; text?: string; image_id?: string; image_url?: string }[];
+  question_image_id?: string | null;
+  question_image_url?: string | null;
   metadata?: any;
   answer?: any;
   flagged: boolean;
@@ -203,21 +207,37 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
             : ['Please read all instructions carefully before starting the exam.'];
 
         // Transform questions to match Question interface
-        const isMultipleCorrect = metadata.isMultipleCorrect || false;
         const transformedQuestions: Question[] = questions.map((q, index) => {
           const qMetadata = q.metadata || {};
           const options = qMetadata.options || [];
           
+          // Map backend question types to frontend types
+          let questionType: string;
+          if (q.type === 'MCQ_SINGLE') {
+            questionType = 'mcq-single';
+          } else if (q.type === 'MCQ_MULTIPLE') {
+            questionType = 'mcq-multiple';
+          } else if (q.type === 'SINGLE_WORD') {
+            questionType = 'single-word';
+          } else {
+            // Fallback for any other types
+            questionType = 'short-answer';
+          }
+          
           return {
             id: q.id,
-            type: q.type === 'MCQ' ? (isMultipleCorrect ? 'mcq-multiple' : 'mcq-single') : 'short-answer',
+            type: questionType,
             title: `Question ${index + 1}`,
             content: q.question_text,
             points: qMetadata.points || 10,
             timeLimit: qMetadata.timeLimit,
+            question_image_id: q.question_image_id || null,
+            question_image_url: q.question_image_id || null, // Backend returns URL in question_image_id field
             options: options.map((opt: any, optIndex: number) => ({
-              id: String.fromCharCode(97 + optIndex), // a, b, c, d, etc.
-              text: opt.text || opt.toString(),
+              id: String.fromCharCode(65 + optIndex), // A, B, C, D, etc. (uppercase)
+              text: opt.text,
+              image_id: opt.image_id,
+              image_url: opt.image_url,
             })),
             metadata: qMetadata,
             answer: undefined,
@@ -250,29 +270,60 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
 
         setExamConfig(config);
         
-        // Convert saved answers (text) back to IDs for display
+        // Convert saved answers (indices/strings) back to IDs for display
         const restoredAnswers: Record<string, any> = {};
         Object.keys(existingSubmissions).forEach(questionId => {
           const question = config.questions.find(q => q.id === questionId);
           if (question) {
             const savedAnswer = existingSubmissions[questionId];
             
-            // For MCQ questions, convert text back to ID for display
+            // For MCQ questions, convert index (number) back to ID (A, B, C, D) for display
             if (question.type === 'mcq-single') {
-              // Find option with matching text
-              const option = question.options?.find(opt => opt.text === savedAnswer);
-              restoredAnswers[questionId] = option?.id || savedAnswer;
+              if (typeof savedAnswer === 'number') {
+                // Backend saved as index (0, 1, 2, 3) - convert to ID (A, B, C, D)
+                const optionId = String.fromCharCode(65 + savedAnswer); // 0 -> 'A', 1 -> 'B', etc.
+                restoredAnswers[questionId] = optionId;
+              } else if (typeof savedAnswer === 'string') {
+                // Backend might have saved as text (for backward compatibility) or already as ID
+                // Try to find option by text first
+                const option = question.options?.find(opt => opt.text === savedAnswer);
+                if (option) {
+                  restoredAnswers[questionId] = option.id;
+                } else if (savedAnswer.length === 1 && savedAnswer >= 'A' && savedAnswer <= 'Z') {
+                  // Already an ID
+                  restoredAnswers[questionId] = savedAnswer;
+                } else {
+                  restoredAnswers[questionId] = savedAnswer;
+                }
+              } else {
+                restoredAnswers[questionId] = savedAnswer;
+              }
             } else if (question.type === 'mcq-multiple') {
-              // For multiple choice, convert array of texts to array of IDs
+              // For multiple choice, convert array of indices to array of IDs
               if (Array.isArray(savedAnswer)) {
-                const ids = savedAnswer.map(text => {
-                  const option = question.options?.find(opt => opt.text === text);
-                  return option?.id;
+                const ids = savedAnswer.map((ans: any) => {
+                  if (typeof ans === 'number') {
+                    // Backend saved as index - convert to ID
+                    return String.fromCharCode(65 + ans);
+                  } else if (typeof ans === 'string') {
+                    // Backend might have saved as text - try to find option
+                    const option = question.options?.find(opt => opt.text === ans);
+                    if (option) {
+                      return option.id;
+                    } else if (ans.length === 1 && ans >= 'A' && ans <= 'Z') {
+                      // Already an ID
+                      return ans;
+                    }
+                  }
+                  return ans;
                 }).filter(id => id !== undefined);
                 restoredAnswers[questionId] = ids;
               } else {
                 restoredAnswers[questionId] = savedAnswer;
               }
+            } else if (question.type === 'single-word') {
+              // For SINGLE_WORD, keep as string
+              restoredAnswers[questionId] = savedAnswer;
             } else {
               // For other question types (short-answer, true-false, etc.), use as-is
               restoredAnswers[questionId] = savedAnswer;
@@ -604,23 +655,41 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   };
 
   // Helper function to convert answer (ID or array of IDs) to text (or array of texts)
-  const convertAnswerToText = (questionId: string, answer: any): any => {
+  const convertAnswerToIndex = (questionId: string, answer: any): any => {
     if (!answer) return answer;
     
-    // For multiple choice (array of IDs)
-    if (Array.isArray(answer)) {
-      return answer.map(id => getOptionTextById(questionId, id)).filter(text => text !== null);
+    const question = examConfig?.questions.find(q => q.id === questionId);
+    if (!question) return answer;
+    
+    // For SINGLE_WORD type, return as-is (it's already a string)
+    if (question.type === 'single-word') {
+      return answer;
     }
     
-    // For single choice (single ID) or true/false
+    // For multiple choice (array of IDs like ['A', 'B'])
+    if (Array.isArray(answer)) {
+      return answer.map(id => {
+        // Convert option ID (A, B, C, D) to index (0, 1, 2, 3)
+        const index = id.charCodeAt(0) - 65; // 'A' = 65, so A -> 0, B -> 1, etc.
+        return index;
+      }).filter(index => index >= 0 && index < (question.options?.length || 0));
+    }
+    
+    // For single choice MCQ, convert ID (A, B, C, D) to index (0, 1, 2, 3)
+    if (typeof answer === 'string' && answer.length === 1) {
+      const index = answer.charCodeAt(0) - 65; // 'A' = 65, so A -> 0, B -> 1, etc.
+      if (index >= 0 && index < (question.options?.length || 0)) {
+        return index;
+      }
+    }
+    
     // For true/false, keep as is (it's already text)
     if (answer === 'true' || answer === 'false') {
       return answer;
     }
     
-    // For single choice MCQ, convert ID to text
-    const text = getOptionTextById(questionId, answer);
-    return text || answer; // Fallback to original if not found
+    // Fallback to original if conversion fails
+    return answer;
   };
 
 
@@ -629,9 +698,10 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     const question = examConfig?.questions.find(q => q.id === questionId);
     if (!question) return;
 
-    // Convert answer from ID to text for saving
-    const answerToSave = convertAnswerToText(questionId, answer);
-    
+    // Check if answer is being deselected (empty string or empty array)
+    const isDeselecting = answer === '' || answer === null || answer === undefined || 
+                         (Array.isArray(answer) && answer.length === 0);
+
     // Update local state with the ID (for display purposes)
     // We keep IDs in local state for UI, but save text to backend
     setExamState(prev => ({
@@ -639,12 +709,19 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       answers: { ...prev.answers, [questionId]: answer }
     }));
 
-    // Auto-save to backend if exam is active (save as text)
+    // Auto-save to backend if exam is active
     if (examConfig && examState.phase === 'active') {
       try {
-        await saveAnswer(examId, questionId, answerToSave); // Save text instead of ID
+        if (isDeselecting) {
+          // Delete the submission if answer is being deselected
+          await deleteAnswer(examId, questionId);
+        } else {
+          // Convert answer from ID to index for saving (backend expects indices for MCQ questions)
+          const answerToSave = convertAnswerToIndex(questionId, answer);
+          await saveAnswer(examId, questionId, answerToSave);
+        }
       } catch (error) {
-        console.error('Failed to save answer:', error);
+        console.error('Failed to save/delete answer:', error);
         // Don't show error to user for auto-save failures
       }
     }
@@ -800,6 +877,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     return <ExamResultsPhase 
       examConfig={examConfig}
       examState={examState}
+      examId={examId}
       onComplete={onComplete}
     />;
   }
@@ -1145,46 +1223,109 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
     switch (currentQuestion.type) {
       case 'mcq-single':
         return (
-          <RadioGroup 
-            value={answer || ''} 
-            onValueChange={(value) => onAnswerChange(currentQuestion.id, value)}
-          >
-            <div className="space-y-3">
-              {currentQuestion.options?.map((option: any) => (
-                <div key={option.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                  <RadioGroupItem value={option.id} id={option.id} />
-                  <Label htmlFor={option.id} className="flex-1 cursor-pointer">
-                    {option.text}
-                  </Label>
+          <div className="space-y-6">
+            {currentQuestion.options?.map((option: any) => {
+              const isSelected = answer === option.id;
+              return (
+                <div 
+                  key={option.id} 
+                  className={`
+                    relative flex items-center gap-6 p-8 rounded-2xl border-2 transition-all duration-200 cursor-pointer
+                    ${isSelected 
+                      ? 'border-primary bg-primary/5 shadow-lg' 
+                      : 'border-border/50 hover:border-primary/30 hover:bg-muted/20'
+                    }
+                  `}
+                  onClick={() => {
+                    // Toggle: if already selected, deselect; otherwise select
+                    if (isSelected) {
+                      onAnswerChange(currentQuestion.id, '');
+                    } else {
+                      onAnswerChange(currentQuestion.id, option.id);
+                    }
+                  }}
+                >
+                  <div className={`
+                    flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold
+                    ${isSelected 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'bg-muted text-muted-foreground'
+                    }
+                  `}>
+                    {option.id}
+                  </div>
+                  <div className="flex-1 cursor-pointer min-w-0">
+                    {option.image_id || option.image_url ? (
+                      <div className="w-full rounded-xl border border-border overflow-hidden bg-muted/10">
+                        <div className="aspect-video w-full flex items-center justify-center">
+                          <ImageWithFallback
+                            src={option.image_url || option.image_id}
+                            fallback={<ImageIcon className="h-20 w-20 text-muted-foreground" />}
+                            alt={`Option ${option.id}`}
+                            className="w-full h-full object-contain max-w-full max-h-full"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-lg leading-relaxed font-medium">{option.text}</span>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
-          </RadioGroup>
+              );
+            })}
+          </div>
         );
 
       case 'mcq-multiple':
         return (
-          <div className="space-y-3">
+          <div className="space-y-6">
             {currentQuestion.options?.map((option: any) => {
               // Check if this option ID is in the answer array
               const isChecked = Array.isArray(answer) && answer.includes(option.id);
               return (
-                <div key={option.id} className="flex items-center space-x-2 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                  <Checkbox
-                    id={option.id}
-                    checked={isChecked}
-                    onCheckedChange={(checked) => {
-                      const newAnswer = answer || [];
-                      if (checked) {
-                        onAnswerChange(currentQuestion.id, [...newAnswer, option.id]);
-                      } else {
-                        onAnswerChange(currentQuestion.id, newAnswer.filter((id: string) => id !== option.id));
-                      }
-                    }}
-                  />
-                  <Label htmlFor={option.id} className="flex-1 cursor-pointer">
-                    {option.text}
-                  </Label>
+                <div 
+                  key={option.id} 
+                  className={`
+                    relative flex items-center gap-6 p-8 rounded-2xl border-2 transition-all duration-200 cursor-pointer
+                    ${isChecked 
+                      ? 'border-primary bg-primary/5 shadow-lg' 
+                      : 'border-border/50 hover:border-primary/30 hover:bg-muted/20'
+                    }
+                  `}
+                  onClick={() => {
+                    const newAnswer = answer || [];
+                    if (isChecked) {
+                      onAnswerChange(currentQuestion.id, newAnswer.filter((id: string) => id !== option.id));
+                    } else {
+                      onAnswerChange(currentQuestion.id, [...newAnswer, option.id]);
+                    }
+                  }}
+                >
+                  <div className={`
+                    flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold
+                    ${isChecked 
+                      ? 'bg-primary text-primary-foreground' 
+                      : 'bg-muted text-muted-foreground'
+                    }
+                  `}>
+                    {option.id}
+                  </div>
+                  <div className="flex-1 cursor-pointer min-w-0">
+                    {option.image_id || option.image_url ? (
+                      <div className="w-full rounded-xl border border-border overflow-hidden bg-muted/10">
+                        <div className="aspect-video w-full flex items-center justify-center">
+                          <ImageWithFallback
+                            src={option.image_url || option.image_id}
+                            fallback={<ImageIcon className="h-20 w-20 text-muted-foreground" />}
+                            alt={`Option ${option.id}`}
+                            className="w-full h-full object-contain max-w-full max-h-full"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-lg leading-relaxed font-medium">{option.text}</span>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -1193,21 +1334,47 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
 
       case 'true-false':
         return (
-          <RadioGroup 
-            value={answer || ''} 
-            onValueChange={(value) => onAnswerChange(currentQuestion.id, value)}
-          >
-            <div className="space-y-3">
-              <div className="flex items-center space-x-2 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                <RadioGroupItem value="true" id="true" />
-                <Label htmlFor="true" className="flex-1 cursor-pointer">True</Label>
-              </div>
-              <div className="flex items-center space-x-2 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                <RadioGroupItem value="false" id="false" />
-                <Label htmlFor="false" className="flex-1 cursor-pointer">False</Label>
-              </div>
-            </div>
-          </RadioGroup>
+          <div className="space-y-6">
+            {['true', 'false'].map((value) => {
+              const isSelected = answer === value;
+              return (
+                <div 
+                  key={value}
+                  className={`
+                    relative flex items-center gap-6 p-8 rounded-2xl border-2 transition-all duration-200 cursor-pointer
+                    ${isSelected 
+                      ? 'border-primary bg-primary/5 shadow-lg' 
+                      : 'border-border/50 hover:border-primary/30 hover:bg-muted/20'
+                    }
+                  `}
+                  onClick={() => {
+                    // Toggle: if already selected, deselect; otherwise select
+                    if (isSelected) {
+                      onAnswerChange(currentQuestion.id, '');
+                    } else {
+                      onAnswerChange(currentQuestion.id, value);
+                    }
+                  }}
+                >
+                  <div className="flex-1 cursor-pointer text-lg font-medium">
+                    {value === 'true' ? 'True' : 'False'}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+
+      case 'single-word':
+        return (
+          <div className="space-y-3">
+            <Input
+              value={answer || ''}
+              onChange={(e) => onAnswerChange(currentQuestion.id, e.target.value)}
+              placeholder="Enter your answer here..."
+              className="w-full h-14 text-lg border-2 border-border/50 focus:border-primary focus:ring-2 focus:ring-primary/20 rounded-xl px-6"
+            />
+          </div>
         );
 
       case 'short-answer':
@@ -1424,41 +1591,51 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.3 }}
             >
-              <Card>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-xl">
-                        {currentQuestion.title}
-                      </CardTitle>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Badge variant="outline">
-                          {currentQuestion.points} points
-                        </Badge>
-                        {currentQuestion.timeLimit && (
-                          <Badge variant="outline">
-                            <Clock className="h-3 w-3 mr-1" />
-                            {currentQuestion.timeLimit}m
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
+              <Card className="shadow-sm border border-border/50 bg-card/50">
+                <CardHeader className="pb-6 border-b border-border/50">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-2xl font-semibold">
+                      {currentQuestion.title}
+                    </CardTitle>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
                       onClick={() => onFlagQuestion(currentQuestion.id)}
-                      className={examState.flaggedQuestions.includes(currentQuestion.id) ? 'text-orange-500' : ''}
+                      className={`
+                        ${examState.flaggedQuestions.includes(currentQuestion.id) 
+                          ? 'text-orange-600 dark:text-orange-400' 
+                          : 'text-muted-foreground'
+                        }
+                      `}
                     >
                       <Flag className="h-4 w-4" />
                     </Button>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="prose dark:prose-invert max-w-none">
-                    <p>{currentQuestion.content}</p>
+                <CardContent className="space-y-10 py-8">
+                  <div className="space-y-6">
+                    {currentQuestion.content && (
+                      <div className="prose dark:prose-invert max-w-none">
+                        <p className="text-xl leading-relaxed text-foreground font-medium">{currentQuestion.content}</p>
+                      </div>
+                    )}
+                    {currentQuestion.question_image_id || currentQuestion.question_image_url ? (
+                      <div className="w-full rounded-2xl border border-border/50 overflow-hidden bg-muted/10">
+                        <div className="aspect-video w-full flex items-center justify-center">
+                          <ImageWithFallback
+                            src={currentQuestion.question_image_url || currentQuestion.question_image_id}
+                            fallback={<ImageIcon className="h-20 w-20 text-muted-foreground" />}
+                            alt="Question"
+                            className="w-full h-full object-contain max-w-full max-h-full"
+                          />
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                   
-                  {renderQuestionContent()}
+                  <div className="pt-4">
+                    {renderQuestionContent()}
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
@@ -1553,8 +1730,37 @@ function ExamSubmittedPhase({ onComplete }: any) {
   );
 }
 
-function ExamResultsPhase({ examConfig, examState, onComplete }: any) {
-  const attempted = Object.keys(examState.answers).length;
+function ExamResultsPhase({ examConfig, examState, onComplete, examId }: any) {
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(true);
+
+  // Fetch actual submissions from backend to get accurate counts
+  useEffect(() => {
+    const fetchSubmissions = async () => {
+      try {
+        const submissionsResponse = await getSubmissions(examId);
+        setSubmissions(submissionsResponse.payload.submissions || []);
+      } catch (error) {
+        console.error('Failed to fetch submissions:', error);
+      } finally {
+        setLoadingSubmissions(false);
+      }
+    };
+
+    fetchSubmissions();
+  }, [examId]);
+
+  // Calculate attempted questions based on actual submissions (not local state)
+  // Only count questions with valid, non-empty answers
+  const attempted = submissions.filter((sub: any) => {
+    const answer = sub.answer;
+    // Check if answer is valid (not empty, null, undefined, or empty array)
+    if (answer === null || answer === undefined) return false;
+    if (typeof answer === 'string' && answer.trim().length === 0) return false;
+    if (Array.isArray(answer) && answer.length === 0) return false;
+    return true;
+  }).length;
+
   const skipped = examConfig.totalQuestions - attempted;
   const timeTaken = examState.endTime && examState.startTime
     ? Math.floor((examState.endTime.getTime() - examState.startTime.getTime()) / 1000)
@@ -1594,11 +1800,15 @@ function ExamResultsPhase({ examConfig, examState, onComplete }: any) {
                 <div className="text-sm text-muted-foreground mt-1">Total Questions</div>
               </div>
               <div className="text-center p-4 bg-muted rounded-lg">
-                <div className="text-2xl font-bold text-green-600">{attempted}</div>
+                <div className="text-2xl font-bold text-green-600">
+                  {loadingSubmissions ? '...' : attempted}
+                </div>
                 <div className="text-sm text-muted-foreground mt-1">Attempted</div>
               </div>
               <div className="text-center p-4 bg-muted rounded-lg">
-                <div className="text-2xl font-bold text-orange-600">{skipped}</div>
+                <div className="text-2xl font-bold text-orange-600">
+                  {loadingSubmissions ? '...' : skipped}
+                </div>
                 <div className="text-sm text-muted-foreground mt-1">Skipped</div>
               </div>
               <div className="text-center p-4 bg-muted rounded-lg">

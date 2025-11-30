@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { authenticatedFetch, getApiUrl } from '../../../services/api';
+import { authenticatedFetch, getApiUrl } from '../../../services/api/core';
 import { Avatar, AvatarFallback } from '../ui/avatar';
 
 interface ImageWithFallbackProps {
@@ -27,7 +27,9 @@ export function ImageWithFallback({ src, fallback, alt, className }: ImageWithFa
 
     const fetchImage = async () => {
       try {
-        const response = await authenticatedFetch(src);
+        // If src is a relative path, prepend API base URL
+        const imageUrl = src.startsWith('http') ? src : getApiUrl(src);
+        const response = await authenticatedFetch(imageUrl);
         const data = await response.json();
         const buffer = new Uint8Array(data.payload.media.data);
         const blob = new Blob([buffer], { type: 'image/jpeg' });

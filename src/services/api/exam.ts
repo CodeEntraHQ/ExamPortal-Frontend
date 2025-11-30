@@ -392,6 +392,24 @@ export async function saveAnswer(examId: string, questionId: string, answer: str
 }
 
 /**
+ * Delete an answer (remove submission)
+ */
+export async function deleteAnswer(examId: string, questionId: string): Promise<void> {
+  const response = await authenticatedFetch(getApiUrl('/v1/submissions/answer'), {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      exam_id: examId,
+      question_id: questionId,
+    }),
+  });
+
+  await response.json();
+}
+
+/**
  * Submit exam
  */
 export async function submitExam(examId: string): Promise<{ payload: { completed_at: string } }> {
