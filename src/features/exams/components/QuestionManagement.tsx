@@ -392,8 +392,10 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
             {/* Add Question Button */}
             <Button 
               onClick={() => {
-                resetForm();
-                setShowAddModal(true);
+                const cleanedExamId = examId.split(':')[0].trim();
+                // Determine route based on current path
+                const basePath = window.location.pathname.includes('/superadmin/') ? '/superadmin' : '/admin';
+                window.location.href = `${basePath}/exam/${cleanedExamId}/question/create`;
               }}
               className="bg-primary hover:bg-primary/90"
             >
