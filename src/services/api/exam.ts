@@ -199,6 +199,13 @@ export interface ExamScoreDistributionItem {
 export interface GetExamScoreDistributionResponse {
   payload: {
     distribution: ExamScoreDistributionItem[];
+    summary?: {
+      highestScore: number;
+      lowestScore: number;
+      averageScore: number;
+      passRate: number;
+      totalAttempts: number;
+    };
   };
 }
 
@@ -715,6 +722,7 @@ export async function getExamScoreDistribution(examId: string): Promise<GetExamS
 
   return response.json();
 }
+
 
 /**
  * Exam API object for convenience
