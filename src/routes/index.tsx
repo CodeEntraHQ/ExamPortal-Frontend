@@ -194,6 +194,10 @@ export const router = createBrowserRouter([
         element: <QuestionCreationPage />,
       },
       {
+        path: 'exam/:examId/question/:questionId/edit',
+        element: <QuestionCreationPage />,
+      },
+      {
         path: 'profile',
         element: <ProfilePage />,
       },
@@ -239,6 +243,10 @@ export const router = createBrowserRouter([
       },
       {
         path: 'exam/:examId/question/create',
+        element: <QuestionCreationPage />,
+      },
+      {
+        path: 'exam/:examId/question/:questionId/edit',
         element: <QuestionCreationPage />,
       },
       {
