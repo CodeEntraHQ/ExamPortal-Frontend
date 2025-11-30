@@ -51,6 +51,7 @@ import { getUsers, ApiUser } from '../../../services/api/user';
 import { useNavigate } from 'react-router-dom';
 import { Checkbox } from '../../../shared/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../shared/components/ui/tooltip';
+import { Switch } from '../../../shared/components/ui/switch';
 import { SquarePen, FilePlus2 } from 'lucide-react';
 
 interface ExamDetailPageProps {
@@ -124,6 +125,8 @@ export function ExamDetailPage({
   const [enrollmentsLoading, setEnrollmentsLoading] = useState<boolean>(false);
   const [enrollmentsError, setEnrollmentsError] = useState<string | null>(null);
   const [deEnrollInFlight, setDeEnrollInFlight] = useState<string | null>(null);
+  const [resultsVisible, setResultsVisible] = useState<boolean>(false);
+  const [updatingResultsVisible, setUpdatingResultsVisible] = useState<boolean>(false);
 
   const { students: studentEnrollments, representatives: representativeEnrollments } = useMemo(() => {
     return enrolledStudents.reduce(
@@ -552,6 +555,15 @@ export function ExamDetailPage({
     fetchScoreDistribution();
   }, [effectiveExamId, canManageQuestions]);
 
+  // Initialize resultsVisible from currentExam
+  useEffect(() => {
+    if (currentExam) {
+      setResultsVisible(currentExam.results_visible ?? false);
+    } else {
+      setResultsVisible(false);
+    }
+  }, [currentExam]);
+
   // Helper function to format duration from seconds to minutes
   const formatDurationFromSeconds = (seconds?: number): number => {
     if (!seconds) return 0;
@@ -686,6 +698,36 @@ export function ExamDetailPage({
       HYBRID: { className: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' }
     };
     return variants[type] || { className: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300' };
+  };
+
+  // Handle results visibility toggle
+  const handleResultsVisibilityToggle = async (checked: boolean) => {
+    if (!effectiveExamId || !canManageQuestions) return;
+
+    setUpdatingResultsVisible(true);
+    try {
+      // Update exam via API
+      const response = await examApi.updateExam(effectiveExamId, {
+        results_visible: checked,
+      });
+
+      // Update local state
+      setResultsVisible(checked);
+      
+      // Update currentExam in context if available
+      if (setCurrentExam && response.payload) {
+        setCurrentExam(response.payload);
+      }
+
+      success(checked ? 'Results are now visible to students' : 'Results are now hidden from students');
+    } catch (err: any) {
+      console.error('Error updating results visibility:', err);
+      error(err?.message || 'Failed to update results visibility. Please try again.');
+      // Revert local state on error
+      setResultsVisible(!checked);
+    } finally {
+      setUpdatingResultsVisible(false);
+    }
   };
 
   // Extracted send invitations logic into a separate function so it can be unit-tested
@@ -1107,6 +1149,47 @@ export function ExamDetailPage({
                 </CardContent>
               </Card>
             </div>
+
+            {/* Results Visibility Settings - Admin Only */}
+            {canManageQuestions && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Eye className="h-5 w-5" />
+                    Results Visibility
+                  </CardTitle>
+                  <CardDescription>
+                    Control whether students can view their exam results
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+                    <div className="space-y-1">
+                      <Label htmlFor="results-visible-toggle" className="text-base font-medium">
+                        Enable Results Visibility
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        {resultsVisible 
+                          ? 'Students can currently view their exam results'
+                          : 'Results are currently hidden from students'}
+                      </p>
+                    </div>
+                    <Switch
+                      id="results-visible-toggle"
+                      checked={resultsVisible}
+                      onCheckedChange={handleResultsVisibilityToggle}
+                      disabled={updatingResultsVisible}
+                    />
+                  </div>
+                  {updatingResultsVisible && (
+                    <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Updating...
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {canManageQuestions && (
               <>

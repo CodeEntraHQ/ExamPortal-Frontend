@@ -21,6 +21,7 @@ export interface BackendExam {
   passing_marks?: number;
   status?: string;
   has_admission_form?: boolean;
+  results_visible?: boolean;
 }
 
 export interface BackendQuestion {
@@ -70,6 +71,7 @@ export interface CreateExamPayload {
     isMultipleCorrect?: boolean;
     [key: string]: any;
   };
+  results_visible?: boolean;
   entity_id?: string;
 }
 
@@ -78,6 +80,7 @@ export interface UpdateExamPayload {
   type?: 'QUIZ' | 'MCQ' | 'ONE_WORD' | 'DESCRIPTIVE' | 'HYBRID' | 'OTHER' | 'EXAM' | string;
   duration_seconds?: number;
   active?: boolean;
+  results_visible?: boolean;
   metadata?: {
     totalMarks?: number;
     passingMarks?: number;
@@ -214,6 +217,7 @@ export interface StudentEnrollment {
     duration_seconds: number;
     metadata: any;
     entity_id: string;
+    results_visible?: boolean;
   };
   result: {
     id: string;
