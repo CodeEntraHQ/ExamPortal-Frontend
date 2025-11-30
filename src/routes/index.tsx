@@ -37,6 +37,7 @@ import { AdmissionFormViewPage } from '../pages/representative/AdmissionFormView
 import { ProfilePage } from '../pages/shared/ProfilePage';
 import { ExamDetailPageWrapper } from '../pages/shared/ExamDetailPageWrapper';
 import { ExamCreationWrapper } from '../pages/shared/ExamCreationWrapper';
+import { QuestionCreationPage } from '../pages/shared/QuestionCreationPage';
 import { AdmissionFormBuilderPage } from '../pages/shared/AdmissionFormBuilderPage';
 
 export const router = createBrowserRouter([
@@ -189,6 +190,10 @@ export const router = createBrowserRouter([
         element: <AdmissionFormBuilderPage />,
       },
       {
+        path: 'exam/:examId/question/create',
+        element: <QuestionCreationPage />,
+      },
+      {
         path: 'profile',
         element: <ProfilePage />,
       },
@@ -231,6 +236,10 @@ export const router = createBrowserRouter([
       {
         path: 'exam/:examId/admission-form',
         element: <AdmissionFormBuilderPage />,
+      },
+      {
+        path: 'exam/:examId/question/create',
+        element: <QuestionCreationPage />,
       },
       {
         path: 'profile',
