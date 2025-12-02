@@ -50,6 +50,7 @@ export function InnovativeAdminDashboard({
 }: InnovativeAdminDashboardProps) {
   const { user } = useAuth();
   const [selectedTimeframe, setSelectedTimeframe] = useState('7d');
+  const [currentTime, setCurrentTime] = useState(new Date());
   
   // State for backend data
   const [recentLogins, setRecentLogins] = useState<RecentLogin[]>([]);
@@ -120,6 +121,13 @@ export function InnovativeAdminDashboard({
     };
 
     fetchEntityPerformance();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
   }, []);
 
   // Enhanced mock data for admin dashboard (commented out - using backend data now)
@@ -245,8 +253,8 @@ export function InnovativeAdminDashboard({
             
             <div className="text-right">
               <div className="text-sm opacity-75 mb-1">Current Time</div>
-              <div className="text-2xl font-bold">{new Date().toLocaleTimeString()}</div>
-              <div className="text-sm opacity-75">{new Date().toLocaleDateString()}</div>
+              <div className="text-2xl font-bold">{currentTime.toLocaleTimeString()}</div>
+              <div className="text-sm opacity-75">{currentTime.toLocaleDateString()}</div>
             </div>
           </div>
           
