@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
-import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
-import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { cn } from '../components/ui/utils';
 
 interface Notification {
   id: string;
@@ -87,27 +87,6 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  const getAlertVariant = (type: Notification['type']) => {
-    switch (type) {
-      case 'error':
-        return 'destructive';
-      default:
-        return 'default';
-    }
-  };
-
-  const getTypeStyles = (type: Notification['type']) => {
-    switch (type) {
-      case 'success':
-        return 'border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300';
-      case 'warning':
-        return 'border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-      case 'info':
-        return 'border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-      case 'error':
-        return '';
-    }
-  };
 
   const value: NotificationContextType = {
     notifications,
@@ -125,42 +104,54 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
       {children}
       
       {/* Notification Container */}
-      <div className="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm w-full">
+      <div className="fixed bottom-4 right-4 z-50 space-y-2 max-w-sm w-full pointer-events-none">
         <AnimatePresence>
           {notifications.map((notification) => (
             <motion.div
               key={notification.id}
-              initial={{ opacity: 0, x: 300, scale: 0.9 }}
+              initial={{ opacity: 0, x: 300, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: 300, scale: 0.9 }}
-              transition={{ duration: 0.2 }}
+              exit={{ opacity: 0, x: 300, scale: 0.95 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="pointer-events-auto"
             >
-              <Alert 
-                variant={getAlertVariant(notification.type)}
-                className={`
-                  relative shadow-lg
-                  ${notification.type !== 'error' ? getTypeStyles(notification.type) : ''}
-                `}
+              <div
+                className={cn(
+                  "relative w-full rounded-lg border shadow-lg px-4 py-3 text-sm",
+                  "bg-card text-card-foreground",
+                  notification.type === 'success' && "border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300",
+                  notification.type === 'warning' && "border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+                  notification.type === 'info' && "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+                  notification.type === 'error' && "border-destructive/50 bg-destructive/10 text-destructive dark:border-destructive dark:bg-destructive/20 dark:text-destructive"
+                )}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`
-                    ${notification.type === 'success' ? 'text-green-600 dark:text-green-400' : ''}
-                    ${notification.type === 'warning' ? 'text-yellow-600 dark:text-yellow-400' : ''}
-                    ${notification.type === 'info' ? 'text-blue-600 dark:text-blue-400' : ''}
-                  `}>
+                  <div className={cn(
+                    "flex-shrink-0 mt-0.5",
+                    notification.type === 'success' && "text-green-600 dark:text-green-400",
+                    notification.type === 'warning' && "text-yellow-600 dark:text-yellow-400",
+                    notification.type === 'info' && "text-blue-600 dark:text-blue-400",
+                    notification.type === 'error' && "text-destructive"
+                  )}>
                     {getIcon(notification.type)}
                   </div>
                   
                   <div className="flex-1 min-w-0">
                     {notification.title && (
-                      <div className="font-medium mb-1">{notification.title}</div>
+                      <div className="font-semibold mb-1 text-sm leading-tight">
+                        {notification.title}
+                      </div>
                     )}
-                    <AlertDescription className="text-sm">
+                    <div className={cn(
+                      "text-sm leading-relaxed break-words",
+                      notification.type === 'error' && "text-destructive",
+                      !notification.title && "mt-0"
+                    )}>
                       {notification.message}
-                    </AlertDescription>
+                    </div>
                     
                     {notification.action && (
-                      <div className="mt-2">
+                      <div className="mt-3">
                         <Button
                           size="sm"
                           variant="outline"
@@ -172,17 +163,8 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
                       </div>
                     )}
                   </div>
-                  
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 opacity-70 hover:opacity-100"
-                    onClick={() => removeNotification(notification.id)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
                 </div>
-              </Alert>
+              </div>
             </motion.div>
           ))}
         </AnimatePresence>
