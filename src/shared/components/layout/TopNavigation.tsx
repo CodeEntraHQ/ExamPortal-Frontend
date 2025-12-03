@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback } from '../ui/avatar';
@@ -45,6 +45,41 @@ export function TopNavigation({ currentView, setCurrentView, breadcrumbItems = [
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const appName = envConfig.appName;
+  
+  // Check if browser is in fullscreen mode
+  const [isFullscreen, setIsFullscreen] = useState(() => {
+    return !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    );
+  });
+
+  // Listen for fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isCurrentlyFullscreen);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
 
   const getNavigationItems = () => {
     const baseItems = [
@@ -77,6 +112,47 @@ export function TopNavigation({ currentView, setCurrentView, breadcrumbItems = [
     }
   };
 
+  // If in fullscreen mode, hide all navigation and show only student details
+  if (isFullscreen) {
+    return (
+      <motion.nav 
+        initial={{ y: -20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        className="sticky top-0 z-50 w-full border-b border-border bg-nav/95 backdrop-blur supports-[backdrop-filter]:bg-nav/95"
+      >
+        <div className="container mx-auto px-4">
+          <div className="flex h-12 items-center">
+            {/* Student Details - Left Top Corner Only */}
+            <div className="flex items-center gap-3">
+              <ImageWithFallback
+                src={user?.profile_picture_link || null}
+                fallback={user?.name?.charAt(0) || 'U'}
+                alt="Profile"
+                className="h-8 w-8 rounded-full object-cover border-2 border-primary/20"
+              />
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold text-foreground leading-tight">
+                  {user?.name || 'Student'}
+                </span>
+                <span className="text-xs text-muted-foreground leading-tight">
+                  {user?.email || ''}
+                </span>
+              </div>
+              <Badge 
+                variant="secondary" 
+                className={`text-xs ${getRoleBadgeColor()}`}
+              >
+                {user?.role || 'STUDENT'}
+              </Badge>
+            </div>
+          </div>
+        </div>
+      </motion.nav>
+    );
+  }
+
+  // Normal navigation when not in fullscreen mode
   return (
     <motion.nav 
       initial={{ y: -20, opacity: 0 }}
