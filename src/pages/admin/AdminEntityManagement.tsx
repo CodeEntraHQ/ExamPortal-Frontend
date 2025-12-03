@@ -53,22 +53,9 @@ export function AdminEntityManagement() {
       
       // For ADMIN users, fetch their entity details
       if (user.role === 'ADMIN') {
-        console.log('🔵 AdminEntityManagement - Admin user detected');
-        console.log('🔵 AdminEntityManagement - User data:', {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          entityId: user.entityId,
-          entityName: user.entityName,
-        });
-        
         try {
           // Fetch full entity details from backend
-          console.log('🔵 AdminEntityManagement - Fetching entity details from backend');
           const response = await getEntityById(user.entityId);
-          
-          console.log('✅ AdminEntityManagement - Entity data fetched from backend:', response);
           
           if (response && response.payload) {
             const apiEntity = response.payload;
@@ -104,14 +91,12 @@ export function AdminEntityManagement() {
               examsCount: entityData.examsCount,
             }));
             
-            console.log('✅ AdminEntityManagement - Entity data fetched and saved:', entityData);
             setEntity(entityData);
             setIsLoading(false);
             return;
           }
         } catch (error: any) {
           console.error('❌ AdminEntityManagement - Failed to fetch entity from backend:', error);
-          console.log('⚠️ AdminEntityManagement - Using fallback: entity data from login response');
           
           // Fallback: Use entity data from login response
           const entityData: Entity = {

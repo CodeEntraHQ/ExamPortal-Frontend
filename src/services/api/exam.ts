@@ -626,16 +626,6 @@ export async function inviteStudents(payload: InviteStudentsPayload): Promise<{
     student_emails: payload.emails,
   };
 
-  console.log('📧 [inviteStudents] Request Details:', {
-    url: getApiUrl(`/v1/exams/${payload.examId}/invite`),
-    method: 'POST',
-    requestBody: requestBody,
-    examId: payload.examId,
-    entityId: payload.entityId,
-    emails: payload.emails,
-    emailCount: payload.emails?.length || 0,
-  });
-
   const response = await authenticatedFetch(getApiUrl(`/v1/exams/${payload.examId}/invite`), {
     method: 'POST',
     headers: {
@@ -645,7 +635,6 @@ export async function inviteStudents(payload: InviteStudentsPayload): Promise<{
   });
 
   const responseData = await response.json();
-  console.log('✅ [inviteStudents] Response:', responseData);
   return responseData;
 }
 

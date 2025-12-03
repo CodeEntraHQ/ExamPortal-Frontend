@@ -195,7 +195,6 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
           });
         } catch (err) {
           // If no submissions exist, that's fine - exam hasn't started yet
-          console.log('No existing submissions found');
         }
 
         // Transform backend data to ExamConfiguration format
@@ -914,7 +913,6 @@ function TwoFactorAuthPhase({ onVerified, onCancel }: any) {
 
   const handleResendCode = () => {
     // Mock resend functionality
-    console.log('Resending 2FA code...');
   };
 
   return (

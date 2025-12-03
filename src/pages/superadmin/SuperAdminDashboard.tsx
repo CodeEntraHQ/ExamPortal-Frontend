@@ -17,11 +17,9 @@ export function SuperAdminDashboard() {
       }}
       onStartExam={(examId: string) => {
         // SuperAdmin doesn't take exams, but handle gracefully
-        console.log('SuperAdmin cannot take exams');
       }}
       onViewResults={(examId: string) => {
         // SuperAdmin doesn't view student results from dashboard
-        console.log('SuperAdmin results view');
       }}
     />
   );

@@ -571,7 +571,6 @@ function StudentDashboard({ onStartExam }: { onStartExam?: (examId: string) => v
                           if (onStartExam) {
                             onStartExam(exam.id.toString());
                           } else {
-                            console.log('Starting exam:', exam.name);
                             // Fallback - would navigate to exam interface
                           }
                         }}
@@ -646,7 +645,6 @@ function StudentDashboard({ onStartExam }: { onStartExam?: (examId: string) => v
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                          console.log('Viewing results for:', exam.name);
                           // Would show detailed results
                         }}
                       >

@@ -336,7 +336,6 @@ export function ExamMonitoring() {
     if (autoRefresh) {
       const interval = setInterval(() => {
         // Simulate real-time updates
-        console.log('Refreshing monitoring data...');
       }, 5000);
       return () => clearInterval(interval);
     }
@@ -352,12 +351,10 @@ export function ExamMonitoring() {
   };
 
   const handleSendMessage = (studentId: string) => {
-    console.log('Sending message to student:', studentId);
     // Implement messaging functionality
   };
 
   const handleTerminateExam = (studentId: string) => {
-    console.log('Terminating exam for student:', studentId);
     // Implement exam termination
   };
 

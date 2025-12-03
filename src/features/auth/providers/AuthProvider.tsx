@@ -41,14 +41,9 @@ const loadUserFromStorage = (): User | null => {
     const storedUser = localStorage.getItem('user');
     const token = getToken();
     
-    console.log('🔵 AuthProvider - Loading user from storage');
-    console.log('🔵 AuthProvider - Stored user data:', storedUser);
-    console.log('🔵 AuthProvider - Token exists:', !!token);
-    
     // If no token, clear user data (token is source of truth)
     if (!token) {
       if (storedUser) {
-        console.log('⚠️ AuthProvider - No token but user data exists, clearing user data');
         localStorage.removeItem('user');
       }
       return null;
@@ -56,17 +51,8 @@ const loadUserFromStorage = (): User | null => {
     
     if (storedUser) {
       const user = JSON.parse(storedUser);
-      console.log('✅ AuthProvider - User loaded from storage:', {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        entityId: user.entityId,
-        entityName: user.entityName,
-      });
       return user;
     }
-    console.log('🔵 AuthProvider - No user data in storage');
     return null;
   } catch (error) {
     console.error('❌ AuthProvider - Failed to load user from storage:', error);
@@ -77,18 +63,8 @@ const loadUserFromStorage = (): User | null => {
 const saveUserToStorage = (user: User | null) => {
   try {
     if (user) {
-      console.log('🔵 AuthProvider - Saving user to storage:', {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        entityId: user.entityId,
-        entityName: user.entityName,
-      });
       localStorage.setItem('user', JSON.stringify(user));
-      console.log('✅ AuthProvider - User saved to storage');
     } else {
-      console.log('🔵 AuthProvider - Removing user from storage');
       localStorage.removeItem('user');
     }
   } catch (error) {
@@ -145,30 +121,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      console.log('🔵 AuthProvider - Login attempt for:', email);
       const response = await apiLogin(email, password);
-      console.log('🔵 AuthProvider - Login response received:', response);
       
       if (response.requires2FA) {
-        console.log('🔵 AuthProvider - 2FA required');
         setLoginCredentials({ email, password });
         return { requires2FA: true };
       }
       if (response.user) {
-        console.log('🔵 AuthProvider - User data from login:', {
-          id: response.user.id,
-          name: response.user.name,
-          email: response.user.email,
-          role: response.user.role,
-          entityId: response.user.entityId,
-          entityName: response.user.entityName,
-          entity_id: (response.user as any).entity_id,
-          entity_name: (response.user as any).entity_name,
-        });
         setUser(response.user);
         saveUserToStorage(response.user);
         setLoginCredentials(null);
-        console.log('✅ AuthProvider - User set and saved to storage');
       } else {
         console.warn('⚠️ AuthProvider - No user data in login response');
       }
@@ -185,25 +147,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const { email, password } = loginCredentials;
-      console.log('🔵 AuthProvider - Verifying 2FA for:', email);
       const response = await apiLogin(email, password, otp);
-      console.log('🔵 AuthProvider - 2FA verification response:', response);
       
       if (response.user) {
-        console.log('🔵 AuthProvider - User data from 2FA verification:', {
-          id: response.user.id,
-          name: response.user.name,
-          email: response.user.email,
-          role: response.user.role,
-          entityId: response.user.entityId,
-          entityName: response.user.entityName,
-          entity_id: (response.user as any).entity_id,
-          entity_name: (response.user as any).entity_name,
-        });
         setUser(response.user);
         saveUserToStorage(response.user);
         setLoginCredentials(null);
-        console.log('✅ AuthProvider - User set and saved to storage after 2FA');
       } else {
         throw new Error('2FA verification failed.');
       }
