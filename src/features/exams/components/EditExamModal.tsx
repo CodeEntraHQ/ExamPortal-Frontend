@@ -52,8 +52,6 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
   // Console log the exam data received from previous page
   useEffect(() => {
     if (exam) {
-      console.log('EditExamModal - Exam data received from previous page:', exam);
-      console.log('EditExamModal - Exam metadata:', exam.metadata);
     }
   }, [exam]);
 
@@ -201,7 +199,6 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
   const getAvailableMetadataFields = () => {
     // Handle null, undefined, or non-object metadata
     if (!exam?.metadata || exam.metadata === null || typeof exam.metadata !== 'object' || Array.isArray(exam.metadata)) {
-      console.log('EditExamModal - No valid metadata found:', exam?.metadata);
       return [];
     }
     const available: Array<{ key: string; value: any; type: 'string' | 'number' | 'boolean' | 'date' | 'array' }> = [];

@@ -1037,7 +1037,6 @@ export function ExamDetailPage({
                   size="sm" 
                   className="bg-primary hover:bg-primary/90"
                   onClick={() => {
-                    console.log('Monitoring exam:', examName);
                     info('Exam monitoring dashboard would open here');
                   }}
                 >
@@ -1745,7 +1744,6 @@ export function ExamDetailPage({
                     variant="outline" 
                     className="h-20 flex-col gap-2"
                     onClick={() => {
-                      console.log('Downloading all responses for:', examName);
                       success('All responses CSV download started');
                     }}
                   >
@@ -1759,7 +1757,6 @@ export function ExamDetailPage({
                     variant="outline" 
                     className="h-20 flex-col gap-2"
                     onClick={() => {
-                      console.log('Downloading detailed report for:', examName);
                       success('Detailed PDF report download started');
                     }}
                   >
@@ -1773,7 +1770,6 @@ export function ExamDetailPage({
                     variant="outline" 
                     className="h-20 flex-col gap-2"
                     onClick={() => {
-                      console.log('Downloading analytics report for:', examName);
                       success('Analytics Excel report download started');
                     }}
                   >
@@ -1787,7 +1783,6 @@ export function ExamDetailPage({
                     variant="outline" 
                     className="h-20 flex-col gap-2"
                     onClick={() => {
-                      console.log('Downloading student list for:', examName);
                       success('Student list CSV download started');
                     }}
                   >

@@ -87,19 +87,6 @@ export function EntityDetailPage({
 
   // Sync entityDetails when entity prop changes
   useEffect(() => {
-    console.log('🔵 EntityDetailPage - Entity prop received:', entity);
-    console.log('🔵 EntityDetailPage - Entity details:', {
-      id: entity.id,
-      name: entity.name,
-      type: entity.type,
-      location: entity.location,
-      email: entity.email,
-      phone: entity.phone,
-      createdAt: entity.createdAt,
-      description: entity.description,
-      logo_link: entity.logo_link,
-    });
-    
     setEntityDetails(entity);
     setEntitySettings({
       name: entity.name,
@@ -111,8 +98,6 @@ export function EntityDetailPage({
       logoLink: entity.logo_link || ''
     });
     setIsEditing(false);
-    
-    console.log('✅ EntityDetailPage - Entity details and settings synced');
   }, [entity]);
 
   // Fetch full entity data if entity is incomplete (only has id and name)
@@ -311,7 +296,6 @@ export function EntityDetailPage({
               onCreateExam={onCreateExam || (() => {
                 // Default: navigate to exam creation
                 // This will be overridden by parent components with proper navigation
-                console.log('Creating exam for entity:', entityDetails.id);
               })}
               onViewExamDetails={onExploreExam}
               onEditExamDetails={onEditExam}
@@ -363,8 +347,6 @@ export function EntityDetailPage({
                 e.preventDefault();
                 setIsSaving(true);
                 try {
-                  console.log('🟢 EntityDetailPage - Submitting form with settings:', entitySettings);
-                  
                   const payload: any = {
                     entity_id: entityDetails.id,
                     name: entitySettings.name,
@@ -378,9 +360,7 @@ export function EntityDetailPage({
                   // Note: logo_link is not supported by the API - only file uploads are supported
                   // If logo needs to be updated, it should be done via file upload in a separate feature
 
-                  console.log('🟢 EntityDetailPage - Calling updateEntity with payload:', payload);
                   const response = await updateEntity(payload);
-                  console.log('🟢 EntityDetailPage - Update response:', response);
                   
                   // Update local state with response
                   if (response && response.payload) {
@@ -399,7 +379,6 @@ export function EntityDetailPage({
                         : entityDetails.createdAt || new Date().toLocaleDateString(),
                     };
                     
-                    console.log('✅ EntityDetailPage - Updated entity details:', updatedEntityDetails);
                     setEntityDetails(updatedEntityDetails);
                     
                     // Save entity data to localStorage for admin users (so it persists on reload)
@@ -416,12 +395,7 @@ export function EntityDetailPage({
                         createdAt: updatedEntityDetails.createdAt,
                         status: updatedEntityDetails.status,
                       };
-                      console.log('🔵 EntityDetailPage - Saving entity data to localStorage:', {
-                        key: savedEntityKey,
-                        data: dataToSave,
-                      });
                       localStorage.setItem(savedEntityKey, JSON.stringify(dataToSave));
-                      console.log('✅ EntityDetailPage - Entity data saved to localStorage');
                     }
                     
                     // Also update the entitySettings state to reflect saved values

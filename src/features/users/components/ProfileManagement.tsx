@@ -144,7 +144,6 @@ export function ProfileManagement() {
     const hasChanges = formData.has('name') || formData.has('bio') || formData.has('phone_number') || formData.has('address') || formData.has('gender') || formData.has('roll_number') || formData.has('profile_picture');
 
     if (!hasChanges) {
-      console.log('No changes to save.');
       setIsEditing(false);
       return;
     }

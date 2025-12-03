@@ -119,17 +119,11 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
   });
 
   const handleCreateOrUpdate = async (formData: CreateEntityPayload | UpdateEntityPayload) => {
-    console.log('🟢 handleCreateOrUpdate - Form data received:', formData);
-    console.log('🟢 handleCreateOrUpdate - Is update?', 'entity_id' in formData);
-    console.log('🟢 handleCreateOrUpdate - Form data keys:', Object.keys(formData));
-    
     try {
       if ('entity_id' in formData) {
-        console.log('🟢 handleCreateOrUpdate - Calling updateEntity with:', formData);
         await updateEntity(formData);
         toast.success('Entity updated successfully!');
       } else {
-        console.log('🟢 handleCreateOrUpdate - Calling createEntity with:', formData);
         await createEntity(formData);
         toast.success('Entity created successfully!');
       }
@@ -550,8 +544,6 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('🟡 handleSubmit - Form data state:', formData);
-    console.log('🟡 handleSubmit - Entity being edited:', entity);
     
     if (!formData.name || !formData.address || !formData.type) {
       toast.error('Please fill in all mandatory fields: Name, Address, and Type.');
@@ -572,32 +564,15 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
     }
     if (formData.phone) {
       payload.phone_number = formData.phone;
-      console.log('🟡 handleSubmit - Phone number:', formData.phone, '-> phone_number:', payload.phone_number);
     }
 
     if (formData.logo) {
       payload.logo = formData.logo;
-      console.log('🟡 handleSubmit - Logo file:', formData.logo.name, formData.logo.size, 'bytes');
     }
 
     if (entity) {
       payload.entity_id = entity.id;
-      console.log('🟡 handleSubmit - Entity ID:', entity.id);
     }
-    
-    console.log('🟡 handleSubmit - Final payload to submit:', payload);
-    console.log('🟡 handleSubmit - Payload keys:', Object.keys(payload));
-    console.log('🟡 handleSubmit - Payload values:', {
-      entity_id: payload.entity_id,
-      name: payload.name,
-      type: payload.type,
-      address: payload.address,
-      description: payload.description,
-      email: payload.email,
-      phone_number: payload.phone_number,
-      hasLogo: !!payload.logo,
-      logoType: payload.logo ? typeof payload.logo : 'none'
-    });
     
     onSubmit(payload);
   };

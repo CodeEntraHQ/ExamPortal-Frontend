@@ -116,7 +116,6 @@ export function useExamMonitoring({
       // Request camera access only if required
       if (cameraRequired) {
         try {
-          console.log('Requesting camera access...');
           cameraStream = await navigator.mediaDevices.getUserMedia({
             video: {
               width: { ideal: 640 },
@@ -125,7 +124,6 @@ export function useExamMonitoring({
             },
             audio: false,
           });
-          console.log('Camera access granted');
         } catch (error: any) {
           console.error('Failed to get camera access:', error);
           // Don't throw - allow exam to continue even if camera fails
@@ -140,7 +138,6 @@ export function useExamMonitoring({
       // Request microphone access only if required
       if (microphoneRequired) {
         try {
-          console.log('Requesting microphone access...');
           microphoneStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
@@ -149,7 +146,6 @@ export function useExamMonitoring({
             },
             video: false,
           });
-          console.log('Microphone access granted');
         } catch (error: any) {
           console.error('Failed to get microphone access:', error);
           // Don't throw - allow exam to continue even if mic fails
@@ -219,7 +215,6 @@ export function useExamMonitoring({
         snapshotIntervalRef.current = setInterval(() => {
           captureSnapshot();
         }, snapshotInterval);
-        console.log('Started snapshot interval:', snapshotInterval);
       }
 
       // Start periodic audio samples (only if microphone is active and callback provided)
@@ -232,13 +227,7 @@ export function useExamMonitoring({
         audioSampleIntervalRef.current = setInterval(() => {
           captureAudioSample();
         }, audioSampleInterval);
-        console.log('Started audio sample interval:', audioSampleInterval);
       }
-      
-      console.log('Monitoring started successfully', {
-        cameraActive: cameraStream !== null,
-        microphoneActive: microphoneStream !== null,
-      });
     } catch (error: any) {
       console.error('Error starting monitoring:', error);
       setState((prev) => ({
@@ -250,8 +239,6 @@ export function useExamMonitoring({
 
   // Stop monitoring
   const stopMonitoring = useCallback(() => {
-    console.log('Stopping monitoring...');
-    
     // Stop intervals
     if (snapshotIntervalRef.current) {
       clearInterval(snapshotIntervalRef.current);
@@ -266,14 +253,12 @@ export function useExamMonitoring({
     if (cameraStreamRef.current) {
       cameraStreamRef.current.getTracks().forEach((track) => {
         track.stop();
-        console.log('Stopped camera track');
       });
       cameraStreamRef.current = null;
     }
     if (microphoneStreamRef.current) {
       microphoneStreamRef.current.getTracks().forEach((track) => {
         track.stop();
-        console.log('Stopped microphone track');
       });
       microphoneStreamRef.current = null;
     }
@@ -297,22 +282,14 @@ export function useExamMonitoring({
       microphoneStream: null,
       error: null,
     });
-    
-    console.log('Monitoring stopped');
   }, []);
 
   // Start/stop monitoring based on enabled flag
   useEffect(() => {
-    console.log('Monitoring useEffect triggered:', { enabled, examId, cameraRequired, microphoneRequired });
-    
     if (enabled) {
-      console.log('Monitoring enabled, starting...', { examId, cameraRequired, microphoneRequired });
       // Use a small delay to ensure video element is ready
       const timer = setTimeout(() => {
-        console.log('Calling startMonitoring...');
-        startMonitoring().then(() => {
-          console.log('startMonitoring completed successfully');
-        }).catch((error) => {
+        startMonitoring().catch((error) => {
           console.error('Error starting monitoring:', error);
           setState((prev) => ({
             ...prev,
@@ -322,12 +299,10 @@ export function useExamMonitoring({
       }, 500);
       
       return () => {
-        console.log('Cleaning up monitoring timer');
         clearTimeout(timer);
         stopMonitoring();
       };
     } else {
-      console.log('Monitoring disabled, stopping...');
       stopMonitoring();
       return undefined;
     }
