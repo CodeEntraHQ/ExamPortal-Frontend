@@ -29,7 +29,7 @@ import { Switch } from '../../../shared/components/ui/switch';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { getUsers, inviteUser, createUser, deregisterUser, deleteUser as deleteUserApi, activateUser, ApiUser } from '../../../services/api/user';
-import { getEntities, ApiEntity } from '../../../services/api/entity';
+import { getEntities, getEntityById, ApiEntity } from '../../../services/api/entity';
 
 interface User {
   id: string;
@@ -102,39 +102,56 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
   // Fetch entities for mapping entity_id to entity name
   const fetchEntities = useCallback(async () => {
     try {
-      // Fetch entities with max limit (10) - if we need more, we can fetch multiple pages
-      // For now, just fetch the first page. If currentEntity is set, we might only need that one
-      const response = await getEntities(1, 10);
-      setEntities(response.payload.entities);
       const map = new Map<string, ApiEntity>();
-      response.payload.entities.forEach(entity => {
-        map.set(entity.id, entity);
-      });
       
-      // If we have more pages and need all entities, fetch them
-      if (response.payload.totalPages > 1 && currentUser?.role === 'SUPERADMIN') {
-        const allEntities = [...response.payload.entities];
-        for (let p = 2; p <= response.payload.totalPages; p++) {
-          try {
-            const nextResponse = await getEntities(p, 10);
-            allEntities.push(...nextResponse.payload.entities);
-            nextResponse.payload.entities.forEach(entity => {
-              map.set(entity.id, entity);
-            });
-          } catch (err) {
-            console.error(`Failed to fetch entities page ${p}:`, err);
-            break; // Stop fetching if we hit an error
+      // Only SUPERADMIN can fetch all entities
+      // ADMIN users can only fetch their own entity
+      if (currentUser?.role === 'SUPERADMIN') {
+        // Fetch entities with max limit (10) - if we need more, we can fetch multiple pages
+        const response = await getEntities(1, 10);
+        setEntities(response.payload.entities);
+        response.payload.entities.forEach(entity => {
+          map.set(entity.id, entity);
+        });
+        
+        // If we have more pages and need all entities, fetch them
+        if (response.payload.totalPages > 1) {
+          const allEntities = [...response.payload.entities];
+          for (let p = 2; p <= response.payload.totalPages; p++) {
+            try {
+              const nextResponse = await getEntities(p, 10);
+              allEntities.push(...nextResponse.payload.entities);
+              nextResponse.payload.entities.forEach(entity => {
+                map.set(entity.id, entity);
+              });
+            } catch (err) {
+              console.error(`Failed to fetch entities page ${p}:`, err);
+              break; // Stop fetching if we hit an error
+            }
           }
+          setEntities(allEntities);
         }
-        setEntities(allEntities);
+      } else if (currentUser?.role === 'ADMIN' && currentUser?.entityId) {
+        // ADMIN users can only fetch their own entity
+        try {
+          const response = await getEntityById(currentUser.entityId);
+          if (response?.payload) {
+            setEntities([response.payload]);
+            map.set(response.payload.id, response.payload);
+          }
+        } catch (err) {
+          // Silently fail - entity names will just not be displayed
+          console.error('Failed to fetch entity:', err);
+        }
       }
+      // For other roles or users without entityId, skip fetching
       
       setEntitiesMap(map);
     } catch (err) {
       console.error('Failed to fetch entities:', err);
       // Don't show error for entities, just continue without entity names
     }
-  }, [currentUser?.role]);
+  }, [currentUser?.role, currentUser?.entityId]);
 
   // Fetch users
   const fetchUsers = useCallback(async () => {
