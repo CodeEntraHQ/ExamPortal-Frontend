@@ -87,7 +87,7 @@ export function Footer() {
             <div>
               <p className="font-medium text-foreground">Head Office</p>
               <p className="text-muted-foreground">CodeEntra Unlocking Solutions Pvt. Ltd.</p>
-              <p className="text-muted-foreground">Patna | Bengaluru</p>
+              <p className="text-muted-foreground">Patna</p>
             </div>
           </div>
         </DialogContent>

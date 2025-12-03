@@ -39,18 +39,28 @@ import { ExamDetailPageWrapper } from '../pages/shared/ExamDetailPageWrapper';
 import { ExamCreationWrapper } from '../pages/shared/ExamCreationWrapper';
 import { QuestionCreationPage } from '../pages/shared/QuestionCreationPage';
 import { AdmissionFormBuilderPage } from '../pages/shared/AdmissionFormBuilderPage';
+import { NotFoundPage } from '../pages/shared/NotFoundPage';
+import { ErrorPage } from '../pages/shared/ErrorPage';
 
 export const router = createBrowserRouter([
-  // Public routes
   {
     path: '/',
-    element: (
+    errorElement: (
       <div className="min-h-screen flex flex-col">
-        <LandingPage />
-        <Footer />
+        <ErrorPage />
       </div>
     ),
-  },
+    children: [
+      // Public routes
+      {
+        path: '/',
+        element: (
+          <div className="min-h-screen flex flex-col">
+            <LandingPage />
+            <Footer />
+          </div>
+        ),
+      },
   {
     path: '/login',
     element: (
@@ -284,10 +294,16 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // Catch all - redirect to home
-  {
-    path: '*',
-    element: <Navigate to="/" replace />,
+      // Catch all - 404 page for unknown routes
+      {
+        path: '*',
+        element: (
+          <div className="min-h-screen flex flex-col">
+            <NotFoundPage />
+          </div>
+        ),
+      },
+    ],
   },
 ]);
 
