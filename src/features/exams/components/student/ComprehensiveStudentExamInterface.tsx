@@ -112,8 +112,10 @@ export function ComprehensiveStudentExamInterface({
   const [showInstructions, setShowInstructions] = useState(true);
   const [examStarted, setExamStarted] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'reconnecting'>('connected');
+  const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const examContainerRef = useRef<HTMLDivElement>(null);
+  const submitExamRef = useRef<(() => void) | null>(null);
 
   // Mock exam data - in real app this would come from API
   const mockExam: ExamSession = {
@@ -316,30 +318,233 @@ export function ComprehensiveStudentExamInterface({
     // Initialize exam session
     setExamSession(mockExam);
     setIsLoading(false);
-
-    // Set up event listeners for proctoring if enabled
-    if (mockExam.proctoring.lockdownEnabled) {
-      const handleContextMenu = (e: MouseEvent) => e.preventDefault();
-      const handleKeyDown = (e: KeyboardEvent) => {
-        // Prevent F12, Ctrl+Shift+I, etc.
-        if (e.key === 'F12' || 
-            (e.ctrlKey && e.shiftKey && e.key === 'I') ||
-            (e.ctrlKey && e.shiftKey && e.key === 'C') ||
-            (e.ctrlKey && e.key === 'u')) {
-          e.preventDefault();
-          warning('Developer tools are disabled during the exam');
-        }
-      };
-      
-      document.addEventListener('contextmenu', handleContextMenu);
-      document.addEventListener('keydown', handleKeyDown);
-      
-      return () => {
-        document.removeEventListener('contextmenu', handleContextMenu);
-        document.removeEventListener('keydown', handleKeyDown);
-      };
-    }
   }, []);
+
+  // Set up event listeners for proctoring and aggressive tab switching prevention
+  useEffect(() => {
+    if (!examSession?.proctoring.lockdownEnabled) return;
+    if (!isFullscreen || !examStarted || examSession?.submitted) return;
+
+    let lastTabSwitchTime = 0;
+    const TAB_SWITCH_DEBOUNCE_MS = 1000; // Prevent counting same switch multiple times
+    let visibilityCheckInterval: ReturnType<typeof setInterval> | null = null;
+    
+    // Helper function to handle tab switch detection
+    const handleTabSwitchDetection = () => {
+      const now = Date.now();
+      // Debounce: only count if it's been more than 1 second since last detection
+      if (now - lastTabSwitchTime < TAB_SWITCH_DEBOUNCE_MS) {
+        return;
+      }
+      lastTabSwitchTime = now;
+      
+      setTabSwitchCount(prev => {
+        const newCount = prev + 1;
+        
+        // If 3 or more switches, show warning and auto-submit
+        if (newCount >= 3) {
+          if (newCount === 3) {
+            // First time reaching 3, show final warning
+            warning(`WARNING: Tab switching detected ${newCount} times. If you switch tabs one more time, the exam will be automatically submitted.`);
+          } else if (newCount > 3) {
+            // More than 3 times, auto-submit
+            error(`Tab switching detected ${newCount} times. The exam is being automatically submitted.`);
+            // Auto-submit the exam
+            setTimeout(() => {
+              if (submitExamRef.current) {
+                submitExamRef.current();
+              }
+            }, 1000);
+          }
+        } else {
+          // Less than 3, show regular warning
+          warning(`Tab/window switching detected (${newCount} time${newCount > 1 ? 's' : ''}). Please stay focused on the exam. ${3 - newCount} warning${3 - newCount > 1 ? 's' : ''} remaining before auto-submit.`);
+        }
+        
+        return newCount;
+      });
+    };
+
+    const handleContextMenu = (e: MouseEvent) => e.preventDefault();
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent F12, Ctrl+Shift+I, etc.
+      if (e.key === 'F12' || 
+          (e.ctrlKey && e.shiftKey && e.key === 'I') ||
+          (e.ctrlKey && e.shiftKey && e.key === 'C') ||
+          (e.ctrlKey && e.key === 'u')) {
+        e.preventDefault();
+        warning('Developer tools are disabled during the exam');
+      }
+      
+      // Comprehensive tab switching keyboard shortcut blocking
+      if ((e.ctrlKey && e.key === 'Tab') ||
+          (e.ctrlKey && e.key === 'PageUp') ||
+          (e.ctrlKey && e.key === 'PageDown') ||
+          (e.ctrlKey && e.shiftKey && e.key === 'Tab') ||
+          (e.ctrlKey && e.key === '1') ||
+          (e.ctrlKey && e.key === '2') ||
+          (e.ctrlKey && e.key === '3') ||
+          (e.ctrlKey && e.key === '4') ||
+          (e.ctrlKey && e.key === '5') ||
+          (e.ctrlKey && e.key === '6') ||
+          (e.ctrlKey && e.key === '7') ||
+          (e.ctrlKey && e.key === '8') ||
+          (e.ctrlKey && e.key === '9')) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        warning('Tab switching is not allowed during the exam');
+        return false;
+      }
+      
+      // Prevent Alt+Tab and other OS-level shortcuts
+      if (e.altKey && (e.key === 'Tab' || e.key === 'F4')) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        warning('Switching applications is not allowed during the exam');
+        return false;
+      }
+
+      // Prevent Windows key shortcuts
+      if (e.key === 'Meta' || e.key === 'OS') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        return false;
+      }
+    };
+
+    // Window blur/focus handlers
+    const handleWindowBlur = () => {
+      handleTabSwitchDetection();
+      
+      // Try to refocus the window
+      setTimeout(() => {
+        if (window.focus) {
+          window.focus();
+        }
+      }, 100);
+    };
+
+    const handleWindowFocus = () => {
+      // When window regains focus, check if we're still in fullscreen
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      
+      if (!isCurrentlyFullscreen && examContainerRef.current?.requestFullscreen) {
+        examContainerRef.current.requestFullscreen().catch(() => {
+          // If fullscreen fails, user might have disabled it
+        });
+      }
+    };
+    
+    // Enhanced visibility change detection
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        tabSwitchCount++;
+        warning(`Tab switching detected (${tabSwitchCount} time${tabSwitchCount > 1 ? 's' : ''}). Please stay focused on the exam.`);
+        
+        // Try to refocus immediately
+        setTimeout(() => {
+          if (window.focus) {
+            window.focus();
+          }
+          // Try to re-enter fullscreen if we lost it
+          if (!document.fullscreenElement && examContainerRef.current?.requestFullscreen) {
+            enterFullscreen();
+          }
+        }, 100);
+      }
+    };
+
+    // Continuous visibility monitoring (polling as backup)
+    const startVisibilityMonitoring = () => {
+      visibilityCheckInterval = setInterval(() => {
+        if (document.hidden) {
+          handleTabSwitchDetection();
+          
+          // Aggressively try to refocus
+          if (window.focus) {
+            window.focus();
+          }
+          
+          // Try to re-enter fullscreen
+          if (!document.fullscreenElement && examContainerRef.current?.requestFullscreen) {
+            examContainerRef.current.requestFullscreen().catch(() => {
+              // If fullscreen fails, user might have disabled it
+            });
+          }
+        }
+      }, 500); // Check every 500ms
+    };
+    
+    // Prevent touch gestures that might switch tabs (four-finger swipe)
+    let touchCount = 0;
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      touchCount = e.touches.length;
+      
+      // Prevent multi-finger gestures (3+ fingers typically used for tab switching)
+      if (e.touches.length >= 3) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        warning('Multi-finger gestures are disabled during the exam');
+      }
+    };
+    
+    const handleTouchMove = (e: TouchEvent) => {
+      if (touchCount >= 3) {
+        // Prevent multi-finger swipe gestures
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+    };
+    
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (touchCount >= 3) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+      }
+      touchCount = 0;
+    };
+    
+    // Add all event listeners
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('touchstart', handleTouchStart, { passive: false });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+    // Start continuous monitoring
+    startVisibilityMonitoring();
+    
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
+      
+      if (visibilityCheckInterval) {
+        clearInterval(visibilityCheckInterval);
+      }
+    };
+  }, [isFullscreen, examStarted, examSession?.proctoring.lockdownEnabled, examSession?.submitted]);
 
   useEffect(() => {
     if (examStarted && examSession && !examSession.submitted) {
@@ -467,6 +672,11 @@ export function ComprehensiveStudentExamInterface({
       onComplete(results);
     }, 2000);
   };
+
+  // Store submit function in ref for use in useEffect
+  useEffect(() => {
+    submitExamRef.current = submitExam;
+  }, [examSession]);
 
   const calculateResults = () => {
     if (!examSession) return null;
