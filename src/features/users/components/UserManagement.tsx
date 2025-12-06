@@ -551,10 +551,6 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                               <Eye className="h-4 w-4 mr-2" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit User
-                            </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => handleToggleUserStatus(user.id)}
                             >
@@ -718,10 +714,6 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                               <Eye className="h-4 w-4 mr-2" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit User
-                            </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => handleToggleUserStatus(user.id)}
                             >
@@ -878,10 +870,6 @@ export function UserManagement({ currentEntity }: UserManagementProps) {
                             <DropdownMenuItem onClick={() => setShowUserDetail(user)}>
                               <Eye className="h-4 w-4 mr-2" />
                               View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit User
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => handleToggleUserStatus(user.id)}
