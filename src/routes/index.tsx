@@ -39,6 +39,7 @@ import { ExamDetailPageWrapper } from '../pages/shared/ExamDetailPageWrapper';
 import { ExamCreationWrapper } from '../pages/shared/ExamCreationWrapper';
 import { QuestionCreationPage } from '../pages/shared/QuestionCreationPage';
 import { AdmissionFormBuilderPage } from '../pages/shared/AdmissionFormBuilderPage';
+import { PublicAdmissionFormPage } from '../pages/public/PublicAdmissionFormPage';
 import { NotFoundPage } from '../pages/shared/NotFoundPage';
 import { ErrorPage } from '../pages/shared/ErrorPage';
 
@@ -122,6 +123,14 @@ export const router = createBrowserRouter([
     element: (
       <div className="min-h-screen flex flex-col">
         <SetPassword />
+      </div>
+    ),
+  },
+  {
+    path: '/public/admission-form/:token',
+    element: (
+      <div className="min-h-screen flex flex-col">
+        <PublicAdmissionFormPage />
       </div>
     ),
   },

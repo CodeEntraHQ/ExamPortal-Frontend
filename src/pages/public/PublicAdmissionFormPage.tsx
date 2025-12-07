@@ -1,6 +1,6 @@
 /**
- * Admission Form View Page
- * Displays the admission form for representatives to view and share
+ * Public Admission Form Page
+ * Displays the admission form for public access (no authentication required)
  */
 
 import { useParams, useNavigate } from 'react-router-dom';
@@ -13,42 +13,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Textarea } from '../../shared/components/ui/textarea';
 import { useNotifications } from '../../shared/providers/NotificationProvider';
 import { admissionFormApi, FormField } from '../../services/api/admissionForm';
-import { examApi } from '../../services/api/exam';
-import { ArrowLeft, Share2, Copy, Check, Loader2 } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../shared/components/ui/dialog';
+import { Loader2, CheckCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '../../shared/components/ui/alert';
 
-export function AdmissionFormViewPage() {
-  const { examId } = useParams<{ examId: string }>();
+export function PublicAdmissionFormPage() {
+  const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { success, error } = useNotifications();
   const [examTitle, setExamTitle] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
   const [formFields, setFormFields] = useState<FormField[]>([]);
   const [formData, setFormData] = useState<Record<string, any>>({});
-  const [shareUrl, setShareUrl] = useState<string>('');
-  const [showShareDialog, setShowShareDialog] = useState<boolean>(false);
-  const [copied, setCopied] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [submitted, setSubmitted] = useState<boolean>(false);
 
   useEffect(() => {
     const loadData = async () => {
-      if (!examId) {
-        error('Exam ID is required');
-        navigate('/representative/dashboard');
+      if (!token) {
+        error('Invalid link');
         return;
       }
 
       try {
         setLoading(true);
 
-        // Load exam details
-        const examResponse = await examApi.getExamById(examId);
-        setExamTitle(examResponse.payload.title || 'Exam');
-
-        // Load admission form
-        const formResponse = await admissionFormApi.getAdmissionForm(examId);
+        // Load admission form by public token
+        const formResponse = await admissionFormApi.getPublicAdmissionForm(token);
         if (formResponse?.payload?.form_structure) {
           setFormFields(formResponse.payload.form_structure);
+          setExamTitle(formResponse.payload.exam_title || 'Exam');
           // Initialize form data
           const initialData: Record<string, any> = {};
           formResponse.payload.form_structure.forEach((field) => {
@@ -56,49 +49,18 @@ export function AdmissionFormViewPage() {
           });
           setFormData(initialData);
         } else {
-          error('Admission form not found for this exam');
-          navigate('/representative/dashboard');
-        }
-
-        // Generate share URL using public token from form response
-        const publicToken = formResponse?.payload?.public_token;
-        if (publicToken) {
-          const baseUrl = window.location.origin;
-          const shareUrlPath = `/public/admission-form/${publicToken}`;
-          setShareUrl(`${baseUrl}${shareUrlPath}`);
-        } else {
-          // Fallback if token not available
-          const baseUrl = window.location.origin;
-          const shareUrlPath = `/public/exam/${examId}/admission-form`;
-          setShareUrl(`${baseUrl}${shareUrlPath}`);
+          error('Admission form not found');
         }
       } catch (err: any) {
         console.error('Error loading admission form:', err);
-        error('Failed to load admission form. Please try again.');
-        navigate('/representative/dashboard');
+        error(err?.message || 'Failed to load admission form. Please check the link and try again.');
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, [examId, navigate, error]);
-
-  const handleCopyUrl = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopied(true);
-      success('URL copied to clipboard!');
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      error('Failed to copy URL. Please try again.');
-    }
-  };
-
-  const handleShareWhatsApp = () => {
-    const message = encodeURIComponent(`Fill out the admission form for ${examTitle}: ${shareUrl}`);
-    window.open(`https://wa.me/?text=${message}`, '_blank');
-  };
+  }, [token, error]);
 
   const handleFieldChange = (fieldId: string, value: any) => {
     setFormData((prev) => ({
@@ -110,8 +72,8 @@ export function AdmissionFormViewPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!examId) {
-      error('Exam ID is required');
+    if (!token) {
+      error('Invalid link');
       return;
     }
 
@@ -131,17 +93,11 @@ export function AdmissionFormViewPage() {
 
     try {
       setSubmitting(true);
-      await admissionFormApi.submitAdmissionForm(examId, {
+      await admissionFormApi.submitPublicAdmissionForm(token, {
         form_responses: formData,
       });
       success('Admission form submitted successfully!');
-      
-      // Reset form after successful submission
-      const initialData: Record<string, any> = {};
-      formFields.forEach((field) => {
-        initialData[field.id || field.label] = '';
-      });
-      setFormData(initialData);
+      setSubmitted(true);
     } catch (err: any) {
       console.error('Error submitting admission form:', err);
       const errorMessage = err?.message || 'Failed to submit admission form. Please try again.';
@@ -267,61 +223,32 @@ export function AdmissionFormViewPage() {
     );
   }
 
+  if (submitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 py-8">
+        <div className="max-w-3xl w-full">
+          <Card>
+            <CardContent className="p-12">
+              <div className="flex flex-col items-center justify-center text-center space-y-4">
+                <CheckCircle className="h-16 w-16 text-green-600" />
+                <h2 className="text-2xl font-bold">Form Submitted Successfully!</h2>
+                <p className="text-muted-foreground">
+                  Thank you for submitting the admission form. Your submission has been received and will be reviewed.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-3xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/representative/dashboard')}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <h1 className="text-3xl font-bold">{examTitle}</h1>
-              <p className="text-muted-foreground">Admission Form</p>
-            </div>
-          </div>
-          <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
-            <DialogTrigger asChild>
-              <Button variant="outline">
-                <Share2 className="h-4 w-4 mr-2" />
-                Share Form
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Share Admission Form</DialogTitle>
-                <DialogDescription>
-                  Share this form URL with students via WhatsApp or copy the link
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Form URL</Label>
-                  <div className="flex gap-2">
-                    <Input value={shareUrl} readOnly className="flex-1" />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handleCopyUrl}
-                      className="flex-shrink-0"
-                    >
-                      {copied ? (
-                        <Check className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={handleShareWhatsApp} className="flex-1 bg-green-600 hover:bg-green-700">
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share on WhatsApp
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold">{examTitle}</h1>
+          <p className="text-muted-foreground">Admission Form</p>
         </div>
 
         <Card>
