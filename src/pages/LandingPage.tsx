@@ -82,7 +82,11 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
       <header className="border-b border-border bg-card/50 backdrop-blur supports-[backdrop-filter]:bg-card/50">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <GraduationCap className="h-8 w-8 text-primary" />
+            <img 
+              src="/favicon.png" 
+              alt="Company Logo" 
+              className="h-8 w-8 object-contain"
+            />
             <span className="text-xl font-semibold">{appName}</span>
           </div>
           <div className="flex items-center gap-4">

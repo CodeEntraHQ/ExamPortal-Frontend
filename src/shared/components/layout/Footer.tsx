@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GraduationCap, Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
+import { Facebook, Instagram, Linkedin, Twitter } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../ui/dialog';
 import { envConfig } from '@/config/env';
 
@@ -19,9 +19,11 @@ export function Footer() {
     <footer className="bg-card border-t border-border mt-auto">
       <div className="container mx-auto px-4 py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-3 text-sm text-muted-foreground whitespace-nowrap">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <GraduationCap className="h-6 w-6 text-primary" />
-          </div>
+          <img 
+            src="/codeEntra.png" 
+            alt="CodeEntra Logo" 
+            className="h-8 w-8 object-contain"
+          />
           <span>© {currentYear} CodeEntra. All rights reserved.</span>
         </div>
         <div className="flex w-full flex-wrap items-center justify-end gap-3 text-sm text-muted-foreground md:w-auto">
@@ -52,7 +54,11 @@ export function Footer() {
             aria-label="Visit CodeEntra main site"
             className="inline-flex items-center gap-2 rounded-full border border-primary/40 px-3 py-2 text-primary transition hover:bg-primary/10"
           >
-            <GraduationCap className="h-4 w-4" />
+            <img 
+              src="/codeEntra.png" 
+              alt="CodeEntra Logo" 
+              className="h-4 w-4 object-contain"
+            />
             <span className="sr-only">Visit CodeEntra main site</span>
           </a>
         </div>

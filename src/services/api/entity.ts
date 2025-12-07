@@ -17,6 +17,7 @@ export interface ApiEntity {
   created_at?: string;
   total_exams?: number;
   total_students?: number;
+  monitoring_enabled?: boolean;
 }
 
 export interface CreateEntityPayload {
@@ -36,6 +37,7 @@ export interface UpdateEntityPayload {
   email?: string;
   phone_number?: string;
   type?: string;
+  monitoring_enabled?: boolean;
 }
 
 export interface GetEntitiesResponse {
@@ -169,6 +171,9 @@ export async function updateEntity(payload: UpdateEntityPayload | FormData): Pro
     if (regularPayload.type !== undefined && regularPayload.type !== null && regularPayload.type !== '') {
       formData.append('type', String(regularPayload.type));
     }
+    if (regularPayload.monitoring_enabled !== undefined && regularPayload.monitoring_enabled !== null) {
+      formData.append('monitoring_enabled', String(regularPayload.monitoring_enabled));
+    }
     // Only append logo if it's a File object
     if (regularPayload.logo && regularPayload.logo instanceof File) {
       formData.append('logo', regularPayload.logo);
@@ -194,6 +199,9 @@ export async function updateEntity(payload: UpdateEntityPayload | FormData): Pro
       }
     }
     if (jsonPayload.type) formData.append('type', String(jsonPayload.type));
+    if (jsonPayload.monitoring_enabled !== undefined && jsonPayload.monitoring_enabled !== null) {
+      formData.append('monitoring_enabled', String(jsonPayload.monitoring_enabled));
+    }
     if (jsonPayload.logo && jsonPayload.logo instanceof File) {
       formData.append('logo', jsonPayload.logo);
     }

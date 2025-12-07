@@ -13,7 +13,6 @@ import {
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { useTheme } from '../../providers/ThemeProvider';
 import { 
-  GraduationCap, 
   Home, 
   Settings,
   User, 
@@ -188,7 +187,11 @@ export function TopNavigation({ currentView, setCurrentView, breadcrumbItems = [
               whileTap={{ scale: 0.95 }}
               className="p-2 rounded-lg bg-primary/10"
             >
-              <GraduationCap className="h-6 w-6 text-primary" />
+              <img 
+                src="/favicon.png" 
+                alt="Company Logo" 
+                className="h-6 w-6 object-contain"
+              />
             </motion.div>
             <span className="text-xl font-semibold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               {appName}

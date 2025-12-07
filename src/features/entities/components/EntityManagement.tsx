@@ -31,6 +31,7 @@ import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { getEntities, createEntity, updateEntity, Entity as ApiEntity, CreateEntityPayload, UpdateEntityPayload, GetEntitiesResponse } from '../../../services/api';
 import { toast } from 'sonner';
 import { Separator } from '../../../shared/components/ui/separator';
+import { Switch } from '../../../shared/components/ui/switch';
 
 export interface Entity {
   id: string;
@@ -46,6 +47,7 @@ export interface Entity {
   lastActivity: string;
   description?: string;
   logo_link?: string;
+  monitoring_enabled?: boolean;
 }
 
 const mapApiEntityToUiEntity = (apiEntity: ApiEntity): Entity => ({
@@ -62,6 +64,7 @@ const mapApiEntityToUiEntity = (apiEntity: ApiEntity): Entity => ({
   lastActivity: apiEntity.created_at ? new Date(apiEntity.created_at).toLocaleDateString() : '',
   description: apiEntity.description || '',
   logo_link: apiEntity.logo_link || '',
+  monitoring_enabled: apiEntity.monitoring_enabled !== undefined ? apiEntity.monitoring_enabled : true,
 });
 
 interface EntityManagementProps {
@@ -146,6 +149,38 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
   const handleEditClick = (entity: Entity) => {
     setEditingEntity(entity);
     setIsModalOpen(true);
+  };
+
+  const handleToggleMonitoring = async (entity: Entity) => {
+    try {
+      const newMonitoringEnabled = !entity.monitoring_enabled;
+      await updateEntity({
+        entity_id: entity.id,
+        name: entity.name,
+        address: entity.location,
+        type: entity.type as 'COLLEGE' | 'SCHOOL',
+        description: entity.description,
+        email: entity.email,
+        phone_number: entity.phone,
+        monitoring_enabled: newMonitoringEnabled,
+      });
+      
+      // Update local state
+      setEntities(prevEntities =>
+        prevEntities.map(e =>
+          e.id === entity.id
+            ? { ...e, monitoring_enabled: newMonitoringEnabled }
+            : e
+        )
+      );
+      
+      toast.success(
+        `Monitoring ${newMonitoringEnabled ? 'enabled' : 'disabled'} for ${entity.name}`
+      );
+    } catch (err: any) {
+      console.error('Failed to toggle monitoring:', err);
+      toast.error(`Failed to toggle monitoring: ${err.message || 'Unknown error'}`);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -365,6 +400,20 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
                         </div> */}
                       </div>
 
+                      {/* Monitoring Toggle - Only for SUPERADMIN */}
+                      {user?.role === 'SUPERADMIN' && (
+                        <div className="flex items-center justify-between pt-2 border-t">
+                          <Label htmlFor={`monitoring-${entity.id}`} className="text-sm font-medium">
+                            Monitoring Enabled
+                          </Label>
+                          <Switch
+                            id={`monitoring-${entity.id}`}
+                            checked={entity.monitoring_enabled !== false}
+                            onCheckedChange={() => handleToggleMonitoring(entity)}
+                          />
+                        </div>
+                      )}
+
                       {/* Actions */}
                       <div className="flex gap-2 pt-2">
                         <Button 
@@ -444,6 +493,20 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
                             {entity.status}
                           </Badge>
                         </div>
+
+                        {/* Monitoring Toggle - Only for SUPERADMIN */}
+                        {user?.role === 'SUPERADMIN' && (
+                          <div className="flex items-center gap-2">
+                            <Label htmlFor={`monitoring-list-${entity.id}`} className="text-sm">
+                              Monitoring
+                            </Label>
+                            <Switch
+                              id={`monitoring-list-${entity.id}`}
+                              checked={entity.monitoring_enabled !== false}
+                              onCheckedChange={() => handleToggleMonitoring(entity)}
+                            />
+                          </div>
+                        )}
 
                           <div className="flex items-center gap-2">
                             <Button 
