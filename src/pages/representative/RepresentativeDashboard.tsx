@@ -8,9 +8,13 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../shared/components/ui/card';
 import { Button } from '../../shared/components/ui/button';
 import { Badge } from '../../shared/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../shared/components/ui/dialog';
+import { Input } from '../../shared/components/ui/input';
+import { Label } from '../../shared/components/ui/label';
 import { examApi, RepresentativeEnrollment } from '../../services/api/exam';
+import { admissionFormApi } from '../../services/api/admissionForm';
 import { useNotifications } from '../../shared/providers/NotificationProvider';
-import { FileText, Calendar, Clock, Loader2 } from 'lucide-react';
+import { FileText, Calendar, Clock, Loader2, Share2, Copy, Check, MessageSquare, Mail } from 'lucide-react';
 // Helper function to format date
 const formatDateAgo = (date: string) => {
   const now = new Date();
@@ -26,9 +30,13 @@ const formatDateAgo = (date: string) => {
 
 export function RepresentativeDashboard() {
   const navigate = useNavigate();
-  const { error } = useNotifications();
+  const { error, success } = useNotifications();
   const [enrollments, setEnrollments] = useState<RepresentativeEnrollment[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [showShareDialog, setShowShareDialog] = useState<boolean>(false);
+  const [selectedExam, setSelectedExam] = useState<{ examId: string; examTitle: string } | null>(null);
+  const [shareUrl, setShareUrl] = useState<string>('');
+  const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchEnrollments = async () => {
@@ -49,6 +57,51 @@ export function RepresentativeDashboard() {
 
   const handleViewForm = (examId: string) => {
     navigate(`/representative/exam/${examId}/form`);
+  };
+
+  const handleShareClick = async (examId: string, examTitle: string) => {
+    try {
+      // Get admission form to retrieve public token
+      const formResponse = await admissionFormApi.getAdmissionForm(examId);
+      const publicToken = formResponse?.payload?.public_token;
+      
+      if (publicToken) {
+        const baseUrl = window.location.origin;
+        const shareUrlPath = `/public/admission-form/${publicToken}`;
+        setShareUrl(`${baseUrl}${shareUrlPath}`);
+        setSelectedExam({ examId, examTitle });
+        setShowShareDialog(true);
+      } else {
+        error('Public link not available for this exam');
+      }
+    } catch (err: any) {
+      console.error('Failed to get share link:', err);
+      error('Failed to generate share link. Please try again.');
+    }
+  };
+
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      success('URL copied to clipboard!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      error('Failed to copy URL. Please try again.');
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    const examTitle = selectedExam?.examTitle || 'the exam';
+    const message = encodeURIComponent(`Fill out the admission form for ${examTitle}: ${shareUrl}`);
+    window.open(`https://wa.me/?text=${message}`, '_blank');
+  };
+
+  const handleShareEmail = () => {
+    const examTitle = selectedExam?.examTitle || 'the exam';
+    const subject = encodeURIComponent(`Admission Form for ${examTitle}`);
+    const body = encodeURIComponent(`Please fill out the admission form for ${examTitle}:\n\n${shareUrl}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
   const formatDuration = (seconds: number) => {
@@ -119,19 +172,70 @@ export function RepresentativeDashboard() {
                       {enrollment.exam.metadata.description}
                     </p>
                   )}
-                  <Button
-                    onClick={() => handleViewForm(enrollment.exam_id)}
-                    className="w-full"
-                    variant="default"
-                  >
-                    <FileText className="h-4 w-4 mr-2" />
-                    View Admission Form
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleViewForm(enrollment.exam_id)}
+                      className="flex-1"
+                      variant="default"
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      View Form
+                    </Button>
+                    <Button
+                      onClick={() => handleShareClick(enrollment.exam_id, enrollment.exam.title)}
+                      variant="outline"
+                      className="flex-shrink-0"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
           </div>
         )}
+
+        {/* Share Dialog */}
+        <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Share Public Link</DialogTitle>
+              <DialogDescription>
+                Share the admission form link for "{selectedExam?.examTitle}"
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Form URL</Label>
+                <div className="flex gap-2">
+                  <Input value={shareUrl} readOnly className="flex-1" />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyUrl}
+                    className="flex-shrink-0"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleShareWhatsApp} className="flex-1 bg-green-600 hover:bg-green-700">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Share on WhatsApp
+                </Button>
+                <Button onClick={handleShareEmail} variant="outline" className="flex-1">
+                  <Mail className="h-4 w-4 mr-2" />
+                  Share via Email
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

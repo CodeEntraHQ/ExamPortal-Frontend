@@ -18,6 +18,7 @@ import { QuestionManagement } from './QuestionManagement';
 import { motion, AnimatePresence } from 'motion/react';
 import { examApi, BackendExam } from '../../../services/api/exam';
 import { getUsers, ApiUser } from '../../../services/api/user';
+import { admissionFormApi } from '../../../services/api/admissionForm';
 import { CreateExamModal } from './CreateExamModal';
 import { useExamContext } from '../providers/ExamContextProvider';
 import { 
@@ -57,7 +58,9 @@ import {
   MessageSquare,
   Activity,
   SquarePen,
-  FilePlus2
+  FilePlus2,
+  Share2,
+  Check
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../shared/components/ui/tooltip';
 import { useNavigate } from 'react-router-dom';
@@ -140,6 +143,10 @@ export function RoleAwareExamManagement({
   const [loadingRepresentatives, setLoadingRepresentatives] = useState(false);
   const [representativeSearchTerm, setRepresentativeSearchTerm] = useState('');
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [showShareLinkModal, setShowShareLinkModal] = useState(false);
+  const [selectedExamForShare, setSelectedExamForShare] = useState<BackendExam | null>(null);
+  const [shareUrl, setShareUrl] = useState<string>('');
+  const [copied, setCopied] = useState<boolean>(false);
 
   // Mock exam data based on user role
   // Keep the original exams for reference (as requested)
@@ -612,6 +619,30 @@ export function RoleAwareExamManagement({
     );
   });
 
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      success('URL copied to clipboard!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      error('Failed to copy URL. Please try again.');
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    const examTitle = selectedExamForShare?.title || 'the exam';
+    const message = encodeURIComponent(`Fill out the admission form for ${examTitle}: ${shareUrl}`);
+    window.open(`https://wa.me/?text=${message}`, '_blank');
+  };
+
+  const handleShareEmail = () => {
+    const examTitle = selectedExamForShare?.title || 'the exam';
+    const subject = encodeURIComponent(`Admission Form for ${examTitle}`);
+    const body = encodeURIComponent(`Please fill out the admission form for ${examTitle}:\n\n${shareUrl}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
   const examStats = [
     {
       title: 'Total Exams',
@@ -646,7 +677,7 @@ export function RoleAwareExamManagement({
   const canCreateExam = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
   const canManageAllEntities = user?.role === 'SUPERADMIN';
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
-  const examTableColumnCount = 7; // Name, Type, Duration, Admission Form, Invite Representative, Status, Created At
+  const examTableColumnCount = 8; // Name, Type, Duration, Admission Form, Public Link, Invite Representative, Status, Created At
 
   if (user?.role === 'STUDENT') {
     return (
@@ -869,6 +900,7 @@ export function RoleAwareExamManagement({
                     <TableHead>Type</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead className="text-center">Admission Form</TableHead>
+                    <TableHead className="text-center">Public Link</TableHead>
                     <TableHead className="text-center">Invite Representative</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created At</TableHead>
@@ -956,6 +988,47 @@ export function RoleAwareExamManagement({
                                 </TooltipTrigger>
                                 <TooltipContent>
                                   {exam.has_admission_form ? 'Edit admission form' : 'Create admission form'}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-center">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label="Share public link"
+                                    disabled={!exam.has_admission_form}
+                                    onClick={async (event) => {
+                                      event.stopPropagation();
+                                      event.preventDefault();
+                                      try {
+                                        // Fetch public token for this exam
+                                        const tokenResponse = await admissionFormApi.getPublicToken(exam.id);
+                                        const publicToken = tokenResponse.payload.public_token;
+                                        
+                                        const baseUrl = window.location.origin;
+                                        const shareUrlPath = `/public/admission-form/${publicToken}`;
+                                        setShareUrl(`${baseUrl}${shareUrlPath}`);
+                                        setSelectedExamForShare(exam);
+                                        setShowShareLinkModal(true);
+                                      } catch (err: any) {
+                                        error(err?.message || 'Failed to generate public link. Please try again.');
+                                      }
+                                    }}
+                                  >
+                                    <Share2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  {exam.has_admission_form 
+                                    ? 'Share public link' 
+                                    : 'Create admission form first'}
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -1165,6 +1238,48 @@ export function RoleAwareExamManagement({
                 : `Invite ${selectedRepresentativeIds.size > 0 ? `(${selectedRepresentativeIds.size})` : ''}`}
             </Button>
           </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+      {/* Share Public Link Modal */}
+      <Dialog open={showShareLinkModal} onOpenChange={setShowShareLinkModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Share Public Link</DialogTitle>
+            <DialogDescription>
+              Share the admission form link for "{selectedExamForShare?.title}"
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Form URL</Label>
+              <div className="flex gap-2">
+                <Input value={shareUrl} readOnly className="flex-1" />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleCopyUrl}
+                  className="flex-shrink-0"
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleShareWhatsApp} className="flex-1 bg-green-600 hover:bg-green-700">
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Share on WhatsApp
+              </Button>
+              <Button onClick={handleShareEmail} variant="outline" className="flex-1">
+                <Mail className="h-4 w-4 mr-2" />
+                Share via Email
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

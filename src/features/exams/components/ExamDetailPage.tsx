@@ -52,7 +52,7 @@ import { useNavigate } from 'react-router-dom';
 import { Checkbox } from '../../../shared/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../shared/components/ui/tooltip';
 import { Switch } from '../../../shared/components/ui/switch';
-import { SquarePen, FilePlus2 } from 'lucide-react';
+import { SquarePen, FilePlus2, Share2, Check, MessageSquare } from 'lucide-react';
 
 interface ExamDetailPageProps {
   examId: string;
@@ -86,6 +86,9 @@ export function ExamDetailPage({
   const [loadingRepresentatives, setLoadingRepresentatives] = useState(false);
   const [representativeSearchTerm, setRepresentativeSearchTerm] = useState('');
   const [invitingRepresentatives, setInvitingRepresentatives] = useState(false);
+  const [showShareLinkModal, setShowShareLinkModal] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string>('');
+  const [copied, setCopied] = useState<boolean>(false);
   const { info, success, error } = useNotifications();
   const { user } = useAuth();
   const { currentExam, setCurrentExam } = useExamContext();
@@ -323,6 +326,30 @@ export function ExamDetailPage({
       rep.email.toLowerCase().includes(searchLower)
     );
   });
+
+  const handleCopyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      success('URL copied to clipboard!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      error('Failed to copy URL. Please try again.');
+    }
+  };
+
+  const handleShareWhatsApp = () => {
+    const examTitle = currentExam?.title || examName;
+    const message = encodeURIComponent(`Fill out the admission form for ${examTitle}: ${shareUrl}`);
+    window.open(`https://wa.me/?text=${message}`, '_blank');
+  };
+
+  const handleShareEmail = () => {
+    const examTitle = currentExam?.title || examName;
+    const subject = encodeURIComponent(`Admission Form for ${examTitle}`);
+    const body = encodeURIComponent(`Please fill out the admission form for ${examTitle}:\n\n${shareUrl}`);
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
   
   // Fetch statistics from backend
   useEffect(() => {
@@ -917,6 +944,39 @@ export function ExamDetailPage({
               <div className="flex gap-2">
                 {canManageQuestions && (
                   <>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            disabled={!hasAdmissionForm}
+                            onClick={async () => {
+                              try {
+                                // Fetch public token for this exam
+                                const tokenResponse = await admissionFormApi.getPublicToken(effectiveExamId);
+                                const publicToken = tokenResponse.payload.public_token;
+                                
+                                const baseUrl = window.location.origin;
+                                const shareUrlPath = `/public/admission-form/${publicToken}`;
+                                setShareUrl(`${baseUrl}${shareUrlPath}`);
+                                setShowShareLinkModal(true);
+                              } catch (err: any) {
+                                error(err?.message || 'Failed to generate public link. Please try again.');
+                              }
+                            }}
+                          >
+                            <Share2 className="h-4 w-4 mr-2" />
+                            Share Public Link
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {hasAdmissionForm 
+                            ? 'Share public link for admission form' 
+                            : 'Create admission form first'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -1885,6 +1945,48 @@ export function ExamDetailPage({
                   : `Invite ${selectedRepresentativeIds.size > 0 ? `(${selectedRepresentativeIds.size})` : ''}`}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Share Public Link Modal */}
+        <Dialog open={showShareLinkModal} onOpenChange={setShowShareLinkModal}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Share Public Link</DialogTitle>
+              <DialogDescription>
+                Share the admission form link for "{currentExam?.title || examName}"
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Form URL</Label>
+                <div className="flex gap-2">
+                  <Input value={shareUrl} readOnly className="flex-1" />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyUrl}
+                    className="flex-shrink-0"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4 text-green-600" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleShareWhatsApp} className="flex-1 bg-green-600 hover:bg-green-700">
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Share on WhatsApp
+                </Button>
+                <Button onClick={handleShareEmail} variant="outline" className="flex-1">
+                  <Mail className="h-4 w-4 mr-2" />
+                  Share via Email
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 

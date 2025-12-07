@@ -25,6 +25,7 @@ export interface AdmissionForm {
   id: string;
   exam_id: string;
   form_structure: FormField[];
+  public_token?: string;
   created_at: string;
   updated_at: string;
 }
@@ -227,6 +228,59 @@ export async function updateSubmissionStatus(
 }
 
 /**
+ * Get public admission form by token (no authentication required)
+ */
+export async function getPublicAdmissionForm(token: string): Promise<GetAdmissionFormResponse> {
+  const response = await fetch(getApiUrl(`/v1/admission-forms/public/${token}`), {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to fetch admission form');
+  }
+
+  return response.json();
+}
+
+/**
+ * Submit public admission form by token (no authentication required)
+ */
+export async function submitPublicAdmissionForm(
+  token: string,
+  payload: SubmitAdmissionFormPayload
+): Promise<SubmitAdmissionFormResponse> {
+  const response = await fetch(getApiUrl(`/v1/admission-forms/public/${token}`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to submit admission form');
+  }
+
+  return response.json();
+}
+
+/**
+ * Get public token for an exam (admin only)
+ */
+export async function getPublicToken(examId: string): Promise<{ payload: { public_token: string } }> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/admission-forms/${examId}/public-token`), {
+    method: 'GET',
+  });
+
+  return response.json();
+}
+
+/**
  * Admission Form API object for convenience
  */
 export const admissionFormApi = {
@@ -236,5 +290,8 @@ export const admissionFormApi = {
   submitAdmissionForm,
   getAdmissionFormSubmissions,
   updateSubmissionStatus,
+  getPublicAdmissionForm,
+  submitPublicAdmissionForm,
+  getPublicToken,
 };
 
