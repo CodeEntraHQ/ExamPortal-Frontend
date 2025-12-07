@@ -11,7 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Button } from '../../../shared/components/ui/button';
 import { Badge } from '../../../shared/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../shared/components/ui/tabs';
-import { updateEntity, getEntities, ApiEntity } from '../../../services/api/entity';
+import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
+import { updateEntity, getEntities, getEntityById, ApiEntity } from '../../../services/api/entity';
 import { 
   Building, 
   Users, 
@@ -21,7 +22,8 @@ import {
   Calendar,
   Settings,
   Pencil,
-  FileText
+  FileText,
+  AlertCircle
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { RoleAwareExamManagement } from '../../../features/exams/components/RoleAwareExamManagement';
@@ -55,6 +57,7 @@ const mapApiEntityToUiEntity = (apiEntity: ApiEntity): Entity => ({
   lastActivity: apiEntity.created_at ? new Date(apiEntity.created_at).toLocaleDateString() : '',
   description: apiEntity.description || '',
   logo_link: apiEntity.logo_link || '',
+  monitoring_enabled: apiEntity.monitoring_enabled !== undefined ? apiEntity.monitoring_enabled : true,
 });
 
 export function EntityDetailPage({
@@ -82,8 +85,15 @@ export function EntityDetailPage({
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
-  const { success, error } = useNotifications();
+  const { success, error, info } = useNotifications();
   const { user } = useAuth();
+  
+  // Show notification when admin tries to access monitoring tab if disabled
+  useEffect(() => {
+    if (entityDetails.monitoring_enabled === false && activeTab === 'analytics' && user?.role === 'ADMIN') {
+      info('You don\'t have rights to see that. Monitoring has been disabled.');
+    }
+  }, [entityDetails.monitoring_enabled, activeTab, user?.role, info]);
 
   // Sync entityDetails when entity prop changes
   useEffect(() => {
@@ -100,55 +110,40 @@ export function EntityDetailPage({
     setIsEditing(false);
   }, [entity]);
 
-  // Fetch full entity data if entity is incomplete (only has id and name)
+  // Always fetch fresh entity data to ensure we have the latest monitoring_enabled status
   useEffect(() => {
     const fetchEntityData = async () => {
-      // Check if entity is incomplete (missing required fields like createdAt, type, etc.)
-      const isIncomplete = !entity.createdAt || !entity.type || !entity.location;
+      if (!entity.id || !user) return;
       
-      // ADMIN users don't have permission to list entities, so skip fetch for them
-      if (user?.role === 'ADMIN') {
-        // For ADMIN, use the entity data as-is (it comes from login response)
-        return;
-      }
-      
-      if (isIncomplete && entity.id) {
-        setIsLoadingEntity(true);
-        try {
-          // Only SUPERADMIN can fetch entities list
-          if (user?.role === 'SUPERADMIN') {
-            // Fetch entities and find the one matching our entity ID
-            const response = await getEntities(1, 10); // Fetch entities (max 10 per backend limit)
-            const foundEntity = response.payload.entities.find(e => e.id === entity.id);
-            
-            if (foundEntity) {
-              const fullEntity = mapApiEntityToUiEntity(foundEntity);
-              setEntityDetails(fullEntity);
-              setEntitySettings({
-                name: fullEntity.name,
-                type: fullEntity.type,
-                address: fullEntity.location,
-                description: fullEntity.description || '',
-                contactEmail: fullEntity.email || '',
-                contactPhone: fullEntity.phone || '',
-                logoLink: fullEntity.logo_link || ''
-              });
-            }
-          }
-        } catch (err) {
-          console.error('Failed to fetch entity details:', err);
-          // Don't show error for ADMIN users as they don't have permission
-          if (user?.role === 'SUPERADMIN') {
-            error('Failed to load entity details');
-          }
-        } finally {
-          setIsLoadingEntity(false);
+      setIsLoadingEntity(true);
+      try {
+        // Both ADMIN and SUPERADMIN can use getEntityById
+        const response = await getEntityById(entity.id);
+        
+        if (response && response.payload) {
+          const fullEntity = mapApiEntityToUiEntity(response.payload);
+          setEntityDetails(fullEntity);
+          setEntitySettings({
+            name: fullEntity.name,
+            type: fullEntity.type,
+            address: fullEntity.location,
+            description: fullEntity.description || '',
+            contactEmail: fullEntity.email || '',
+            contactPhone: fullEntity.phone || '',
+            logoLink: fullEntity.logo_link || ''
+          });
         }
+      } catch (err) {
+        console.error('Failed to fetch entity details:', err);
+        // If fetch fails, use the entity prop data as fallback
+        // Don't show error to avoid disrupting user experience
+      } finally {
+        setIsLoadingEntity(false);
       }
     };
 
     fetchEntityData();
-  }, [entity.id, entity.createdAt, entity.type, entity.location, error, user?.role]);
+  }, [entity.id, user]);
 
   return (
     <div className="space-y-6">
@@ -311,15 +306,26 @@ export function EntityDetailPage({
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
-            <div className="flex justify-between items-center">
-              <div>
-                <h2 className="text-xl font-semibold">Monitoring & Analytics</h2>
-                <p className="text-muted-foreground">
-                  Real-time monitoring and performance insights for {entityDetails.name}
-                </p>
-              </div>
-            </div>
-            <AnalyticsDashboard currentEntity={entityDetails.id} />
+            {entityDetails.monitoring_enabled === false && user?.role === 'ADMIN' ? (
+              <Alert variant="destructive" className="border-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription className="text-base font-semibold">
+                  You don't have rights to see that. Monitoring has been disabled.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-xl font-semibold">Monitoring & Analytics</h2>
+                    <p className="text-muted-foreground">
+                      Real-time monitoring and performance insights for {entityDetails.name}
+                    </p>
+                  </div>
+                </div>
+                <AnalyticsDashboard currentEntity={entityDetails.id} />
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">
