@@ -173,31 +173,52 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
 
   const handleApproveClick = () => {
     if (!selectedSubmission) return;
-    setShowPasswordInput(true);
+    // Only show password input if submission is NOT from a representative
+    const isFromRepresentative = selectedSubmission.representative_id !== null;
+    if (!isFromRepresentative) {
+      setShowPasswordInput(true);
+    } else {
+      // If from representative, approve directly without password
+      handleApprove();
+    }
   };
 
   const handleApprove = async () => {
     if (!selectedSubmission) return;
     
-    // Validate password
-    if (!password || password.length < 6) {
-      showError('Password must be at least 6 characters long');
-      return;
-    }
+    const isFromRepresentative = selectedSubmission.representative_id !== null;
     
-    if (password !== confirmPassword) {
-      showError('Passwords do not match');
-      return;
+    // Validate password only if NOT from representative
+    if (!isFromRepresentative) {
+      if (!password || password.length < 6) {
+        showError('Password must be at least 6 characters long');
+        return;
+      }
+      
+      if (password !== confirmPassword) {
+        showError('Passwords do not match');
+        return;
+      }
     }
     
     setIsProcessing(true);
     try {
-      await admissionFormApi.updateSubmissionStatus(selectedSubmission.id, {
+      const payload: { action: 'approve'; password?: string } = {
         action: 'approve',
-        password: password,
-      });
+      };
       
-      showSuccess('Submission approved successfully. User account created and invitation sent.');
+      // Only include password if NOT from representative
+      if (!isFromRepresentative && password) {
+        payload.password = password;
+      }
+      
+      await admissionFormApi.updateSubmissionStatus(selectedSubmission.id, payload);
+      
+      const successMessage = isFromRepresentative
+        ? 'Submission approved successfully. User account created and password setup link sent via email.'
+        : 'Submission approved successfully. User account created and invitation sent.';
+      
+      showSuccess(successMessage);
       setIsDetailDialogOpen(false);
       setShowPasswordInput(false);
       setPassword('');
@@ -535,7 +556,7 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
           )}
           {isAdmin && selectedSubmission?.status === 'PENDING' && (
             <>
-              {showPasswordInput && (
+              {showPasswordInput && selectedSubmission.representative_id === null && (
                 <div className="space-y-4 border-t pt-4">
                   <div className="space-y-2">
                     <Label htmlFor="password">Password for User Account</Label>
@@ -561,8 +582,19 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
                   </div>
                 </div>
               )}
+              {selectedSubmission.representative_id !== null && (
+                <div className="border-t pt-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                    <p className="text-sm text-blue-800">
+                      <strong>Note:</strong> This submission was added by a representative. 
+                      When approved, the user will receive an email with a password setup link 
+                      and exam details.
+                    </p>
+                  </div>
+                </div>
+              )}
               <DialogFooter className="gap-2">
-                {showPasswordInput ? (
+                {showPasswordInput && selectedSubmission.representative_id === null ? (
                   <>
                     <Button
                       variant="outline"
@@ -606,8 +638,17 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
                       onClick={handleApproveClick}
                       disabled={isProcessing}
                     >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Approve
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-4 w-4 mr-2" />
+                          Approve
+                        </>
+                      )}
                     </Button>
                   </>
                 )}
