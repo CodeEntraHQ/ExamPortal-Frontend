@@ -79,7 +79,7 @@ export interface AdmissionFormSubmissionListItem {
   id: string;
   exam_id: string;
   exam_title: string;
-  representative_id: string;
+  representative_id: string | null;
   representative_name: string;
   representative_email: string;
   form_responses: Record<string, any>;
