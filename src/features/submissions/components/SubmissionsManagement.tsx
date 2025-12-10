@@ -173,50 +173,31 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
 
   const handleApproveClick = () => {
     if (!selectedSubmission) return;
-    // Only show password input if submission is NOT from a representative
-    const isFromRepresentative = selectedSubmission.representative_id !== null;
-    if (!isFromRepresentative) {
-      setShowPasswordInput(true);
-    } else {
-      // If from representative, approve directly without password
-      handleApprove();
-    }
+    // Approve directly for both representative and public-link submissions (no password input)
+    handleApprove();
   };
 
   const handleApprove = async () => {
     if (!selectedSubmission) return;
     
-    const isFromRepresentative = selectedSubmission.representative_id !== null;
-    
-    // Validate password only if NOT from representative
-    if (!isFromRepresentative) {
-      if (!password || password.length < 6) {
-        showError('Password must be at least 6 characters long');
-        return;
-      }
-      
-      if (password !== confirmPassword) {
-        showError('Passwords do not match');
-        return;
-      }
-    }
+    const isFromRepresentative =
+      !!selectedSubmission.representative_id &&
+      selectedSubmission.representative_id !== 'null';
+    const isFromPublicLink = !isFromRepresentative;
     
     setIsProcessing(true);
     try {
-      const payload: { action: 'approve'; password?: string } = {
+      const payload: { action: 'approve' } = {
         action: 'approve',
       };
-      
-      // Only include password if NOT from representative
-      if (!isFromRepresentative && password) {
-        payload.password = password;
-      }
       
       await admissionFormApi.updateSubmissionStatus(selectedSubmission.id, payload);
       
       const successMessage = isFromRepresentative
         ? 'Submission approved successfully. User account created and password setup link sent via email.'
-        : 'Submission approved successfully. User account created and invitation sent.';
+        : isFromPublicLink
+          ? 'Submission approved successfully. User account created and password setup link sent via email.'
+          : 'Submission approved successfully. User account created and invitation sent.';
       
       showSuccess(successMessage);
       setIsDetailDialogOpen(false);
@@ -342,8 +323,14 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="font-medium">{submission.representative_name}</span>
-                      <span className="text-sm text-muted-foreground">{submission.representative_email}</span>
+                      {submission.representative_id && submission.representative_id !== 'null' ? (
+                        <>
+                          <span className="font-medium">{submission.representative_name}</span>
+                          <span className="text-sm text-muted-foreground">{submission.representative_email}</span>
+                        </>
+                      ) : (
+                        <span className="text-sm text-muted-foreground italic">Submitted via public link</span>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -530,9 +517,15 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-muted-foreground">Representative</label>
-                  <p className="text-sm">{selectedSubmission.representative_name}</p>
-                  <p className="text-xs text-muted-foreground">{selectedSubmission.representative_email}</p>
+                  <label className="text-sm font-medium text-muted-foreground">Submission Source</label>
+                  {selectedSubmission.representative_id && selectedSubmission.representative_id !== 'null' ? (
+                    <>
+                      <p className="text-sm">{selectedSubmission.representative_name}</p>
+                      <p className="text-xs text-muted-foreground">{selectedSubmission.representative_email}</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">Submitted via public link</p>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Submitted</label>
@@ -556,33 +549,7 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
           )}
           {isAdmin && selectedSubmission?.status === 'PENDING' && (
             <>
-              {showPasswordInput && selectedSubmission.representative_id === null && (
-                <div className="space-y-4 border-t pt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password for User Account</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter password (min 6 characters)"
-                      disabled={isProcessing}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm Password</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Confirm password"
-                      disabled={isProcessing}
-                    />
-                  </div>
-                </div>
-              )}
-              {selectedSubmission.representative_id !== null && (
+              {selectedSubmission.representative_id && selectedSubmission.representative_id !== 'null' ? (
                 <div className="border-t pt-4">
                   <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
                     <p className="text-sm text-blue-800">
@@ -592,66 +559,44 @@ export function SubmissionsManagement({ currentEntity }: SubmissionsManagementPr
                     </p>
                   </div>
                 </div>
+              ) : (
+                <div className="border-t pt-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                    <p className="text-sm text-blue-800">
+                      <strong>Note:</strong> This submission was received via a public link. 
+                      When approved, the user will receive an email with a password setup link 
+                      and exam details.
+                    </p>
+                  </div>
+                </div>
               )}
               <DialogFooter className="gap-2">
-                {showPasswordInput && selectedSubmission.representative_id === null ? (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setShowPasswordInput(false);
-                        setPassword('');
-                        setConfirmPassword('');
-                      }}
-                      disabled={isProcessing}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleApprove}
-                      disabled={isProcessing}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Approve & Create Account
-                        </>
-                      )}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="outline"
-                      onClick={handleReject}
-                      disabled={isProcessing}
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Reject
-                    </Button>
-                    <Button
-                      onClick={handleApproveClick}
-                      disabled={isProcessing}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="h-4 w-4 mr-2" />
-                          Approve
-                        </>
-                      )}
-                    </Button>
-                  </>
-                )}
+                <>
+                  <Button
+                    variant="outline"
+                    onClick={handleReject}
+                    disabled={isProcessing}
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Reject
+                  </Button>
+                  <Button
+                    onClick={handleApproveClick}
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Approve
+                      </>
+                    )}
+                  </Button>
+                </>
               </DialogFooter>
             </>
           )}

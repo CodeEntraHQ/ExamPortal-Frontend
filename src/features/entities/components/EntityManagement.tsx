@@ -607,9 +607,10 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.name || !formData.address || !formData.type) {
-      toast.error('Please fill in all mandatory fields: Name, Address, and Type.');
+    const trimmedEmail = formData.email.trim();
+
+    if (!formData.name || !formData.address || !formData.type || !trimmedEmail) {
+      toast.error('Please fill in all mandatory fields: Name, Address, Type, and Email.');
       return;
     }
     
@@ -622,9 +623,7 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
     if (formData.description) {
       payload.description = formData.description;
     }
-    if (formData.email) {
-      payload.email = formData.email;
-    }
+    payload.email = trimmedEmail;
     if (formData.phone) {
       payload.phone_number = formData.phone;
     }
@@ -701,13 +700,14 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
         <TabsContent value="contact" className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Email <span className="text-destructive">*</span></Label>
               <Input
                 id="email"
                 type="email"
                 value={formData.email}
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                 placeholder="contact@institution.edu"
+                required
               />
             </div>
             <div className="space-y-2">
