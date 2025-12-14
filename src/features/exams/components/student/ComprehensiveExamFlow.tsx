@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getExamById, getQuestions, BackendExam, BackendQuestion, startExam, saveAnswer, deleteAnswer, submitExam, getSubmissions } from '../../../../services/api/exam';
+import { useFaceDetection } from '../../../../hooks/useFaceDetection';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../shared/components/ui/card';
 import { Button } from '../../../../shared/components/ui/button';
 import { Progress } from '../../../../shared/components/ui/progress';
@@ -132,6 +133,8 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [faceDetectionWarning, setFaceDetectionWarning] = useState<string | null>(null);
 
   const fetchAllExamQuestions = async (examId: string) => {
     const aggregatedQuestions: BackendQuestion[] = [];
@@ -691,8 +694,19 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
         passed
       }));
 
-      // Clean up proctoring
+      // Clean up proctoring and camera
       document.removeEventListener('visibilitychange', handleTabSwitch);
+      
+      // Stop camera stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      setProctoringActive(false);
+      
       if (document.fullscreenElement) {
         document.exitFullscreen();
       }
@@ -703,7 +717,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     }
   };
 
-  // Enter fullscreen when exam becomes active
+  // Enter fullscreen and enable camera when exam becomes active
   useEffect(() => {
     if (examState.phase === 'active' && !isFullscreen) {
       // Small delay to ensure DOM is ready
@@ -713,6 +727,59 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       return () => clearTimeout(timer);
     }
   }, [examState.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Enable camera when exam phase becomes active (backup in case beginActiveExam didn't trigger it)
+  // But only if not already active and before fullscreen to avoid warnings
+  useEffect(() => {
+    if (examState.phase === 'active' && !proctoringActive && !isFullscreen) {
+      // Enable camera when exam is active but BEFORE fullscreen to avoid browser warnings
+      enableCamera();
+    }
+  }, [examState.phase, proctoringActive, isFullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup camera stream when component unmounts or exam phase changes away from active
+  useEffect(() => {
+    return () => {
+      // Cleanup camera stream on unmount
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    };
+  }, []);
+
+  // Stop camera when exam phase is no longer active
+  useEffect(() => {
+    if (examState.phase !== 'active' && proctoringActive) {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      setProctoringActive(false);
+    }
+  }, [examState.phase, proctoringActive]);
+
+  // Face detection monitoring - MUST be called before any conditional returns
+  const faceDetection = useFaceDetection({
+    videoRef,
+    enabled: examState.phase === 'active' && proctoringActive,
+    onFaceDetectionChange: (result) => {
+      if (result.faceCount === 0) {
+        setFaceDetectionWarning('No face detected. Please ensure you are visible in the camera.');
+      } else if (result.hasMultipleFaces) {
+        setFaceDetectionWarning('Multiple faces detected. Please ensure you are alone during the exam.');
+      } else {
+        setFaceDetectionWarning(null);
+      }
+    },
+    detectionInterval: 2000,
+  });
 
   // Fullscreen change listener - only active during exam
   useEffect(() => {
@@ -844,7 +911,40 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     }
   };
 
-  const beginActiveExam = (startedAt: Date) => {
+  // Enable camera when exam starts
+  const enableCamera = async () => {
+    try {
+      // Request camera access
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          facingMode: 'user',
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        } 
+      });
+      
+      // Store the stream in ref so we can use it when video element is available
+      streamRef.current = stream;
+      setProctoringActive(true);
+      
+      // Try to set the stream to video element if it's already available
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(err => {
+          console.error('Error playing video:', err);
+        });
+      }
+    } catch (error: any) {
+      console.error('Failed to enable camera:', error);
+      setWarningMessage('Camera access failed. Please ensure camera permissions are granted.');
+      setShowWarning(true);
+      // Don't block exam start if camera fails, but show warning
+      setProctoringActive(false);
+      streamRef.current = null;
+    }
+  };
+
+  const beginActiveExam = async (startedAt: Date) => {
     if (!examConfig) return;
     
     // Calculate initial remaining time based on started_at and current time
@@ -859,7 +959,14 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       timeRemaining: initialRemainingTime
     }));
 
-    // Always enter fullscreen mode when exam starts
+    // Request camera permission BEFORE entering fullscreen to avoid browser warnings
+    await enableCamera();
+
+    // Small delay to ensure permission dialog is closed before requesting fullscreen
+    // This prevents browser warnings about permission requests during fullscreen
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Enter fullscreen mode after camera permission is granted and dialog is closed
     enterFullscreen();
 
     if (examConfig.proctoring.tabSwitchDetection) {
@@ -1061,6 +1168,8 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
           warningMessage={warningMessage}
           proctoringActive={proctoringActive}
           videoRef={videoRef}
+          streamRef={streamRef}
+          faceDetectionWarning={faceDetectionWarning}
         />
         {/* Fullscreen Exit Warning Dialog */}
         <Dialog open={showFullscreenExitWarning} onOpenChange={() => {}}>
@@ -1444,8 +1553,18 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup }: any) 
   );
 }
 
-function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion, onNavigateToQuestion, onSubmitExam, formatTime, showCalculator, setShowCalculator, showWarning, setShowWarning, warningMessage, proctoringActive, videoRef }: any) {
+function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion, onNavigateToQuestion, onSubmitExam, formatTime, showCalculator, setShowCalculator, showWarning, setShowWarning, warningMessage, proctoringActive, videoRef, streamRef, faceDetectionWarning }: any) {
   const currentQuestion = examConfig.questions[examState.currentQuestion];
+
+  // Set stream to video element when it becomes available
+  useEffect(() => {
+    if (videoRef.current && streamRef?.current && proctoringActive) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(err => {
+        console.error('Error playing video:', err);
+      });
+    }
+  }, [proctoringActive, videoRef, streamRef]);
 
   const renderQuestionContent = () => {
     const answer = examState.answers[currentQuestion.id];
@@ -1699,14 +1818,35 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Proctoring Video */}
+      {/* Proctoring Video - Small window overlay in bottom-left when exam is active */}
       {proctoringActive && (
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          className="fixed top-4 right-4 w-32 h-24 border rounded-lg z-50 opacity-75"
-        />
+        <div className="fixed bottom-4 left-4 z-50 bg-background border-2 border-primary rounded-lg shadow-lg overflow-hidden">
+          <div className="bg-primary/10 px-2 py-1 flex items-center gap-2">
+            <Camera className="h-3 w-3 text-primary" />
+            <span className="text-xs font-medium text-primary">Camera Active</span>
+          </div>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-48 h-36 object-cover"
+            style={{ transform: 'scaleX(-1)' }} // Mirror the video for better UX
+          />
+        </div>
+      )}
+
+      {/* Face Detection Warning Banner */}
+      {faceDetectionWarning && (
+        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[60] bg-destructive text-destructive-foreground px-6 py-3 rounded-lg shadow-lg border-2 border-destructive animate-pulse">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5" />
+            <div>
+              <div className="font-semibold">Proctoring Alert</div>
+              <div className="text-sm">{faceDetectionWarning}</div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Exam Header */}

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { uploadMedia } from '@/services/api/media';
+import { createMonitoring } from '@/services/api/examMonitoring';
 
 interface MonitoringState {
   cameraActive: boolean;
@@ -17,6 +19,10 @@ interface UseExamMonitoringOptions {
   onAudioSample?: (audioData: string) => void;
   snapshotInterval?: number; // milliseconds
   audioSampleInterval?: number; // milliseconds
+  enrollmentId?: string; // required to post monitoring events
+  autoUploadSnapshots?: boolean; // upload snapshots to backend automatically
+  autoPostEvents?: boolean; // post tab/fullscreen events automatically
+  externalVideoRef?: React.RefObject<HTMLVideoElement> | null; // optional external video element to use
 }
 
 export function useExamMonitoring({
@@ -28,6 +34,10 @@ export function useExamMonitoring({
   onAudioSample,
   snapshotInterval = 30000, // 30 seconds default
   audioSampleInterval = 10000, // 10 seconds default
+  enrollmentId,
+  autoUploadSnapshots = false,
+  autoPostEvents = false,
+  externalVideoRef = null,
 }: UseExamMonitoringOptions) {
   const [state, setState] = useState<MonitoringState>({
     cameraActive: false,
@@ -37,7 +47,8 @@ export function useExamMonitoring({
     error: null,
   });
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const internalVideoRef = useRef<HTMLVideoElement | null>(null);
+  const videoRef = externalVideoRef ?? internalVideoRef;
   const snapshotIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioSampleIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -45,6 +56,10 @@ export function useExamMonitoring({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
+  const switchCountRef = useRef<number>(0);
+  const fullscreenExitCountRef = useRef<number>(0);
+  const snapshotMediaIdsRef = useRef<string[]>([]);
+  const sentExamStartSnapshotRef = useRef<boolean>(false);
 
   // Capture video snapshot
   const captureSnapshot = useCallback(() => {
@@ -75,6 +90,47 @@ export function useExamMonitoring({
 
       if (onSnapshot) {
         onSnapshot(imageData);
+      }
+
+      // If auto-upload enabled, convert and upload
+      if (autoUploadSnapshots && enrollmentId) {
+        try {
+          // Convert dataURL to Blob via fetch
+          fetch(imageData)
+            .then((r) => r.blob())
+            .then(async (blob) => {
+              const resp = await uploadMedia(blob);
+              if (resp && resp.id) {
+                snapshotMediaIdsRef.current.push(resp.id);
+
+                // If first snapshot and not yet sent as exam_start, set as exam_start_media_id
+                const examStartId = !sentExamStartSnapshotRef.current ? resp.id : null;
+
+                if (!sentExamStartSnapshotRef.current) sentExamStartSnapshotRef.current = true;
+
+                // Optionally post monitoring record for this snapshot
+                if (autoPostEvents) {
+                  try {
+                    await createMonitoring({
+                      enrollment_id: enrollmentId,
+                      // include current counts and the snapshot id
+                      switch_tab_count: switchCountRef.current,
+                      fullscreen_exit_count: fullscreenExitCountRef.current,
+                      exam_start_media_id: examStartId,
+                      metadata: { snapshot_media_ids: snapshotMediaIdsRef.current },
+                    });
+                  } catch (e) {
+                    console.error('Failed to create monitoring record:', e);
+                  }
+                }
+              }
+            })
+            .catch((err) => {
+              console.error('Failed to upload snapshot blob:', err);
+            });
+        } catch (err) {
+          console.error('Error auto-uploading snapshot:', err);
+        }
       }
     } catch (error) {
       console.error('Error capturing snapshot:', error);
@@ -168,6 +224,14 @@ export function useExamMonitoring({
         videoRef.current.play().catch((error) => {
           console.error('Error playing video:', error);
         });
+      }
+
+      // If no camera stream was obtained by the hook but an external video
+      // element already has a MediaStream (e.g., parent component obtained
+      // getUserMedia), use that stream so snapshots can be captured.
+      if (!cameraStream && videoRef.current && (videoRef.current.srcObject as MediaStream | null)) {
+        // Use the external video's srcObject as the camera stream
+        cameraStream = videoRef.current.srcObject as MediaStream;
       }
 
       // Set up audio context for audio analysis if microphone is available
@@ -287,6 +351,41 @@ export function useExamMonitoring({
   // Start/stop monitoring based on enabled flag
   useEffect(() => {
     if (enabled) {
+      // register visibility and fullscreen listeners to track counts
+      const handleVisibility = () => {
+        if (document.hidden) {
+          switchCountRef.current += 1;
+
+          if (autoPostEvents && enrollmentId) {
+            createMonitoring({
+              enrollment_id: enrollmentId,
+              switch_tab_count: switchCountRef.current,
+              fullscreen_exit_count: fullscreenExitCountRef.current,
+              metadata: { snapshot_media_ids: snapshotMediaIdsRef.current },
+            }).catch((e) => console.error('createMonitoring failed:', e));
+          }
+        }
+      };
+
+      const handleFullscreen = () => {
+        // Exited full screen when there's no fullscreen element
+        if (!document.fullscreenElement) {
+          fullscreenExitCountRef.current += 1;
+
+          if (autoPostEvents && enrollmentId) {
+            createMonitoring({
+              enrollment_id: enrollmentId,
+              switch_tab_count: switchCountRef.current,
+              fullscreen_exit_count: fullscreenExitCountRef.current,
+              metadata: { snapshot_media_ids: snapshotMediaIdsRef.current },
+            }).catch((e) => console.error('createMonitoring failed:', e));
+          }
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibility);
+      document.addEventListener('fullscreenchange', handleFullscreen);
+
       // Use a small delay to ensure video element is ready
       const timer = setTimeout(() => {
         startMonitoring().catch((error) => {
@@ -300,6 +399,8 @@ export function useExamMonitoring({
       
       return () => {
         clearTimeout(timer);
+        document.removeEventListener('visibilitychange', handleVisibility);
+        document.removeEventListener('fullscreenchange', handleFullscreen);
         stopMonitoring();
       };
     } else {
