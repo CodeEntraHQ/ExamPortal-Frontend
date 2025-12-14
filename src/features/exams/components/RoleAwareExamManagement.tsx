@@ -19,6 +19,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { examApi, BackendExam } from '../../../services/api/exam';
 import { getUsers, ApiUser } from '../../../services/api/user';
 import { admissionFormApi } from '../../../services/api/admissionForm';
+import { getEntityById } from '../../../services/api/entity';
+import { Switch } from '../../../shared/components/ui/switch';
 import { CreateExamModal } from './CreateExamModal';
 import { useExamContext } from '../providers/ExamContextProvider';
 import { 
@@ -147,6 +149,8 @@ export function RoleAwareExamManagement({
   const [selectedExamForShare, setSelectedExamForShare] = useState<BackendExam | null>(null);
   const [shareUrl, setShareUrl] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
+  const [entityMonitoringEnabled, setEntityMonitoringEnabled] = useState<boolean>(true);
+  const [togglingMonitoring, setTogglingMonitoring] = useState<Set<string>>(new Set());
 
   // Mock exam data based on user role
   // Keep the original exams for reference (as requested)
@@ -277,6 +281,26 @@ export function RoleAwareExamManagement({
 
     fetchExams();
   }, [page, limit, currentEntity, user?.role]);
+
+  // Fetch entity monitoring status
+  useEffect(() => {
+    const fetchEntityMonitoringStatus = async () => {
+      if (currentEntity) {
+        try {
+          const response = await getEntityById(currentEntity);
+          if (response?.payload) {
+            setEntityMonitoringEnabled(response.payload.monitoring_enabled !== false);
+          }
+        } catch (err) {
+          console.error('Failed to fetch entity monitoring status:', err);
+          // Default to enabled if fetch fails
+          setEntityMonitoringEnabled(true);
+        }
+      }
+    };
+
+    fetchEntityMonitoringStatus();
+  }, [currentEntity]);
 
   // Fetch statistics from backend
   useEffect(() => {
@@ -438,6 +462,42 @@ export function RoleAwareExamManagement({
           success(`${exam.title} deleted successfully`);
         }
         break;
+    }
+  };
+
+  const handleToggleMonitoring = async (exam: BackendExam) => {
+    if (!entityMonitoringEnabled) {
+      error('Monitoring is disabled at the entity level. Please enable it in entity settings first.');
+      return;
+    }
+
+    const currentMonitoringEnabled = exam.monitoring_enabled === true || exam.monitoring_enabled === undefined || exam.monitoring_enabled === null;
+    const newMonitoringEnabled = !currentMonitoringEnabled;
+    setTogglingMonitoring(prev => new Set(prev).add(exam.id));
+
+    try {
+      await examApi.updateExam(exam.id, {
+        monitoring_enabled: newMonitoringEnabled,
+      });
+
+      // Update local state
+      setBackendExams(prevExams =>
+        prevExams.map(e =>
+          e.id === exam.id
+            ? { ...e, monitoring_enabled: newMonitoringEnabled }
+            : e
+        )
+      );
+
+      success(`Monitoring ${newMonitoringEnabled ? 'enabled' : 'disabled'} for ${exam.title}`);
+    } catch (err: any) {
+      error(err?.message || 'Failed to update monitoring status. Please try again.');
+    } finally {
+      setTogglingMonitoring(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(exam.id);
+        return newSet;
+      });
     }
   };
 
@@ -677,7 +737,7 @@ export function RoleAwareExamManagement({
   const canCreateExam = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
   const canManageAllEntities = user?.role === 'SUPERADMIN';
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
-  const examTableColumnCount = 8; // Name, Type, Duration, Admission Form, Public Link, Invite Representative, Status, Created At
+  const examTableColumnCount = 9; // Name, Type, Duration, Admission Form, Public Link, Invite Representative, Monitoring, Status, Created At
 
   if (user?.role === 'STUDENT') {
     return (
@@ -902,6 +962,7 @@ export function RoleAwareExamManagement({
                     <TableHead className="text-center">Admission Form</TableHead>
                     <TableHead className="text-center">Public Link</TableHead>
                     <TableHead className="text-center">Invite Representative</TableHead>
+                    <TableHead className="text-center">Monitoring</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created At</TableHead>
                   </TableRow>
@@ -1064,6 +1125,38 @@ export function RoleAwareExamManagement({
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-center">
+                            {!entityMonitoringEnabled ? (
+                              <div className="flex flex-col items-center gap-1">
+                                <Switch
+                                  checked={false}
+                                  disabled={true}
+                                />
+                                <span className="text-xs text-muted-foreground">Monitoring is disabled</span>
+                              </div>
+                            ) : (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div className="flex items-center gap-2">
+                                      <Switch
+                                        checked={exam.monitoring_enabled === true || exam.monitoring_enabled === undefined || exam.monitoring_enabled === null}
+                                        onCheckedChange={() => handleToggleMonitoring(exam)}
+                                        disabled={togglingMonitoring.has(exam.id)}
+                                      />
+                                    </div>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {(exam.monitoring_enabled === true || exam.monitoring_enabled === undefined || exam.monitoring_enabled === null)
+                                      ? 'Disable monitoring'
+                                      : 'Enable monitoring'}
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>

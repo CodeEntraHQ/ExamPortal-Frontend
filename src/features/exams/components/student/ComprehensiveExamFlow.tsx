@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getExamById, getQuestions, BackendExam, BackendQuestion, startExam, saveAnswer, deleteAnswer, submitExam, getSubmissions } from '../../../../services/api/exam';
 import { useFaceDetection } from '../../../../hooks/useFaceDetection';
+import { updateMonitoring } from '../../../../services/api/examMonitoring';
+import { uploadMedia } from '../../../../services/api/media';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../shared/components/ui/card';
 import { Button } from '../../../../shared/components/ui/button';
 import { Progress } from '../../../../shared/components/ui/progress';
@@ -128,13 +130,19 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   const [showWarning, setShowWarning] = useState(false);
   const [warningMessage, setWarningMessage] = useState('');
   const [proctoringActive, setProctoringActive] = useState(false);
+  const [examMonitoringEnabled, setExamMonitoringEnabled] = useState<boolean>(true); // Track if monitoring is enabled for this exam
   const [twoFactorEnabled] = useState(true); // Mock - in real app this would come from user profile
   const [showFullscreenExitWarning, setShowFullscreenExitWarning] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
+  const [fullscreenExitCount, setFullscreenExitCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [faceDetectionWarning, setFaceDetectionWarning] = useState<string | null>(null);
+  const [enrollmentId, setEnrollmentId] = useState<string | null>(null);
+  const [pendingPhotoMediaId, setPendingPhotoMediaId] = useState<string | null>(null);
+  const snapshotCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const regularSnapshotIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchAllExamQuestions = async (examId: string) => {
     const aggregatedQuestions: BackendQuestion[] = [];
@@ -176,6 +184,10 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
         // Fetch exam details
         const examResponse = await getExamById(examId);
         const exam: BackendExam = examResponse.payload;
+        
+        // Check if monitoring is enabled for this exam
+        const monitoringEnabled = exam.monitoring_enabled !== false && exam.monitoring_enabled !== undefined;
+        setExamMonitoringEnabled(monitoringEnabled);
         
         // Fetch questions
         const questions = await fetchAllExamQuestions(examId);
@@ -234,8 +246,8 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
             content: q.question_text,
             points: qMetadata.points || 10,
             timeLimit: qMetadata.timeLimit,
-            question_image_id: q.question_image_id || null,
-            question_image_url: q.question_image_id || null, // Backend returns URL in question_image_id field
+            question_image_id: (q as any).question_image_id || q.metadata?.question_image_id || null,
+            question_image_url: (q as any).question_image_id || q.metadata?.question_image_id || null, // Backend returns URL in question_image_id field
             options: options.map((opt: any, optIndex: number) => ({
               id: String.fromCharCode(65 + optIndex), // A, B, C, D, etc. (uppercase)
               text: opt.text,
@@ -372,7 +384,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
 
   // Aggressive tab switching prevention - multiple layers of protection
   useEffect(() => {
-    if (examState.phase !== 'active' || !isFullscreen) return;
+    if (examState.phase !== 'active' || !isFullscreen || !enrollmentId) return;
 
     let lastTabSwitchTime = 0;
     const TAB_SWITCH_DEBOUNCE_MS = 1000; // Prevent counting same switch multiple times
@@ -389,6 +401,11 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       
       setTabSwitchCount(prev => {
         const newCount = prev + 1;
+        
+        // Save to backend immediately - enrollmentId is guaranteed to be available here
+        sendMonitoringUpdate({ tab_switch_count: newCount }).catch((err) => {
+          console.error('Failed to update tab switch count:', err);
+        });
         
         // If 3 or more switches, show warning and auto-submit
         if (newCount >= 3) {
@@ -599,7 +616,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examState.phase, isFullscreen]);
+  }, [examState.phase, isFullscreen, enrollmentId]);
 
   const enterFullscreen = async () => {
     try {
@@ -730,12 +747,13 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
 
   // Enable camera when exam phase becomes active (backup in case beginActiveExam didn't trigger it)
   // But only if not already active and before fullscreen to avoid warnings
+  // Only enable if monitoring is enabled for this exam
   useEffect(() => {
-    if (examState.phase === 'active' && !proctoringActive && !isFullscreen) {
+    if (examState.phase === 'active' && !proctoringActive && !isFullscreen && examMonitoringEnabled) {
       // Enable camera when exam is active but BEFORE fullscreen to avoid browser warnings
       enableCamera();
     }
-  }, [examState.phase, proctoringActive, isFullscreen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [examState.phase, proctoringActive, isFullscreen, examMonitoringEnabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cleanup camera stream when component unmounts or exam phase changes away from active
   useEffect(() => {
@@ -762,18 +780,144 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
         videoRef.current.srcObject = null;
       }
       setProctoringActive(false);
+      
+      // Clear snapshot interval
+      if (regularSnapshotIntervalRef.current) {
+        clearInterval(regularSnapshotIntervalRef.current);
+        regularSnapshotIntervalRef.current = null;
+      }
     }
   }, [examState.phase, proctoringActive]);
 
+  // Set up regular interval snapshots when exam is active
+  useEffect(() => {
+    if (examState.phase === 'active' && proctoringActive && enrollmentId && examMonitoringEnabled) {
+      // Capture snapshot every 2 minutes (600000 ms)
+      regularSnapshotIntervalRef.current = setInterval(async () => {
+        if (videoRef.current && videoRef.current.readyState >= 2) {
+          console.log('Capturing regular interval snapshot...');
+          await captureSnapshot('regular_interval');
+        }
+      }, 2 * 60 * 1000); // 2 minutes
+
+      return () => {
+        if (regularSnapshotIntervalRef.current) {
+          clearInterval(regularSnapshotIntervalRef.current);
+          regularSnapshotIntervalRef.current = null;
+        }
+      };
+    }
+  }, [examState.phase, proctoringActive, enrollmentId, examMonitoringEnabled]);
+
+  // Capture snapshot from video
+  const captureSnapshot = async (snapshotType: 'regular_interval' | 'multiple_face_detection' | 'no_face_detection' | 'exam_start'): Promise<string | null> => {
+    if (!videoRef.current || !proctoringActive || !examMonitoringEnabled) return null;
+
+    try {
+      // Create canvas if it doesn't exist
+      if (!snapshotCanvasRef.current) {
+        const canvas = document.createElement('canvas');
+        snapshotCanvasRef.current = canvas;
+      }
+
+      const canvas = snapshotCanvasRef.current;
+      const video = videoRef.current;
+
+      // Check if video is ready
+      if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+        console.warn('Video not ready for snapshot');
+        return null;
+      }
+
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Draw current video frame to canvas
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        console.error('Failed to get canvas context');
+        return null;
+      }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert to blob
+      return new Promise((resolve) => {
+        canvas.toBlob(async (blob) => {
+          if (!blob || !enrollmentId) {
+            resolve(null);
+            return;
+          }
+
+          try {
+            // Upload snapshot to media table
+            console.log(`Uploading ${snapshotType} snapshot...`);
+            const mediaResponse = await uploadMedia(blob);
+            const mediaId = mediaResponse.id;
+            console.log(`Snapshot uploaded with media ID: ${mediaId}`);
+
+            // Update monitoring record with snapshot
+            console.log(`Updating monitoring with snapshot: ${snapshotType}, media_id: ${mediaId}`);
+            await updateMonitoring({
+              enrollment_id: enrollmentId,
+              snapshot_media_id: mediaId,
+              snapshot_type: snapshotType,
+              // Preserve current counts
+              tab_switch_count: tabSwitchCount,
+              fullscreen_exit_count: fullscreenExitCount,
+            });
+            console.log(`Monitoring updated successfully with ${snapshotType} snapshot`);
+
+            resolve(mediaId);
+          } catch (error) {
+            console.error(`Failed to upload/update ${snapshotType} snapshot:`, error);
+            resolve(null);
+          }
+        }, 'image/jpeg', 0.8);
+      });
+    } catch (error) {
+      console.error('Error capturing snapshot:', error);
+      return null;
+    }
+  };
+
+  // Send monitoring update to backend
+  const sendMonitoringUpdate = async (updates: { tab_switch_count?: number; fullscreen_exit_count?: number }) => {
+    if (!enrollmentId || !examMonitoringEnabled) {
+      console.warn('Cannot update monitoring: enrollmentId not set or monitoring is disabled');
+      return;
+    }
+
+    try {
+      console.log('Sending monitoring update:', { enrollment_id: enrollmentId, ...updates });
+      const response = await updateMonitoring({
+        enrollment_id: enrollmentId,
+        ...updates,
+      });
+      console.log('Monitoring update successful:', response);
+    } catch (error) {
+      console.error('Failed to update monitoring:', error);
+    }
+  };
+
   // Face detection monitoring - MUST be called before any conditional returns
   const faceDetection = useFaceDetection({
-    videoRef,
-    enabled: examState.phase === 'active' && proctoringActive,
-    onFaceDetectionChange: (result) => {
+    videoRef: videoRef as React.RefObject<HTMLVideoElement>,
+    enabled: examState.phase === 'active' && proctoringActive && examMonitoringEnabled,
+    onFaceDetectionChange: async (result) => {
       if (result.faceCount === 0) {
         setFaceDetectionWarning('No face detected. Please ensure you are visible in the camera.');
+        // Capture snapshot for no face detection
+        if (enrollmentId) {
+          await captureSnapshot('no_face_detection');
+        }
       } else if (result.hasMultipleFaces) {
         setFaceDetectionWarning('Multiple faces detected. Please ensure you are alone during the exam.');
+        // Capture snapshot for multiple face detection
+        if (enrollmentId) {
+          await captureSnapshot('multiple_face_detection');
+        }
       } else {
         setFaceDetectionWarning(null);
       }
@@ -783,7 +927,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
 
   // Fullscreen change listener - only active during exam
   useEffect(() => {
-    if (examState.phase !== 'active') return;
+    if (examState.phase !== 'active' || !enrollmentId) return;
 
     const handleFullscreenChange = () => {
       const isCurrentlyFullscreen = !!(
@@ -798,8 +942,21 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       setIsFullscreen(isCurrentlyFullscreen);
 
       if (!isCurrentlyFullscreen && wasFullscreen) {
-        // User exited fullscreen - show warning
+        // Always show warning when fullscreen is exited
         setShowFullscreenExitWarning(true);
+        
+        // Only track and update backend if monitoring is enabled
+        if (examMonitoringEnabled) {
+          // User exited fullscreen - increment count and send to backend
+          // enrollmentId is guaranteed to be available here
+          setFullscreenExitCount(prev => {
+            const newCount = prev + 1;
+            sendMonitoringUpdate({ fullscreen_exit_count: newCount }).catch((err) => {
+              console.error('Failed to update fullscreen exit count:', err);
+            });
+            return newCount;
+          });
+        }
       }
     };
 
@@ -815,7 +972,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
     };
-  }, [examState.phase, isFullscreen]);
+  }, [examState.phase, isFullscreen, enrollmentId, examMonitoringEnabled]);
 
   // Timer effect - only active during exam, calculates remaining time from started_at
   useEffect(() => {
@@ -856,8 +1013,8 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     // Check internet connection
     setSystemChecks(prev => ({ ...prev, connection: navigator.onLine }));
 
-    // Check camera if required
-    if (examConfig.proctoring.cameraRequired) {
+    // Check camera if required - only if monitoring is enabled
+    if (examConfig.proctoring.cameraRequired && examMonitoringEnabled) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         setSystemChecks(prev => ({ ...prev, camera: true }));
@@ -871,7 +1028,8 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
         setShowWarning(true);
       }
     } else {
-      setSystemChecks(prev => ({ ...prev, camera: true }));
+      // If monitoring is disabled, mark camera as not required
+      setSystemChecks(prev => ({ ...prev, camera: !examConfig.proctoring.cameraRequired || !examMonitoringEnabled }));
     }
 
     // Check microphone if required
@@ -896,6 +1054,12 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     try {
       // Call backend to start exam and update enrollment status
       const startResponse = await startExam(examId);
+      
+      // Store enrollment_id from response
+      const enrollment_id = (startResponse.payload as any).enrollment_id;
+      if (enrollment_id) {
+        setEnrollmentId(enrollment_id);
+      }
       
       // Use the started_at from backend response
       const startedAt = startResponse.payload.started_at 
@@ -959,17 +1123,42 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       timeRemaining: initialRemainingTime
     }));
 
-    // Request camera permission BEFORE entering fullscreen to avoid browser warnings
-    await enableCamera();
+    // Only enable camera and monitoring if monitoring is enabled for this exam
+    if (examMonitoringEnabled) {
+      // Request camera permission BEFORE entering fullscreen to avoid browser warnings
+      await enableCamera();
 
-    // Small delay to ensure permission dialog is closed before requesting fullscreen
-    // This prevents browser warnings about permission requests during fullscreen
-    await new Promise(resolve => setTimeout(resolve, 300));
+      // Small delay to ensure permission dialog is closed before requesting fullscreen
+      // This prevents browser warnings about permission requests during fullscreen
+      await new Promise(resolve => setTimeout(resolve, 300));
 
-    // Enter fullscreen mode after camera permission is granted and dialog is closed
-    enterFullscreen();
+      // Enter fullscreen mode after camera permission is granted and dialog is closed
+      enterFullscreen();
 
-    if (examConfig.proctoring.tabSwitchDetection) {
+      // Capture exam start snapshot after camera is ready
+      // Use a longer delay to ensure video stream is fully ready
+      if (enrollmentId) {
+        setTimeout(async () => {
+          if (proctoringActive && videoRef.current && videoRef.current.readyState >= 2) {
+            console.log('Capturing exam start snapshot...');
+            await captureSnapshot('exam_start');
+          } else {
+            console.warn('Video not ready for exam start snapshot, retrying...');
+            // Retry after another 2 seconds
+            setTimeout(async () => {
+              if (proctoringActive && videoRef.current && videoRef.current.readyState >= 2) {
+                await captureSnapshot('exam_start');
+              }
+            }, 2000);
+          }
+        }, 3000); // Wait 3 seconds for video to be ready
+      }
+    } else {
+      // If monitoring is disabled, just enter fullscreen without camera
+      enterFullscreen();
+    }
+
+    if (examConfig.proctoring.tabSwitchDetection && examMonitoringEnabled) {
       document.addEventListener('visibilitychange', handleTabSwitch);
     }
   };
@@ -1090,6 +1279,47 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Handle photo upload before exam starts - MUST be before any conditional returns
+  const handlePhotoUploaded = async (mediaId: string) => {
+    if (!enrollmentId) {
+      console.log('Photo uploaded before exam start. Will map to examMonitoring when exam starts.');
+      // Store the mediaId to map later when enrollmentId is available
+      setPendingPhotoMediaId(mediaId);
+      return;
+    }
+
+    try {
+      // Map uploaded photo to examMonitoring metadata exam_start
+      await updateMonitoring({
+        enrollment_id: enrollmentId,
+        snapshot_media_id: mediaId,
+        snapshot_type: 'exam_start',
+      });
+      console.log('Photo mapped to exam_start successfully');
+      setPendingPhotoMediaId(null);
+    } catch (error) {
+      console.error('Failed to map photo to examMonitoring:', error);
+    }
+  };
+
+  // Map pending photo when enrollmentId becomes available - MUST be before any conditional returns
+  useEffect(() => {
+    if (enrollmentId && pendingPhotoMediaId) {
+      updateMonitoring({
+        enrollment_id: enrollmentId,
+        snapshot_media_id: pendingPhotoMediaId,
+        snapshot_type: 'exam_start',
+      })
+        .then(() => {
+          console.log('Pending photo mapped to exam_start successfully');
+          setPendingPhotoMediaId(null);
+        })
+        .catch((error) => {
+          console.error('Failed to map pending photo to examMonitoring:', error);
+        });
+    }
+  }, [enrollmentId, pendingPhotoMediaId]);
+
   // Show loading state - AFTER all hooks
   if (loadingExam) {
     return (
@@ -1145,8 +1375,11 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   if (examState.phase === 'instructions') {
     return <ExamInstructionsPhase 
       examConfig={examConfig}
+      enrollmentId={enrollmentId}
       onStartExam={handleStartExam}
       onBackToSetup={() => setExamState(prev => ({ ...prev, phase: 'setup' }))}
+      onPhotoUploaded={examMonitoringEnabled ? handlePhotoUploaded : undefined}
+      monitoringEnabled={examMonitoringEnabled}
     />;
   }
 
@@ -1463,8 +1696,141 @@ function ExamSetupPhase({ examConfig, systemChecks, onSystemCheck, onProceedToIn
   );
 }
 
-function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup }: any) {
+function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollmentId, onPhotoUploaded, monitoringEnabled = true }: any) {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Start camera when component mounts - only if monitoring is enabled
+  useEffect(() => {
+    if (!monitoringEnabled) return; // Don't start camera if monitoring is disabled
+
+    const startCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          }
+        });
+        
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(err => {
+            console.error('Error playing video:', err);
+          });
+        }
+        setCameraError(null);
+      } catch (error: any) {
+        console.error('Failed to access camera:', error);
+        setCameraError('Camera access denied. Please enable camera permissions to capture your photo.');
+      }
+    };
+
+    startCamera();
+
+    // Cleanup on unmount
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+    };
+  }, [monitoringEnabled]);
+
+  const handleCapturePhoto = async () => {
+    if (!videoRef.current || !streamRef.current) {
+      alert('Camera not ready. Please wait for camera to initialize.');
+      return;
+    }
+
+    setIsCapturing(true);
+    try {
+      // Create canvas if it doesn't exist
+      if (!canvasRef.current) {
+        const canvas = document.createElement('canvas');
+        canvasRef.current = canvas;
+      }
+
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+
+      // Check if video is ready
+      if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+        alert('Video not ready. Please wait a moment and try again.');
+        setIsCapturing(false);
+        return;
+      }
+
+      // Set canvas dimensions to match video
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      // Draw current video frame to canvas
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        alert('Failed to capture photo. Please try again.');
+        setIsCapturing(false);
+        return;
+      }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert to blob and create preview
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          alert('Failed to capture photo. Please try again.');
+          setIsCapturing(false);
+          return;
+        }
+
+        // Create preview
+        const previewUrl = URL.createObjectURL(blob);
+        setPhotoPreview(previewUrl);
+
+        // Upload photo immediately after capture
+        setIsUploading(true);
+        try {
+          const { uploadMedia } = await import('../../../../services/api/media');
+          const mediaResponse = await uploadMedia(blob);
+          const mediaId = mediaResponse.id;
+
+          // Map to examMonitoring metadata exam_start
+          if (onPhotoUploaded) {
+            await onPhotoUploaded(mediaId);
+          }
+
+          // Stop camera stream after successful capture
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+          }
+          if (videoRef.current) {
+            videoRef.current.srcObject = null;
+          }
+
+          alert('Photo captured and uploaded successfully!');
+        } catch (error: any) {
+          console.error('Failed to upload photo:', error);
+          alert('Failed to upload photo. Please try again.');
+        } finally {
+          setIsUploading(false);
+          setIsCapturing(false);
+        }
+      }, 'image/jpeg', 0.8);
+    } catch (error: any) {
+      console.error('Error capturing photo:', error);
+      alert('Failed to capture photo. Please try again.');
+      setIsCapturing(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -1518,6 +1884,75 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup }: any) 
               </div>
             </div>
 
+            {/* Photo Capture Section - Only show if monitoring is enabled */}
+            {monitoringEnabled && (
+              <div className="space-y-3 pt-2 pb-2 border-t">
+                <h4 className="font-semibold text-base">Capture Your Photo (Optional but Recommended)</h4>
+              <div className="space-y-3">
+                {cameraError ? (
+                  <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <p className="text-sm text-destructive">{cameraError}</p>
+                  </div>
+                ) : (
+                  <>
+                    {!photoPreview ? (
+                      <div className="space-y-3">
+                        <div className="relative w-full max-w-md mx-auto aspect-video bg-black rounded-lg overflow-hidden border-2 border-border">
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                            style={{ transform: 'scaleX(-1)' }} // Mirror the video for better UX
+                          />
+                          {!streamRef.current && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                              <div className="text-center text-white">
+                                <Camera className="h-8 w-8 mx-auto mb-2 animate-pulse" />
+                                <p className="text-sm">Initializing camera...</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex justify-center">
+                          <Button
+                            type="button"
+                            onClick={handleCapturePhoto}
+                            disabled={isCapturing || isUploading || !streamRef.current}
+                            className="flex items-center gap-2"
+                            size="lg"
+                          >
+                            <Camera className="h-4 w-4" />
+                            {isCapturing ? 'Capturing...' : isUploading ? 'Uploading...' : 'Capture Photo'}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="relative w-full max-w-md mx-auto aspect-video bg-black rounded-lg overflow-hidden border-2 border-border">
+                          <img
+                            src={photoPreview}
+                            alt="Captured Photo"
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-2 right-2 bg-green-500 text-white px-2 py-1 rounded text-xs font-semibold">
+                            ✓ Captured
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground text-center">
+                          {enrollmentId 
+                            ? 'Photo captured and mapped to your exam record.' 
+                            : 'Photo captured. It will be mapped to your exam record when you start the exam.'}
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              </div>
+            )}
+
             {/* Agreement Checkbox */}
             <div className="flex items-start space-x-2 pt-2 pb-1">
               <Checkbox 
@@ -1560,7 +1995,7 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
   useEffect(() => {
     if (videoRef.current && streamRef?.current && proctoringActive) {
       videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(err => {
+      videoRef.current.play().catch((err: any) => {
         console.error('Error playing video:', err);
       });
     }
