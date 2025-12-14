@@ -88,12 +88,13 @@ export function EntityDetailPage({
   const { success, error, info } = useNotifications();
   const { user } = useAuth();
   
+  // COMMENTED OUT: Monitoring tab has been removed
   // Show notification when admin tries to access monitoring tab if disabled
-  useEffect(() => {
-    if (entityDetails.monitoring_enabled === false && activeTab === 'analytics' && user?.role === 'ADMIN') {
-      info('You don\'t have rights to see that. Monitoring has been disabled.');
-    }
-  }, [entityDetails.monitoring_enabled, activeTab, user?.role, info]);
+  // useEffect(() => {
+  //   if (entityDetails.monitoring_enabled === false && activeTab === 'analytics' && user?.role === 'ADMIN') {
+  //     info('You don\'t have rights to see that. Monitoring has been disabled.');
+  //   }
+  // }, [entityDetails.monitoring_enabled, activeTab, user?.role, info]);
 
   // Sync entityDetails when entity prop changes
   useEffect(() => {
@@ -262,7 +263,7 @@ export function EntityDetailPage({
 
         {/* Management Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="exams" className="flex items-center gap-2">
               <BookOpen className="h-4 w-4" />
               Manage Exams
@@ -275,10 +276,11 @@ export function EntityDetailPage({
               <FileText className="h-4 w-4" />
               Manage Submissions
             </TabsTrigger>
-            <TabsTrigger value="analytics" className="flex items-center gap-2">
+            {/* COMMENTED OUT: Monitoring tab removed from entity level */}
+            {/* <TabsTrigger value="analytics" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               Monitoring
-            </TabsTrigger>
+            </TabsTrigger> */}
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Settings
@@ -305,7 +307,8 @@ export function EntityDetailPage({
             <SubmissionsManagement currentEntity={entityDetails.id} />
           </TabsContent>
 
-          <TabsContent value="analytics" className="space-y-6">
+          {/* COMMENTED OUT: Monitoring tab content removed from entity level */}
+          {/* <TabsContent value="analytics" className="space-y-6">
             {entityDetails.monitoring_enabled === false && user?.role === 'ADMIN' ? (
               <Alert variant="destructive" className="border-destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -326,7 +329,7 @@ export function EntityDetailPage({
                 <AnalyticsDashboard currentEntity={entityDetails.id} />
               </>
             )}
-          </TabsContent>
+          </TabsContent> */}
 
           <TabsContent value="settings" className="space-y-6">
             <div className="flex justify-between items-start gap-4">

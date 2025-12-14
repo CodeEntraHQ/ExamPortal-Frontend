@@ -22,6 +22,7 @@ export interface BackendExam {
   status?: string;
   has_admission_form?: boolean;
   results_visible?: boolean;
+  monitoring_enabled?: boolean;
 }
 
 export interface BackendQuestion {
@@ -80,6 +81,7 @@ export interface UpdateExamPayload {
   duration_seconds?: number;
   active?: boolean;
   results_visible?: boolean;
+  monitoring_enabled?: boolean;
   metadata?: {
     totalMarks?: number;
     passingMarks?: number;

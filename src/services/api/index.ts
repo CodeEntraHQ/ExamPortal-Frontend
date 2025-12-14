@@ -51,3 +51,7 @@ export type { UserProfile, ApiUser, GetUsersResponse, InviteUserPayload, InviteU
 
 // Two Factor Auth API
 export { twoFactorAPI } from './twoFactorAuth';
+
+// Media + Monitoring APIs
+export { uploadMedia } from './media';
+export { createMonitoring, getMonitoringByEnrollment } from './examMonitoring';

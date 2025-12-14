@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useExamMonitoring } from '@/hooks/useExamMonitoring';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../shared/components/ui/card';
 import { Button } from '../../../../shared/components/ui/button';
 import { Progress } from '../../../../shared/components/ui/progress';
@@ -73,7 +74,7 @@ interface ExamState {
   };
 }
 
-export function StudentExamInterface({ examId, onComplete }: { examId: string; onComplete: () => void }) {
+export function StudentExamInterface({ examId, onComplete, enrollmentId }: { examId: string; onComplete: () => void; enrollmentId?: string }) {
   const [examState, setExamState] = useState<ExamState>({
     id: examId,
     title: 'Advanced Mathematics Final Exam',
@@ -215,6 +216,21 @@ export function StudentExamInterface({ examId, onComplete }: { examId: string; o
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const submitExamRef = useRef<(() => void) | null>(null);
 
+  const { captureSnapshot } = useExamMonitoring({
+    examId,
+    enabled: proctoringActive,
+    cameraRequired: false,
+    microphoneRequired: false,
+    enrollmentId: enrollmentId,
+    autoUploadSnapshots: true,
+    autoPostEvents: true,
+    externalVideoRef: videoRef,
+    onSnapshot: (data) => {
+      // optional hook callback - could be used for local preview or debugging
+      // console.debug('snapshot captured');
+    },
+  });
+
   // Timer effect
   useEffect(() => {
     const timer = setInterval(() => {
@@ -240,6 +256,14 @@ export function StudentExamInterface({ examId, onComplete }: { examId: string; o
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         setProctoringActive(true);
+        // Capture an initial exam-start snapshot if monitoring is enabled
+        try {
+          if (captureSnapshot) {
+            setTimeout(() => captureSnapshot(), 1000);
+          }
+        } catch (e) {
+          console.error('Failed to capture initial snapshot:', e);
+        }
       }
     } catch (error) {
       console.error('Camera setup failed:', error);

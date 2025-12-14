@@ -5,6 +5,7 @@ import { Badge } from '../../../shared/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../shared/components/ui/tabs';
 import { Progress } from '../../../shared/components/ui/progress';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../../shared/components/ui/dialog';
+import { ScrollArea } from '../../../shared/components/ui/scroll-area';
 import { Input } from '../../../shared/components/ui/input';
 import { Label } from '../../../shared/components/ui/label';
 import { Textarea } from '../../../shared/components/ui/textarea';
@@ -35,7 +36,11 @@ import {
   UserMinus,
   Loader2,
   RefreshCcw,
-  Search
+  Search,
+  Globe,
+  Maximize,
+  Camera,
+  AlertTriangle
 } from 'lucide-react';
 import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
 import { motion } from 'motion/react';
@@ -48,11 +53,105 @@ import { EditExamModal } from './EditExamModal';
 import { examApi, LeaderboardEntry, ExamEnrollment } from '../../../services/api/exam';
 import { admissionFormApi } from '../../../services/api/admissionForm';
 import { getUsers, ApiUser } from '../../../services/api/user';
+import { getMonitoringByExam, ExamMonitoringData } from '../../../services/api/examMonitoring';
+import { getApiUrl } from '../../../services/api/core';
+import { getEntityById } from '../../../services/api/entity';
 import { useNavigate } from 'react-router-dom';
 import { Checkbox } from '../../../shared/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../shared/components/ui/tooltip';
 import { Switch } from '../../../shared/components/ui/switch';
 import { SquarePen, FilePlus2, Share2, Check, MessageSquare } from 'lucide-react';
+
+// Component to display authenticated media images
+function AuthenticatedImage({ mediaId, alt, className, onError }: { mediaId: string; alt: string; className?: string; onError?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void }) {
+  const [imageSrc, setImageSrc] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const loadImage = async () => {
+      try {
+        setLoading(true);
+        setError(false);
+        const { authenticatedFetch } = await import('../../../services/api/core');
+        const response = await authenticatedFetch(getApiUrl(`/v1/medias?id=${mediaId}`));
+        const data = await response.json();
+        
+        if (data.payload?.media) {
+          // Handle buffer data - convert to blob URL
+          let blob: Blob;
+          if (data.payload.media instanceof Array || (typeof data.payload.media === 'object' && data.payload.media.type === 'Buffer')) {
+            // It's a buffer array
+            const buffer = data.payload.media.data || data.payload.media;
+            const uint8Array = new Uint8Array(buffer);
+            blob = new Blob([uint8Array], { type: 'image/jpeg' });
+          } else if (typeof data.payload.media === 'string') {
+            // It's base64 string
+            const base64Data = data.payload.media.replace(/^data:image\/\w+;base64,/, '');
+            const binaryString = atob(base64Data);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i);
+            }
+            blob = new Blob([bytes], { type: 'image/jpeg' });
+          } else {
+            throw new Error('Unknown media format');
+          }
+          
+          const blobUrl = URL.createObjectURL(blob);
+          setImageSrc(blobUrl);
+        } else {
+          throw new Error('No media data');
+        }
+      } catch (err) {
+        console.error('Failed to load image:', err);
+        setError(true);
+        if (onError) {
+          onError({} as React.SyntheticEvent<HTMLImageElement, Event>);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadImage();
+
+    // Cleanup blob URL on unmount or when mediaId changes
+    return () => {
+      if (imageSrc && imageSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(imageSrc);
+      }
+    };
+  }, [mediaId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (error || !imageSrc) {
+    return (
+      <div className={`${className} bg-muted rounded-lg border-2 border-dashed flex items-center justify-center`}>
+        <div className="text-center text-muted-foreground">
+          <Camera className="h-6 w-6 mx-auto mb-1 opacity-50" />
+          <p className="text-xs">Failed to load</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className={`${className} bg-muted rounded-lg border-2 border-dashed flex items-center justify-center`}>
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageSrc}
+      alt={alt}
+      className={className}
+      onError={onError}
+    />
+  );
+}
 
 interface ExamDetailPageProps {
   examId: string;
@@ -93,6 +192,15 @@ export function ExamDetailPage({
   const { user } = useAuth();
   const { currentExam, setCurrentExam } = useExamContext();
   const navigate = useNavigate();
+  
+  // Monitoring data state
+  const [monitoringData, setMonitoringData] = useState<ExamMonitoringData[]>([]);
+  const [loadingMonitoring, setLoadingMonitoring] = useState(false);
+  const [monitoringError, setMonitoringError] = useState<string | null>(null);
+  const [entityMonitoringEnabled, setEntityMonitoringEnabled] = useState<boolean>(true);
+  const [examMonitoringEnabled, setExamMonitoringEnabled] = useState<boolean>(true);
+  const [loadingEntityMonitoring, setLoadingEntityMonitoring] = useState(false);
+  const [selectedStudentForDetails, setSelectedStudentForDetails] = useState<string | null>(null);
   
   // Statistics state
   const [statistics, setStatistics] = useState<{
@@ -210,6 +318,92 @@ export function ExamDetailPage({
 
     checkAdmissionForm();
   }, [effectiveExamId, canManageQuestions]);
+
+  // Fetch entity monitoring status
+  useEffect(() => {
+    const fetchEntityMonitoringStatus = async () => {
+      if (entityId) {
+        setLoadingEntityMonitoring(true);
+        try {
+          const response = await getEntityById(entityId);
+          if (response?.payload) {
+            setEntityMonitoringEnabled(response.payload.monitoring_enabled !== false);
+          }
+        } catch (err) {
+          console.error('Failed to fetch entity monitoring status:', err);
+          // Default to enabled if fetch fails
+          setEntityMonitoringEnabled(true);
+        } finally {
+          setLoadingEntityMonitoring(false);
+        }
+      }
+    };
+
+    fetchEntityMonitoringStatus();
+  }, [entityId]);
+
+  // Show notification when admin tries to access monitoring tab if disabled
+  useEffect(() => {
+    if (entityMonitoringEnabled === false && activeTab === 'monitoring' && user?.role === 'ADMIN') {
+      info('You don\'t have rights to see that. Monitoring has been disabled.');
+    }
+  }, [entityMonitoringEnabled, activeTab, user?.role, info]);
+
+  // Fetch exam monitoring status
+  useEffect(() => {
+    const fetchExamMonitoringStatus = async () => {
+      if (!effectiveExamId) return;
+      
+      try {
+        const response = await examApi.getExamById(effectiveExamId);
+        if (response?.payload) {
+          setExamMonitoringEnabled(response.payload.monitoring_enabled !== false);
+        }
+      } catch (err) {
+        console.error('Failed to fetch exam monitoring status:', err);
+        // Default to enabled if fetch fails
+        setExamMonitoringEnabled(true);
+      }
+    };
+
+    fetchExamMonitoringStatus();
+  }, [effectiveExamId]);
+
+  // Fetch monitoring data when monitoring tab is active (only if monitoring is enabled)
+  useEffect(() => {
+    const fetchMonitoringData = async () => {
+      // Only fetch if monitoring is enabled and user has access
+      const isMonitoringDisabled = entityMonitoringEnabled === false && user?.role === 'ADMIN';
+      
+      // Don't fetch if exam monitoring is disabled
+      if (examMonitoringEnabled === false) {
+        setMonitoringData([]);
+        setMonitoringError(null);
+        return;
+      }
+      
+      if (activeTab === 'monitoring' && effectiveExamId && !isMonitoringDisabled) {
+        setLoadingMonitoring(true);
+        setMonitoringError(null);
+        try {
+          const response = await getMonitoringByExam(effectiveExamId);
+          setMonitoringData(response.payload.enrollments || []);
+        } catch (err: any) {
+          console.error('Failed to fetch monitoring data:', err);
+          setMonitoringError(err.message || 'Failed to load monitoring data');
+          setMonitoringData([]);
+        } finally {
+          setLoadingMonitoring(false);
+        }
+      } else if (activeTab === 'monitoring' && isMonitoringDisabled) {
+        // Clear data if monitoring is disabled
+        setMonitoringData([]);
+        setMonitoringError(null);
+      }
+    };
+
+    fetchMonitoringData();
+  }, [activeTab, effectiveExamId, entityMonitoringEnabled, examMonitoringEnabled, user?.role]);
 
   // Fetch representatives when modal opens
   useEffect(() => {
@@ -1146,7 +1340,7 @@ export function ExamDetailPage({
             </TabsTrigger>
             <TabsTrigger value="monitoring" className="flex items-center gap-2">
               <Monitor className="h-4 w-4" />
-              Live Monitor
+              Monitor
             </TabsTrigger>
             {canManageQuestions && (
               <TabsTrigger value="questions" className="flex items-center gap-2">
@@ -1560,8 +1754,33 @@ export function ExamDetailPage({
           )}
 
           <TabsContent value="monitoring" className="space-y-6">
+            {entityMonitoringEnabled === false && user?.role === 'ADMIN' ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <Alert variant="destructive" className="border-destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-base font-semibold">
+                      You don't have rights to view this feature.
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
+            ) : entityMonitoringEnabled === true && examMonitoringEnabled === false ? (
+              <Card>
+                <CardContent className="pt-6">
+                  <Alert variant="destructive" className="border-destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-base font-semibold">
+                      Monitoring is disabled for this exam.
+                    </AlertDescription>
+                  </Alert>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* COMMENTED OUT: Previous implementation with mock data */}
+            {/* 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Live Activity Timeline */}
               <Card>
                 <CardHeader>
                   <CardTitle>Activity Timeline</CardTitle>
@@ -1586,7 +1805,6 @@ export function ExamDetailPage({
                 </CardContent>
               </Card>
 
-              {/* Current Active Sessions */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -1623,6 +1841,364 @@ export function ExamDetailPage({
                 </CardContent>
               </Card>
             </div>
+            */}
+
+            {/* NEW: Real monitoring data from database */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Exam Monitoring Data</CardTitle>
+                    <CardDescription>All enrollment monitoring data with categorized snapshots</CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      if (effectiveExamId) {
+                        setLoadingMonitoring(true);
+                        try {
+                          const response = await getMonitoringByExam(effectiveExamId);
+                          setMonitoringData(response.payload.enrollments || []);
+                        } catch (err: any) {
+                          setMonitoringError(err.message || 'Failed to refresh monitoring data');
+                        } finally {
+                          setLoadingMonitoring(false);
+                        }
+                      }
+                    }}
+                    disabled={loadingMonitoring}
+                  >
+                    <RefreshCcw className={`h-4 w-4 mr-2 ${loadingMonitoring ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {loadingMonitoring ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                    <p className="text-muted-foreground mt-2">Loading monitoring data...</p>
+                  </div>
+                ) : monitoringError ? (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{monitoringError}</AlertDescription>
+                  </Alert>
+                ) : monitoringData.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Monitor className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>No monitoring data available for this exam.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {monitoringData.map((enrollmentData) => {
+                      // Check if student has any violations
+                      const hasViolations = 
+                        enrollmentData.monitoring.tab_switch_count > 0 ||
+                        enrollmentData.monitoring.fullscreen_exit_count > 0 ||
+                        (enrollmentData.monitoring.metadata.snapshots.multiple_face_detection?.length || 0) > 0 ||
+                        (enrollmentData.monitoring.metadata.snapshots.no_face_detection?.length || 0) > 0;
+
+                      return (
+                        <Card 
+                          key={enrollmentData.enrollment_id} 
+                          className={`border-2 transition-all hover:shadow-lg ${
+                            hasViolations 
+                              ? 'border-red-500 bg-red-50 dark:bg-red-950/20' 
+                              : 'border-border'
+                          }`}
+                        >
+                          <CardHeader className="pb-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <CardTitle className="text-base mb-1">
+                                  {enrollmentData.user?.name || 'Unknown Student'}
+                                </CardTitle>
+                                <CardDescription className="text-xs">
+                                  {enrollmentData.user?.email || 'No email'}
+                                </CardDescription>
+                                {enrollmentData.user?.roll_number && (
+                                  <CardDescription className="text-xs mt-0.5">
+                                    Roll: {enrollmentData.user.roll_number}
+                                  </CardDescription>
+                                )}
+                              </div>
+                              {hasViolations && (
+                                <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                              )}
+                            </div>
+                          </CardHeader>
+                          <CardContent className="pt-0 space-y-3">
+                            {/* Status Badge */}
+                            <div className="flex items-center justify-between">
+                              <Badge variant={enrollmentData.enrollment_status === 'ONGOING' ? 'default' : 'secondary'} className="text-xs">
+                                {enrollmentData.enrollment_status || 'N/A'}
+                              </Badge>
+                              {hasViolations && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Violations Detected
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Quick Stats */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="p-2 bg-muted/50 rounded text-center">
+                                <div className="flex items-center justify-center gap-1 mb-1">
+                                  <Globe className="h-3 w-3 text-muted-foreground" />
+                                  <span className="text-xs text-muted-foreground">Tab Switches</span>
+                                </div>
+                                <p className="text-lg font-bold">{enrollmentData.monitoring.tab_switch_count}</p>
+                              </div>
+                              <div className="p-2 bg-muted/50 rounded text-center">
+                                <div className="flex items-center justify-center gap-1 mb-1">
+                                  <Maximize className="h-3 w-3 text-muted-foreground" />
+                                  <span className="text-xs text-muted-foreground">Screen Exits</span>
+                                </div>
+                                <p className="text-lg font-bold">{enrollmentData.monitoring.fullscreen_exit_count}</p>
+                              </div>
+                            </div>
+
+                            {/* Violation Indicators */}
+                            {hasViolations && (
+                              <div className="space-y-1">
+                                {enrollmentData.monitoring.tab_switch_count > 0 && (
+                                  <div className="flex items-center gap-2 text-xs text-red-600">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    <span>{enrollmentData.monitoring.tab_switch_count} tab switch(es)</span>
+                                  </div>
+                                )}
+                                {enrollmentData.monitoring.fullscreen_exit_count > 0 && (
+                                  <div className="flex items-center gap-2 text-xs text-red-600">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    <span>{enrollmentData.monitoring.fullscreen_exit_count} screen exit(s)</span>
+                                  </div>
+                                )}
+                                {(enrollmentData.monitoring.metadata.snapshots.multiple_face_detection?.length || 0) > 0 && (
+                                  <div className="flex items-center gap-2 text-xs text-red-600">
+                                    <Users className="h-3 w-3" />
+                                    <span>{enrollmentData.monitoring.metadata.snapshots.multiple_face_detection.length} multiple face detection(s)</span>
+                                  </div>
+                                )}
+                                {(enrollmentData.monitoring.metadata.snapshots.no_face_detection?.length || 0) > 0 && (
+                                  <div className="flex items-center gap-2 text-xs text-red-600">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    <span>{enrollmentData.monitoring.metadata.snapshots.no_face_detection.length} no face detection(s)</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {/* View Details Button */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => setSelectedStudentForDetails(enrollmentData.enrollment_id)}
+                            >
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Full Screen Details Dialog */}
+                {selectedStudentForDetails && (() => {
+                  const enrollmentData = monitoringData.find(
+                    (data) => data.enrollment_id === selectedStudentForDetails
+                  );
+                  if (!enrollmentData) return null;
+
+                  return (
+                    <Dialog 
+                      open={!!selectedStudentForDetails} 
+                      onOpenChange={() => setSelectedStudentForDetails(null)}
+                    >
+                      <DialogContent className="max-w-[95vw] max-h-[95vh] w-[95vw] h-[95vh] p-6 flex flex-col overflow-hidden">
+                        <DialogHeader className="flex-shrink-0">
+                          <DialogTitle className="text-2xl">
+                            Monitoring Details - {enrollmentData.user?.name || 'Unknown Student'}
+                          </DialogTitle>
+                          <DialogDescription>
+                            {enrollmentData.user?.email || 'No email'}
+                            {enrollmentData.user?.roll_number && ` • Roll: ${enrollmentData.user.roll_number}`}
+                          </DialogDescription>
+                        </DialogHeader>
+                        
+                        <div className="flex-1 overflow-y-auto mt-4 pr-2" style={{ maxHeight: 'calc(95vh - 120px)' }}>
+                          <div className="space-y-6">
+                          {/* Monitoring Counts */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <Card>
+                              <CardContent className="p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Globe className="h-5 w-5 text-muted-foreground" />
+                                  <span className="text-sm font-medium">Tab Switches</span>
+                                </div>
+                                <p className="text-3xl font-bold">{enrollmentData.monitoring.tab_switch_count}</p>
+                              </CardContent>
+                            </Card>
+                            <Card>
+                              <CardContent className="p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Maximize className="h-5 w-5 text-muted-foreground" />
+                                  <span className="text-sm font-medium">Fullscreen Exits</span>
+                                </div>
+                                <p className="text-3xl font-bold">{enrollmentData.monitoring.fullscreen_exit_count}</p>
+                              </CardContent>
+                            </Card>
+                          </div>
+
+                          {/* Status Badge */}
+                          <div className="flex items-center gap-2">
+                            <Badge variant={enrollmentData.enrollment_status === 'ONGOING' ? 'default' : 'secondary'}>
+                              Status: {enrollmentData.enrollment_status || 'N/A'}
+                            </Badge>
+                            {(enrollmentData.monitoring.tab_switch_count > 0 ||
+                              enrollmentData.monitoring.fullscreen_exit_count > 0 ||
+                              (enrollmentData.monitoring.metadata.snapshots.multiple_face_detection?.length || 0) > 0 ||
+                              (enrollmentData.monitoring.metadata.snapshots.no_face_detection?.length || 0) > 0) && (
+                              <Badge variant="destructive">
+                                Violations Detected
+                              </Badge>
+                            )}
+                          </div>
+
+                          {/* Snapshots by Category */}
+                          <div className="space-y-4">
+                            <h4 className="font-semibold text-lg">Snapshots by Category</h4>
+                            
+                            {/* Exam Start Snapshot */}
+                            {enrollmentData.monitoring.metadata.snapshots.exam_start && (
+                              <div className="p-4 border rounded-lg">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Play className="h-4 w-4 text-primary" />
+                                  <span className="font-medium">Exam Start Snapshot</span>
+                                </div>
+                                <div className="relative group">
+                                  <AuthenticatedImage
+                                    mediaId={enrollmentData.monitoring.metadata.snapshots.exam_start}
+                                    alt="Exam Start Snapshot"
+                                    className="w-full max-w-md aspect-video object-cover rounded-lg border-2 border-primary/20 hover:border-primary transition-colors cursor-pointer"
+                                  />
+                                  <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                    Exam Start
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Regular Interval Snapshots */}
+                            {enrollmentData.monitoring.metadata.snapshots.regular_interval?.length > 0 && (
+                              <div className="p-4 border rounded-lg">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Clock className="h-4 w-4 text-blue-500" />
+                                  <span className="font-medium">Regular Interval Snapshots</span>
+                                  <Badge variant="outline">{enrollmentData.monitoring.metadata.snapshots.regular_interval.length} snapshots</Badge>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                  {enrollmentData.monitoring.metadata.snapshots.regular_interval.map((mediaId, idx) => (
+                                    <div key={idx} className="relative group">
+                                      <AuthenticatedImage
+                                        mediaId={mediaId}
+                                        alt={`Regular Interval Snapshot ${idx + 1}`}
+                                        className="w-full aspect-video object-cover rounded-lg border-2 border-transparent hover:border-primary transition-colors cursor-pointer"
+                                      />
+                                      <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-xs p-1 text-center opacity-0 group-hover:opacity-100 transition-opacity rounded-b-lg">
+                                        Snapshot {idx + 1}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Multiple Face Detection Snapshots */}
+                            {enrollmentData.monitoring.metadata.snapshots.multiple_face_detection?.length > 0 && (
+                              <div className="p-4 border rounded-lg border-orange-200 dark:border-orange-900">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <Users className="h-4 w-4 text-orange-500" />
+                                  <span className="font-medium">Multiple Face Detection Snapshots</span>
+                                  <Badge variant="outline" className="text-orange-600">{enrollmentData.monitoring.metadata.snapshots.multiple_face_detection.length} snapshots</Badge>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                  {enrollmentData.monitoring.metadata.snapshots.multiple_face_detection.map((mediaId, idx) => (
+                                    <div key={idx} className="relative group">
+                                      <AuthenticatedImage
+                                        mediaId={mediaId}
+                                        alt={`Multiple Face Detection Snapshot ${idx + 1}`}
+                                        className="w-full aspect-video object-cover rounded-lg border-2 border-orange-300 dark:border-orange-700 hover:border-orange-500 transition-colors cursor-pointer"
+                                      />
+                                      <div className="absolute bottom-0 left-0 right-0 bg-orange-600/90 text-white text-xs p-1 text-center opacity-0 group-hover:opacity-100 transition-opacity rounded-b-lg">
+                                        Multiple Faces {idx + 1}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* No Face Detection Snapshots */}
+                            {enrollmentData.monitoring.metadata.snapshots.no_face_detection?.length > 0 && (
+                              <div className="p-4 border rounded-lg border-red-200 dark:border-red-900">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                                  <span className="font-medium">No Face Detection Snapshots</span>
+                                  <Badge variant="outline" className="text-red-600">{enrollmentData.monitoring.metadata.snapshots.no_face_detection.length} snapshots</Badge>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                  {enrollmentData.monitoring.metadata.snapshots.no_face_detection.map((mediaId, idx) => (
+                                    <div key={idx} className="relative group">
+                                      <AuthenticatedImage
+                                        mediaId={mediaId}
+                                        alt={`No Face Detection Snapshot ${idx + 1}`}
+                                        className="w-full aspect-video object-cover rounded-lg border-2 border-red-300 dark:border-red-700 hover:border-red-500 transition-colors cursor-pointer"
+                                      />
+                                      <div className="absolute bottom-0 left-0 right-0 bg-red-600/90 text-white text-xs p-1 text-center opacity-0 group-hover:opacity-100 transition-opacity rounded-b-lg">
+                                        No Face {idx + 1}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Show message if no snapshots */}
+                            {!enrollmentData.monitoring.metadata.snapshots.exam_start &&
+                             (!enrollmentData.monitoring.metadata.snapshots.regular_interval || enrollmentData.monitoring.metadata.snapshots.regular_interval.length === 0) &&
+                             (!enrollmentData.monitoring.metadata.snapshots.multiple_face_detection || enrollmentData.monitoring.metadata.snapshots.multiple_face_detection.length === 0) &&
+                             (!enrollmentData.monitoring.metadata.snapshots.no_face_detection || enrollmentData.monitoring.metadata.snapshots.no_face_detection.length === 0) && (
+                              <div className="p-4 border rounded-lg bg-muted/30 text-center text-muted-foreground">
+                                <Camera className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                <p>No snapshots captured yet</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Metadata Info */}
+                          {enrollmentData.monitoring.created_at && (
+                            <div className="pt-4 border-t text-sm text-muted-foreground">
+                              <p>Monitoring created: {new Date(enrollmentData.monitoring.created_at).toLocaleString()}</p>
+                              {enrollmentData.monitoring.updated_at && (
+                                <p>Last updated: {new Date(enrollmentData.monitoring.updated_at).toLocaleString()}</p>
+                              )}
+                            </div>
+                          )}
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  );
+                })()}
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="analytics" className="space-y-6">
