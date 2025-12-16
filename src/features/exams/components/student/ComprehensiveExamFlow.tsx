@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getExamById, getQuestions, BackendExam, BackendQuestion, startExam, saveAnswer, deleteAnswer, submitExam, getSubmissions } from '../../../../services/api/exam';
 import { useFaceDetection } from '../../../../hooks/useFaceDetection';
+import { useAudioDetection } from '../../../../hooks/useAudioDetection';
 import { updateMonitoring } from '../../../../services/api/examMonitoring';
 import { uploadMedia } from '../../../../services/api/media';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../shared/components/ui/card';
@@ -136,9 +137,11 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
   const [fullscreenExitCount, setFullscreenExitCount] = useState(0);
+  const [voiceDetectionCount, setVoiceDetectionCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [faceDetectionWarning, setFaceDetectionWarning] = useState<string | null>(null);
+  const [voiceWarning, setVoiceWarning] = useState<string | null>(null);
   const [enrollmentId, setEnrollmentId] = useState<string | null>(null);
   const [pendingPhotoMediaId, setPendingPhotoMediaId] = useState<string | null>(null);
   const snapshotCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -202,6 +205,12 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
           enrollmentStatus = submissionsResponse.payload.enrollment_status;
           if (submissionsResponse.payload.started_at) {
             startedAt = new Date(submissionsResponse.payload.started_at);
+          }
+          
+          // Set enrollmentId from submissions response (needed for monitoring when resuming)
+          if (submissionsResponse.payload.enrollment_id) {
+            setEnrollmentId(submissionsResponse.payload.enrollment_id);
+            console.log('Set enrollmentId from submissions:', submissionsResponse.payload.enrollment_id);
           }
           
           // Restore answers from submissions
@@ -791,14 +800,21 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
 
   // Set up regular interval snapshots when exam is active
   useEffect(() => {
-    if (examState.phase === 'active' && proctoringActive && enrollmentId && examMonitoringEnabled) {
-      // Capture snapshot every 2 minutes (600000 ms)
+    if (examState.phase === 'active' && proctoringActive && enrollmentId && examMonitoringEnabled && examConfig) {
+      // Calculate interval as total exam timing / 8
+      // examConfig.duration is in minutes, so convert to seconds, divide by 8, then convert to milliseconds
+      const totalSeconds = examConfig.duration * 60; // Total exam duration in seconds
+      const intervalSeconds = totalSeconds / 8; // Divide by 8 as requested
+      const intervalMs = intervalSeconds * 1000; // Convert to milliseconds
+      
+      console.log(`Setting regular snapshot interval: ${intervalSeconds} seconds (${intervalMs}ms) for exam duration: ${examConfig.duration} minutes`);
+      
       regularSnapshotIntervalRef.current = setInterval(async () => {
         if (videoRef.current && videoRef.current.readyState >= 2) {
           console.log('Capturing regular interval snapshot...');
           await captureSnapshot('regular_interval');
         }
-      }, 2 * 60 * 1000); // 2 minutes
+      }, intervalMs);
 
       return () => {
         if (regularSnapshotIntervalRef.current) {
@@ -807,7 +823,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
         }
       };
     }
-  }, [examState.phase, proctoringActive, enrollmentId, examMonitoringEnabled]);
+  }, [examState.phase, proctoringActive, enrollmentId, examMonitoringEnabled, examConfig]);
 
   // Capture snapshot from video
   const captureSnapshot = async (snapshotType: 'regular_interval' | 'multiple_face_detection' | 'no_face_detection' | 'exam_start'): Promise<string | null> => {
@@ -866,6 +882,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
               // Preserve current counts
               tab_switch_count: tabSwitchCount,
               fullscreen_exit_count: fullscreenExitCount,
+              voice_detection_count: voiceDetectionCount,
             });
             console.log(`Monitoring updated successfully with ${snapshotType} snapshot`);
 
@@ -883,7 +900,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   };
 
   // Send monitoring update to backend
-  const sendMonitoringUpdate = async (updates: { tab_switch_count?: number; fullscreen_exit_count?: number }) => {
+  const sendMonitoringUpdate = async (updates: { tab_switch_count?: number; fullscreen_exit_count?: number; voice_detection_count?: number }) => {
     if (!enrollmentId || !examMonitoringEnabled) {
       console.warn('Cannot update monitoring: enrollmentId not set or monitoring is disabled');
       return;
@@ -923,6 +940,38 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       }
     },
     detectionInterval: 2000,
+  });
+
+  // Audio detection monitoring - MUST be called before any conditional returns
+  const audioDetection = useAudioDetection({
+    enabled: examState.phase === 'active' && examMonitoringEnabled,
+    onVoiceDetected: async () => {
+      console.log('onVoiceDetected callback triggered in ComprehensiveExamFlow');
+      // Show warning when voice is detected
+      setVoiceWarning('Voice detected. Please ensure you are alone during the exam.');
+      console.log('Voice warning set');
+      
+      // Clear warning after 5 seconds
+      setTimeout(() => {
+        setVoiceWarning(null);
+      }, 5000);
+      
+      // Increment voice detection count
+      if (enrollmentId && examMonitoringEnabled) {
+        setVoiceDetectionCount(prev => {
+          const newCount = prev + 1;
+          console.log('Updating voice detection count:', newCount);
+          sendMonitoringUpdate({ voice_detection_count: newCount }).catch((err) => {
+            console.error('Failed to update voice detection count:', err);
+          });
+          return newCount;
+        });
+      } else {
+        console.warn('Cannot update count - enrollmentId:', enrollmentId, 'monitoringEnabled:', examMonitoringEnabled);
+      }
+    },
+    energyThreshold: -50, // -50dB threshold
+    analysisInterval: 16, // ~60fps
   });
 
   // Fullscreen change listener - only active during exam
@@ -1075,16 +1124,21 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     }
   };
 
-  // Enable camera when exam starts
+  // Enable camera and microphone when exam starts
   const enableCamera = async () => {
     try {
-      // Request camera access
+      // Request camera and microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
           facingMode: 'user',
           width: { ideal: 640 },
           height: { ideal: 480 }
-        } 
+        },
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
       });
       
       // Store the stream in ref so we can use it when video element is available
@@ -1403,6 +1457,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
           videoRef={videoRef}
           streamRef={streamRef}
           faceDetectionWarning={faceDetectionWarning}
+          voiceWarning={voiceWarning}
         />
         {/* Fullscreen Exit Warning Dialog */}
         <Dialog open={showFullscreenExitWarning} onOpenChange={() => {}}>
@@ -1705,6 +1760,16 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  
+  // Microphone test state
+  const [micTestActive, setMicTestActive] = useState(false);
+  const [micTestError, setMicTestError] = useState<string | null>(null);
+  const [micLevel, setMicLevel] = useState<number>(0);
+  const [micTestStream, setMicTestStream] = useState<MediaStream | null>(null);
+  const micAudioContextRef = useRef<AudioContext | null>(null);
+  const micAnalyserRef = useRef<AnalyserNode | null>(null);
+  const micAnimationFrameRef = useRef<number | null>(null);
+  const micTestActiveRef = useRef<boolean>(false);
 
   // Start camera when component mounts - only if monitoring is enabled
   useEffect(() => {
@@ -1744,6 +1809,159 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
       }
     };
   }, [monitoringEnabled]);
+
+  // Microphone test functions
+  const startMicTest = async () => {
+    try {
+      setMicTestError(null);
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
+      
+      // Verify stream has audio tracks
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length === 0) {
+        throw new Error('No audio tracks found in stream');
+      }
+      
+      console.log('Microphone stream obtained:', {
+        tracks: audioTracks.length,
+        trackEnabled: audioTracks[0].enabled,
+        trackReadyState: audioTracks[0].readyState,
+      });
+      
+      setMicTestStream(stream);
+      setMicTestActive(true);
+      micTestActiveRef.current = true;
+      
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      const audioContext = new AudioContextClass();
+      micAudioContextRef.current = audioContext;
+      
+      console.log('AudioContext created, state:', audioContext.state);
+      
+      // Resume audio context if suspended (required for user interaction)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+        console.log('AudioContext resumed, new state:', audioContext.state);
+      }
+      
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.3; // Increased for smoother visualization
+      micAnalyserRef.current = analyser;
+      
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+      
+      console.log('Audio source connected to analyser');
+      
+      // For getByteTimeDomainData, we need a buffer of size fftSize
+      const bufferLength = analyser.fftSize;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      const updateMicLevel = () => {
+        // Check if test is still active using ref
+        if (!micTestActiveRef.current || !micAnalyserRef.current || !micAudioContextRef.current) {
+          if (micAnimationFrameRef.current) {
+            cancelAnimationFrame(micAnimationFrameRef.current);
+            micAnimationFrameRef.current = null;
+          }
+          return;
+        }
+        
+        // Ensure audio context is running
+        if (micAudioContextRef.current.state === 'suspended') {
+          micAudioContextRef.current.resume().catch(console.error);
+        }
+        
+        try {
+          // Use getByteTimeDomainData for amplitude detection
+          micAnalyserRef.current.getByteTimeDomainData(dataArray);
+        } catch (error) {
+          console.error('Error getting time domain data:', error);
+          return;
+        }
+        
+        // Calculate volume level
+        let sum = 0;
+        let max = 0;
+        let min = 255;
+        
+        for (let i = 0; i < dataArray.length; i++) {
+          const sample = dataArray[i];
+          min = Math.min(min, sample);
+          max = Math.max(max, sample);
+          // Normalize sample to -1 to 1 range
+          const normalized = (sample - 128) / 128;
+          sum += normalized * normalized;
+        }
+        
+        // Calculate RMS (Root Mean Square)
+        const rms = Math.sqrt(sum / dataArray.length);
+        
+        // Calculate peak-to-peak amplitude
+        const peakToPeak = max - min;
+        const peakToPeakNormalized = peakToPeak / 255;
+        
+        // Convert RMS to percentage (0-100)
+        // RMS for silence is ~0, for loud audio is ~0.3-0.5
+        const rmsLevel = Math.min(100, (rms * 200)); // Scale RMS to 0-100
+        
+        // Also use peak-to-peak as a backup
+        const peakLevel = Math.min(100, (peakToPeakNormalized * 100));
+        
+        // Use the maximum of both methods
+        const level = Math.max(rmsLevel, peakLevel);
+        
+        setMicLevel(level);
+        
+        // Continue the loop
+        micAnimationFrameRef.current = requestAnimationFrame(updateMicLevel);
+      };
+      
+      // Start monitoring after a small delay to ensure everything is set up
+      setTimeout(() => {
+        console.log('Starting microphone level monitoring...');
+        updateMicLevel();
+      }, 300);
+    } catch (error: any) {
+      console.error('Failed to access microphone:', error);
+      setMicTestError('Microphone access denied. Please enable microphone permissions.');
+      setMicTestActive(false);
+      micTestActiveRef.current = false;
+    }
+  };
+  
+  const stopMicTest = () => {
+    if (micTestStream) {
+      micTestStream.getTracks().forEach(track => track.stop());
+      setMicTestStream(null);
+    }
+    if (micAnimationFrameRef.current) {
+      cancelAnimationFrame(micAnimationFrameRef.current);
+      micAnimationFrameRef.current = null;
+    }
+    if (micAudioContextRef.current) {
+      micAudioContextRef.current.close().catch(console.error);
+      micAudioContextRef.current = null;
+    }
+    setMicTestActive(false);
+    micTestActiveRef.current = false;
+    setMicLevel(0);
+  };
+  
+  // Cleanup microphone test on unmount
+  useEffect(() => {
+    return () => {
+      stopMicTest();
+    };
+  }, []);
 
   const handleCapturePhoto = async () => {
     if (!videoRef.current || !streamRef.current) {
@@ -1953,6 +2171,104 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
               </div>
             )}
 
+            {/* Microphone Test Section - Only show if monitoring is enabled */}
+            {monitoringEnabled && (
+              <div className="space-y-3 pt-2 pb-2 border-t">
+                <h4 className="font-semibold text-base">Test Your Microphone (Optional but Recommended)</h4>
+                <div className="space-y-3">
+                  {micTestError ? (
+                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+                      <p className="text-sm text-destructive">{micTestError}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {!micTestActive ? (
+                        <div className="text-center">
+                          <Button
+                            type="button"
+                            onClick={startMicTest}
+                            variant="outline"
+                            className="flex items-center gap-2 mx-auto"
+                            size="lg"
+                          >
+                            <Mic className="h-4 w-4" />
+                            Test Microphone
+                          </Button>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Click to test your microphone before starting the exam
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div className="p-4 bg-muted/50 rounded-lg border-2 border-border">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <Mic className="h-4 w-4 text-primary" />
+                                <span className="text-sm font-medium">Microphone Level</span>
+                              </div>
+                              <span className="text-xs text-muted-foreground">{micLevel.toFixed(0)}%</span>
+                            </div>
+                            
+                            {/* Audio Level Bar */}
+                            <div className="w-full h-4 bg-muted rounded-full overflow-hidden mb-2">
+                              <div 
+                                className={`h-full transition-all duration-100 ${
+                                  micLevel > 70 ? 'bg-red-500' :
+                                  micLevel > 40 ? 'bg-yellow-500' :
+                                  micLevel > 10 ? 'bg-green-500' :
+                                  'bg-muted-foreground'
+                                }`}
+                                style={{ width: `${Math.min(100, micLevel)}%` }}
+                              />
+                            </div>
+                            
+                            {/* Waveform visualization */}
+                            <div className="flex items-end justify-between gap-0.5 h-6">
+                              {Array.from({ length: 15 }).map((_, i) => {
+                                const wave = Math.sin((Date.now() / 50 + i * 0.4) % (Math.PI * 2));
+                                const height = (Math.abs(wave) * (micLevel / 100) + 0.1) * 100;
+                                
+                                return (
+                                  <div
+                                    key={i}
+                                    className="flex-1 bg-primary transition-all duration-75"
+                                    style={{
+                                      height: `${Math.max(5, Math.min(100, height))}%`,
+                                      minHeight: '2px'
+                                    }}
+                                  />
+                                );
+                              })}
+                            </div>
+                            
+                            <div className="flex items-center gap-2 mt-2 text-xs">
+                              {micLevel > 10 ? (
+                                <span className="text-green-600 dark:text-green-400">✓ Microphone working</span>
+                              ) : (
+                                <span className="text-muted-foreground">Speak into your microphone</span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-center">
+                            <Button
+                              type="button"
+                              onClick={stopMicTest}
+                              variant="outline"
+                              className="flex items-center gap-2"
+                              size="sm"
+                            >
+                              Stop Test
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Agreement Checkbox */}
             <div className="flex items-start space-x-2 pt-2 pb-1">
               <Checkbox 
@@ -1988,7 +2304,7 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
   );
 }
 
-function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion, onNavigateToQuestion, onSubmitExam, formatTime, showCalculator, setShowCalculator, showWarning, setShowWarning, warningMessage, proctoringActive, videoRef, streamRef, faceDetectionWarning }: any) {
+function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion, onNavigateToQuestion, onSubmitExam, formatTime, showCalculator, setShowCalculator, showWarning, setShowWarning, warningMessage, proctoringActive, videoRef, streamRef, faceDetectionWarning, voiceWarning }: any) {
   const currentQuestion = examConfig.questions[examState.currentQuestion];
 
   // Set stream to video element when it becomes available
@@ -2273,12 +2589,31 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
 
       {/* Face Detection Warning Banner */}
       {faceDetectionWarning && (
-        <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[60] bg-destructive text-destructive-foreground px-6 py-3 rounded-lg shadow-lg border-2 border-destructive animate-pulse">
+        <div 
+          className="fixed left-1/2 transform -translate-x-1/2 z-[99999] bg-destructive text-destructive-foreground px-6 py-4 rounded-lg shadow-2xl border-2 border-destructive animate-pulse min-w-[400px] max-w-[90vw] pointer-events-auto"
+          style={{ bottom: '80px' }}
+        >
           <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5" />
-            <div>
-              <div className="font-semibold">Proctoring Alert</div>
-              <div className="text-sm">{faceDetectionWarning}</div>
+            <AlertTriangle className="h-6 w-6 flex-shrink-0" />
+            <div className="flex-1">
+              <div className="font-bold text-base mb-1">Proctoring Alert</div>
+              <div className="text-sm font-medium">{faceDetectionWarning}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Voice Detection Warning Banner */}
+      {voiceWarning && (
+        <div 
+          className="fixed left-1/2 transform -translate-x-1/2 z-[99999] bg-destructive text-destructive-foreground px-6 py-4 rounded-lg shadow-2xl border-2 border-destructive animate-pulse min-w-[400px] max-w-[90vw] pointer-events-auto"
+          style={{ bottom: faceDetectionWarning ? '140px' : '80px' }}
+        >
+          <div className="flex items-center gap-3">
+            <Mic className="h-6 w-6 flex-shrink-0" />
+            <div className="flex-1">
+              <div className="font-bold text-base mb-1">Audio Proctoring Alert</div>
+              <div className="text-sm font-medium">{voiceWarning}</div>
             </div>
           </div>
         </div>

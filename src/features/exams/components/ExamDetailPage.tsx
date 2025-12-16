@@ -40,7 +40,8 @@ import {
   Globe,
   Maximize,
   Camera,
-  AlertTriangle
+  AlertTriangle,
+  Mic
 } from 'lucide-react';
 import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
 import { motion } from 'motion/react';
@@ -1897,6 +1898,7 @@ export function ExamDetailPage({
                       const hasViolations = 
                         enrollmentData.monitoring.tab_switch_count > 0 ||
                         enrollmentData.monitoring.fullscreen_exit_count > 0 ||
+                        (enrollmentData.monitoring.voice_detection_count || 0) > 0 ||
                         (enrollmentData.monitoring.metadata.snapshots.multiple_face_detection?.length || 0) > 0 ||
                         (enrollmentData.monitoring.metadata.snapshots.no_face_detection?.length || 0) > 0;
 
@@ -1943,7 +1945,7 @@ export function ExamDetailPage({
                             </div>
 
                             {/* Quick Stats */}
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-3 gap-2">
                               <div className="p-2 bg-muted/50 rounded text-center">
                                 <div className="flex items-center justify-center gap-1 mb-1">
                                   <Globe className="h-3 w-3 text-muted-foreground" />
@@ -1957,6 +1959,13 @@ export function ExamDetailPage({
                                   <span className="text-xs text-muted-foreground">Screen Exits</span>
                                 </div>
                                 <p className="text-lg font-bold">{enrollmentData.monitoring.fullscreen_exit_count}</p>
+                              </div>
+                              <div className="p-2 bg-muted/50 rounded text-center">
+                                <div className="flex items-center justify-center gap-1 mb-1">
+                                  <Mic className="h-3 w-3 text-muted-foreground" />
+                                  <span className="text-xs text-muted-foreground">Voice Detections</span>
+                                </div>
+                                <p className="text-lg font-bold">{enrollmentData.monitoring.voice_detection_count || 0}</p>
                               </div>
                             </div>
 
@@ -1973,6 +1982,12 @@ export function ExamDetailPage({
                                   <div className="flex items-center gap-2 text-xs text-red-600">
                                     <AlertTriangle className="h-3 w-3" />
                                     <span>{enrollmentData.monitoring.fullscreen_exit_count} screen exit(s)</span>
+                                  </div>
+                                )}
+                                {(enrollmentData.monitoring.voice_detection_count || 0) > 0 && (
+                                  <div className="flex items-center gap-2 text-xs text-red-600">
+                                    <Mic className="h-3 w-3" />
+                                    <span>{enrollmentData.monitoring.voice_detection_count} voice detection(s)</span>
                                   </div>
                                 )}
                                 {(enrollmentData.monitoring.metadata.snapshots.multiple_face_detection?.length || 0) > 0 && (
@@ -2054,6 +2069,15 @@ export function ExamDetailPage({
                                 <p className="text-3xl font-bold">{enrollmentData.monitoring.fullscreen_exit_count}</p>
                               </CardContent>
                             </Card>
+                            <Card>
+                              <CardContent className="p-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <Mic className="h-5 w-5 text-muted-foreground" />
+                                  <span className="text-sm font-medium">Voice Detections</span>
+                                </div>
+                                <p className="text-3xl font-bold">{enrollmentData.monitoring.voice_detection_count || 0}</p>
+                              </CardContent>
+                            </Card>
                           </div>
 
                           {/* Status Badge */}
@@ -2063,6 +2087,7 @@ export function ExamDetailPage({
                             </Badge>
                             {(enrollmentData.monitoring.tab_switch_count > 0 ||
                               enrollmentData.monitoring.fullscreen_exit_count > 0 ||
+                              (enrollmentData.monitoring.voice_detection_count || 0) > 0 ||
                               (enrollmentData.monitoring.metadata.snapshots.multiple_face_detection?.length || 0) > 0 ||
                               (enrollmentData.monitoring.metadata.snapshots.no_face_detection?.length || 0) > 0) && (
                               <Badge variant="destructive">
