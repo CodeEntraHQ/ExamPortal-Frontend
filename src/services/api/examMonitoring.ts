@@ -4,6 +4,7 @@ export interface UpdateMonitoringPayload {
   enrollment_id: string;
   tab_switch_count?: number;
   fullscreen_exit_count?: number;
+  voice_detection_count?: number;
   snapshot_media_id?: string;
   snapshot_type?: 'regular_interval' | 'multiple_face_detection' | 'no_face_detection' | 'exam_start';
 }
@@ -14,6 +15,7 @@ export interface MonitoringResponse {
     enrollment_id: string;
     tab_switch_count: number;
     fullscreen_exit_count: number;
+    voice_detection_count: number;
     metadata: {
       snapshots: {
         regular_interval: string[];
@@ -83,6 +85,7 @@ export interface ExamMonitoringData {
     id?: string;
     tab_switch_count: number;
     fullscreen_exit_count: number;
+      voice_detection_count: number;
     metadata: {
       snapshots: {
         regular_interval: string[];

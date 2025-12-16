@@ -433,6 +433,7 @@ export async function submitExam(examId: string): Promise<{ payload: { completed
  */
 export async function getSubmissions(examId: string): Promise<{
   payload: {
+    enrollment_id?: string;
     enrollment_status: string;
     started_at?: string;
     submissions: Array<{
