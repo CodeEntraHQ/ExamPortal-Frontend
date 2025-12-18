@@ -4,6 +4,7 @@ import { useFaceDetection } from '../../../../hooks/useFaceDetection';
 import { useAudioDetection } from '../../../../hooks/useAudioDetection';
 import { updateMonitoring } from '../../../../services/api/examMonitoring';
 import { uploadMedia } from '../../../../services/api/media';
+import { getResumptionRequest, invalidateResumptionRequest } from '../../../../services/api/resumptionRequest';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../../../shared/components/ui/card';
 import { Button } from '../../../../shared/components/ui/button';
 import { Progress } from '../../../../shared/components/ui/progress';
@@ -140,6 +141,10 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
   const [voiceDetectionCount, setVoiceDetectionCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const tabSwitchCountRef = useRef(0); // Synchronous ref to track count
+  const isSubmittingRef = useRef(false);
+  const prevPhaseRef = useRef<'setup' | 'instructions' | '2fa' | 'active' | 'submitted' | 'results'>('setup'); // Track previous phase to detect exits
+  const hasInvalidatedOnActiveRef = useRef(false); // Track if we've invalidated resumption request when exam became active
   const [faceDetectionWarning, setFaceDetectionWarning] = useState<string | null>(null);
   const [voiceWarning, setVoiceWarning] = useState<string | null>(null);
   const [enrollmentId, setEnrollmentId] = useState<string | null>(null);
@@ -357,20 +362,74 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
           }
         });
         
-        // If exam is ongoing, restore state
+        // If exam is ongoing, restore state (check resumption approval if enrollmentId is available)
         if (enrollmentStatus === 'ONGOING' && startedAt) {
-          // Calculate remaining time dynamically from started_at and exam duration
-          const now = new Date();
-          const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
-          const remainingTime = Math.max(0, config.duration * 60 - elapsedSeconds);
+          // Helper function to restore exam state
+          const restoreExamState = () => {
+            // Calculate remaining time dynamically from started_at and exam duration
+            const now = new Date();
+            const elapsedSeconds = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
+            const remainingTime = Math.max(0, config.duration * 60 - elapsedSeconds);
+            
+            // Find the first unanswered question to restore currentQuestion, or last question if all answered
+            let restoredCurrentQuestion = 0;
+            const firstUnansweredIndex = config.questions.findIndex(q => {
+              const answer = restoredAnswers[q.id];
+              // Consider question unanswered if answer is null, undefined, empty string, or empty array
+              return answer === null || answer === undefined || 
+                     answer === '' || 
+                     (Array.isArray(answer) && answer.length === 0);
+            });
+            
+            if (firstUnansweredIndex >= 0) {
+              // Go to first unanswered question
+              restoredCurrentQuestion = firstUnansweredIndex;
+            } else {
+              // All questions answered, go to last question
+              restoredCurrentQuestion = config.questions.length - 1;
+            }
+            
+            const newPhase = remainingTime > 0 ? 'active' : 'results';
+            setExamState(prev => ({
+              ...prev,
+              phase: newPhase,
+              currentQuestion: restoredCurrentQuestion,
+              timeRemaining: remainingTime,
+              answers: restoredAnswers, // Use converted answers (IDs for display)
+              startTime: startedAt,
+            }));
+            // Initialize prevPhaseRef with the restored phase
+            prevPhaseRef.current = newPhase;
+          };
           
-          setExamState(prev => ({
-            ...prev,
-            phase: remainingTime > 0 ? 'active' : 'results',
-            timeRemaining: remainingTime,
-            answers: restoredAnswers, // Use converted answers (IDs for display)
-            startTime: startedAt,
-          }));
+          // If enrollmentId is available, check for resumption approval
+          if (enrollmentId) {
+            try {
+              // Check for resumption request approval
+              const resumptionResponse = await getResumptionRequest(enrollmentId);
+              const resumptionRequest = resumptionResponse.payload;
+              
+              // If there's a request but it's not approved, don't allow exam to continue
+              if (resumptionRequest.has_request && resumptionRequest.status !== 'APPROVED') {
+                if (resumptionRequest.status === 'PENDING') {
+                  setExamError('Your resumption request is pending approval. Please wait for admin approval before continuing the exam.');
+                } else if (resumptionRequest.status === 'REJECTED') {
+                  setExamError(`Your resumption request was rejected. ${resumptionRequest.rejection_reason ? `Reason: ${resumptionRequest.rejection_reason}` : 'Please contact your administrator.'}`);
+                }
+                return; // Don't restore exam state
+              }
+              
+              // Request is approved or doesn't exist - restore exam state
+              restoreExamState();
+            } catch (resumptionError: any) {
+              // If we can't check resumption status, log but still restore (for backward compatibility)
+              console.warn('Failed to check resumption request status:', resumptionError);
+              restoreExamState();
+            }
+          } else {
+            // No enrollmentId yet (first time starting) - restore exam state directly
+            restoreExamState();
+          }
         }
       } catch (error: any) {
         console.error('Failed to fetch exam data:', error);
@@ -396,49 +455,60 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     if (examState.phase !== 'active' || !isFullscreen || !enrollmentId) return;
 
     let lastTabSwitchTime = 0;
-    const TAB_SWITCH_DEBOUNCE_MS = 1000; // Prevent counting same switch multiple times
+    const TAB_SWITCH_DEBOUNCE_MS = 500; // Prevent counting same switch multiple times (reduced from 1000ms)
     let visibilityCheckInterval: ReturnType<typeof setInterval> | null = null;
+    let lastVisibilityState = !document.hidden; // Track previous visibility state
     
     // Helper function to handle tab switch detection
     const handleTabSwitchDetection = () => {
+      // Prevent if already submitting
+      if (isSubmittingRef.current) {
+        return;
+      }
+
       const now = Date.now();
-      // Debounce: only count if it's been more than 1 second since last detection
+      // Debounce: only count if it's been more than debounce time since last detection
       if (now - lastTabSwitchTime < TAB_SWITCH_DEBOUNCE_MS) {
         return;
       }
       lastTabSwitchTime = now;
       
-      setTabSwitchCount(prev => {
-        const newCount = prev + 1;
-        
-        // Save to backend immediately - enrollmentId is guaranteed to be available here
-        sendMonitoringUpdate({ tab_switch_count: newCount }).catch((err) => {
-          console.error('Failed to update tab switch count:', err);
-        });
-        
-        // If 3 or more switches, show warning and auto-submit
-        if (newCount >= 3) {
-          if (newCount === 3) {
-            // First time reaching 3, show final warning
-            setWarningMessage(`WARNING: Tab switching detected ${newCount} times. If you switch tabs one more time, the exam will be automatically submitted.`);
-            setShowWarning(true);
-          } else if (newCount > 3) {
-            // More than 3 times, auto-submit
-            setWarningMessage(`Tab switching detected ${newCount} times. The exam is being automatically submitted.`);
-            setShowWarning(true);
-            // Auto-submit the exam
-            setTimeout(() => {
-              handleSubmitExam();
-            }, 1000);
-          }
-        } else {
-          // Less than 3, show regular warning
-          setWarningMessage(`Tab/window switching detected (${newCount} time${newCount > 1 ? 's' : ''}). Please stay focused on the exam. ${3 - newCount} warning${3 - newCount > 1 ? 's' : ''} remaining before auto-submit.`);
-          setShowWarning(true);
-        }
-        
-        return newCount;
+      // Use ref for synchronous counting to prevent race conditions
+      tabSwitchCountRef.current += 1;
+      const newCount = tabSwitchCountRef.current;
+      
+      // Update state for UI
+      setTabSwitchCount(newCount);
+      
+      // Save to backend immediately - enrollmentId is guaranteed to be available here
+      sendMonitoringUpdate({ tab_switch_count: newCount }).catch((err) => {
+        console.error('Failed to update tab switch count:', err);
       });
+      
+      // If 3 or more switches, auto-submit immediately
+      if (newCount >= 3) {
+        // Prevent multiple submissions
+        if (isSubmittingRef.current) {
+          return;
+        }
+        isSubmittingRef.current = true;
+        
+        // Auto-submit immediately on 3rd attempt
+        setWarningMessage(`Tab switching detected ${newCount} times. The exam is being automatically submitted.`);
+        setShowWarning(true);
+        
+        // Auto-submit the exam immediately without delay
+        handleSubmitExam().catch((error) => {
+          console.error('Failed to auto-submit exam:', error);
+          setWarningMessage('Failed to submit exam automatically. Please contact support.');
+          setShowWarning(true);
+          isSubmittingRef.current = false; // Reset on error
+        });
+      } else {
+        // Less than 3, show regular warning
+        setWarningMessage(`Tab/window switching detected (${newCount} time${newCount > 1 ? 's' : ''}). Please stay focused on the exam. ${3 - newCount} warning${3 - newCount > 1 ? 's' : ''} remaining before auto-submit.`);
+        setShowWarning(true);
+      }
     };
 
     // Comprehensive keyboard shortcut blocking
@@ -485,10 +555,10 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
     };
 
     // Window blur/focus handlers - detect when window loses focus
+    // Note: We don't count blur events separately to avoid double counting
+    // Visibility change is more reliable for tab switching detection
     const handleWindowBlur = () => {
       if (examState.phase === 'active') {
-        handleTabSwitchDetection();
-        
         // Try to refocus the window after a short delay
         setTimeout(() => {
           if (window.focus) {
@@ -514,31 +584,42 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       }
     };
 
-    // Enhanced visibility change detection
+    // Enhanced visibility change detection - PRIMARY detection method
     const handleVisibilityChange = () => {
-      if (document.hidden && examState.phase === 'active') {
-        handleTabSwitchDetection();
+      if (examState.phase === 'active') {
+        // Only count when transitioning from visible to hidden (actual tab switch)
+        const isNowHidden = document.hidden;
+        if (isNowHidden && !lastVisibilityState) {
+          // State changed from visible to hidden - this is a real tab switch
+          lastVisibilityState = true;
+          handleTabSwitchDetection();
+        } else if (!isNowHidden) {
+          // Tab became visible again
+          lastVisibilityState = false;
+        }
         
-        // Try to refocus immediately
-        setTimeout(() => {
-          if (window.focus) {
-            window.focus();
-          }
-          // Try to re-enter fullscreen if we lost it
-          if (!document.fullscreenElement) {
-            enterFullscreen();
-          }
-        }, 100);
+        if (isNowHidden) {
+          // Try to refocus immediately
+          setTimeout(() => {
+            if (window.focus) {
+              window.focus();
+            }
+            // Try to re-enter fullscreen if we lost it
+            if (!document.fullscreenElement) {
+              enterFullscreen();
+            }
+          }, 100);
+        }
       }
     };
 
     // Continuous visibility monitoring (polling as backup)
+    // Removed automatic counting from polling to prevent double counting
+    // Only use for refocusing, not for detection
     const startVisibilityMonitoring = () => {
       visibilityCheckInterval = setInterval(() => {
-        if (examState.phase === 'active' && document.hidden) {
-          handleTabSwitchDetection();
-          
-          // Aggressively try to refocus
+        if (examState.phase === 'active' && document.hidden && !isSubmittingRef.current) {
+          // Only try to refocus, don't count again (visibilitychange already handled it)
           if (window.focus) {
             window.focus();
           }
@@ -775,8 +856,53 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
       if (videoRef.current) {
         videoRef.current.srcObject = null;
       }
+      
+      // Invalidate resumption request when component unmounts if exam was active
+      // This ensures student needs to request approval again if they exit
+      if (examState.phase === 'active' && enrollmentId) {
+        invalidateResumptionRequest(enrollmentId).catch(err => {
+          console.warn('Failed to invalidate resumption request on unmount:', err);
+        });
+      }
     };
-  }, []);
+  }, [examState.phase, enrollmentId]);
+
+  // Invalidate resumption request immediately when exam becomes active
+  // This ensures that once the exam starts, the approved request is marked as "used"
+  // If the browser closes, the next resume attempt will require a new request
+  useEffect(() => {
+    if (examState.phase === 'active' && enrollmentId && !hasInvalidatedOnActiveRef.current) {
+      // Exam just became active - invalidate any approved resumption request immediately
+      // This marks the request as "used" so closing browser will require new approval
+      hasInvalidatedOnActiveRef.current = true;
+      invalidateResumptionRequest(enrollmentId).catch(err => {
+        console.warn('Failed to invalidate resumption request when exam became active:', err);
+      });
+    }
+    
+    // Reset flag when exam is no longer active
+    if (examState.phase !== 'active') {
+      hasInvalidatedOnActiveRef.current = false;
+    }
+    
+    prevPhaseRef.current = examState.phase;
+  }, [examState.phase, enrollmentId]);
+
+  // Invalidate resumption request when exam phase changes away from active
+  // This ensures student needs to request approval again if they exit
+  useEffect(() => {
+    // Check if phase changed from 'active' to something else (and not submitted/results)
+    if (prevPhaseRef.current === 'active' && 
+        examState.phase !== 'active' && 
+        examState.phase !== 'submitted' && 
+        examState.phase !== 'results' &&
+        enrollmentId) {
+      // Student exited the exam - invalidate the approved resumption request
+      invalidateResumptionRequest(enrollmentId).catch(err => {
+        console.warn('Failed to invalidate resumption request on phase change:', err);
+      });
+    }
+  }, [examState.phase, enrollmentId]);
 
   // Stop camera when exam phase is no longer active
   useEffect(() => {
@@ -1099,6 +1225,11 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
 
   const handleStartExam = async () => {
     if (!examConfig) return;
+    
+    // Reset tab switch tracking when exam starts
+    tabSwitchCountRef.current = 0;
+    isSubmittingRef.current = false;
+    setTabSwitchCount(0);
     
     try {
       // Call backend to start exam and update enrollment status
@@ -1457,6 +1588,7 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
           videoRef={videoRef}
           streamRef={streamRef}
           faceDetectionWarning={faceDetectionWarning}
+          onDismissFaceDetectionWarning={() => setFaceDetectionWarning(null)}
           voiceWarning={voiceWarning}
         />
         {/* Fullscreen Exit Warning Dialog */}
@@ -1477,15 +1609,23 @@ export function ComprehensiveExamFlow({ examId, onComplete, onCancel }: Comprehe
               </p>
               <div className="flex flex-col gap-2">
                 <Button 
-                  onClick={handleFullscreenGoBack}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFullscreenGoBack();
+                  }}
                   className="w-full"
+                  style={{ pointerEvents: 'auto', cursor: 'pointer' }}
                 >
                   Go Back to Fullscreen
                 </Button>
                 <Button 
-                  onClick={handleFullscreenExit}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFullscreenExit();
+                  }}
                   variant="destructive"
                   className="w-full"
+                  style={{ pointerEvents: 'auto', cursor: 'pointer' }}
                 >
                   Exit and Submit Exam
                 </Button>
@@ -1757,6 +1897,8 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
   const [isUploading, setIsUploading] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [photoCaptured, setPhotoCaptured] = useState(false); // Track if photo is captured
+  const [micTestCompleted, setMicTestCompleted] = useState(false); // Track if mic test is completed
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -1838,6 +1980,9 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
       setMicTestStream(stream);
       setMicTestActive(true);
       micTestActiveRef.current = true;
+      // Mark mic test as completed when test starts successfully and stream is obtained
+      // This ensures microphone access is working
+      setMicTestCompleted(true);
       
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       const audioContext = new AudioContextClass();
@@ -2025,6 +2170,9 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
             await onPhotoUploaded(mediaId);
           }
 
+          // Mark photo as captured
+          setPhotoCaptured(true);
+
           // Stop camera stream after successful capture
           if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
@@ -2105,7 +2253,16 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
             {/* Photo Capture Section - Only show if monitoring is enabled */}
             {monitoringEnabled && (
               <div className="space-y-3 pt-2 pb-2 border-t">
-                <h4 className="font-semibold text-base">Capture Your Photo (Optional but Recommended)</h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-base">Capture Your Photo</h4>
+                  <span className="text-destructive text-sm font-medium">(Required)</span>
+                  {photoCaptured && (
+                    <span className="text-green-600 dark:text-green-400 text-sm font-medium flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" />
+                      Completed
+                    </span>
+                  )}
+                </div>
               <div className="space-y-3">
                 {cameraError ? (
                   <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -2174,7 +2331,16 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
             {/* Microphone Test Section - Only show if monitoring is enabled */}
             {monitoringEnabled && (
               <div className="space-y-3 pt-2 pb-2 border-t">
-                <h4 className="font-semibold text-base">Test Your Microphone (Optional but Recommended)</h4>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-semibold text-base">Test Your Microphone</h4>
+                  <span className="text-destructive text-sm font-medium">(Required)</span>
+                  {micTestCompleted && (
+                    <span className="text-green-600 dark:text-green-400 text-sm font-medium flex items-center gap-1">
+                      <CheckCircle className="h-4 w-4" />
+                      Completed
+                    </span>
+                  )}
+                </div>
                 <div className="space-y-3">
                   {micTestError ? (
                     <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
@@ -2283,19 +2449,38 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-2">
-              <Button onClick={onBackToSetup} variant="outline" className="flex-1">
-                Back
-              </Button>
-              <Button 
-                onClick={onStartExam}
-                disabled={!agreedToTerms}
-                className="flex-1 bg-primary hover:bg-primary/90"
-                size="lg"
-              >
-                <Play className="h-4 w-4 mr-2" />
-                Start Exam
-              </Button>
+            <div className="space-y-3 pt-2">
+              {/* Show requirements message if button is disabled */}
+              {(!agreedToTerms || (monitoringEnabled && (!photoCaptured || !micTestCompleted))) && (
+                <div className="p-3 bg-muted/50 border border-border rounded-lg">
+                  <p className="text-sm font-medium mb-1">Please complete the following to start the exam:</p>
+                  <ul className="text-xs text-muted-foreground space-y-1 ml-4 list-disc">
+                    {!agreedToTerms && (
+                      <li>Agree to the exam terms and conditions</li>
+                    )}
+                    {monitoringEnabled && !photoCaptured && (
+                      <li>Capture your photo (Required)</li>
+                    )}
+                    {monitoringEnabled && !micTestCompleted && (
+                      <li>Test your microphone (Required)</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <Button onClick={onBackToSetup} variant="outline" className="flex-1">
+                  Back
+                </Button>
+                <Button 
+                  onClick={onStartExam}
+                  disabled={!agreedToTerms || (monitoringEnabled && (!photoCaptured || !micTestCompleted))}
+                  className="flex-1 bg-primary hover:bg-primary/90"
+                  size="lg"
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Start Exam
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -2304,7 +2489,7 @@ function ExamInstructionsPhase({ examConfig, onStartExam, onBackToSetup, enrollm
   );
 }
 
-function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion, onNavigateToQuestion, onSubmitExam, formatTime, showCalculator, setShowCalculator, showWarning, setShowWarning, warningMessage, proctoringActive, videoRef, streamRef, faceDetectionWarning, voiceWarning }: any) {
+function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion, onNavigateToQuestion, onSubmitExam, formatTime, showCalculator, setShowCalculator, showWarning, setShowWarning, warningMessage, proctoringActive, videoRef, streamRef, faceDetectionWarning, onDismissFaceDetectionWarning, voiceWarning }: any) {
   const currentQuestion = examConfig.questions[examState.currentQuestion];
 
   // Set stream to video element when it becomes available
@@ -2590,7 +2775,7 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
       {/* Face Detection Warning Banner */}
       {faceDetectionWarning && (
         <div 
-          className="fixed left-1/2 transform -translate-x-1/2 z-[99999] bg-destructive text-destructive-foreground px-6 py-4 rounded-lg shadow-2xl border-2 border-destructive animate-pulse min-w-[400px] max-w-[90vw] pointer-events-auto"
+          className="fixed left-1/2 transform -translate-x-1/2 z-40 bg-destructive text-destructive-foreground px-6 py-4 rounded-lg shadow-2xl border-2 border-destructive min-w-[400px] max-w-[90vw] pointer-events-auto"
           style={{ bottom: '80px' }}
         >
           <div className="flex items-center gap-3">
@@ -2599,6 +2784,20 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
               <div className="font-bold text-base mb-1">Proctoring Alert</div>
               <div className="text-sm font-medium">{faceDetectionWarning}</div>
             </div>
+            {onDismissFaceDetectionWarning && (
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDismissFaceDetectionWarning();
+                }}
+                variant="secondary"
+                size="sm"
+                className="ml-2 bg-destructive-foreground text-destructive hover:bg-destructive-foreground/90 flex-shrink-0"
+                style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+              >
+                Understood
+              </Button>
+            )}
           </div>
         </div>
       )}
@@ -2606,7 +2805,7 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
       {/* Voice Detection Warning Banner */}
       {voiceWarning && (
         <div 
-          className="fixed left-1/2 transform -translate-x-1/2 z-[99999] bg-destructive text-destructive-foreground px-6 py-4 rounded-lg shadow-2xl border-2 border-destructive animate-pulse min-w-[400px] max-w-[90vw] pointer-events-auto"
+          className="fixed left-1/2 transform -translate-x-1/2 z-40 bg-destructive text-destructive-foreground px-6 py-4 rounded-lg shadow-2xl border-2 border-destructive min-w-[400px] max-w-[90vw] pointer-events-auto"
           style={{ bottom: faceDetectionWarning ? '140px' : '80px' }}
         >
           <div className="flex items-center gap-3">
@@ -2817,7 +3016,13 @@ function ActiveExamPhase({ examConfig, examState, onAnswerChange, onFlagQuestion
               <div className="space-y-4">
                 <p>{warningMessage}</p>
                 <div className="flex justify-end">
-                  <Button onClick={() => setShowWarning(false)}>
+                  <Button 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowWarning(false);
+                    }}
+                    style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                  >
                     Understood
                   </Button>
                 </div>
