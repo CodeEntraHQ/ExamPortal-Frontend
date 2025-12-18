@@ -674,7 +674,7 @@ export function StudentExamInterface({ examId, onComplete, enrollmentId }: { exa
             />
             {currentQuestion.metadata?.minWords && (
               <div className="text-sm text-muted-foreground">
-                Word count: {(answer || '').split(' ').filter(word => word.length > 0).length} / {currentQuestion.metadata.minWords} minimum
+                Word count: {(answer || '').split(' ').filter((word: string) => word.length > 0).length} / {currentQuestion.metadata.minWords} minimum
               </div>
             )}
           </div>
@@ -729,7 +729,7 @@ export function StudentExamInterface({ examId, onComplete, enrollmentId }: { exa
           <MatchingQuestion 
             question={currentQuestion}
             answer={answer}
-            onChange={(newAnswer) => handleAnswerChange(currentQuestion.id, newAnswer)}
+            onChange={(newAnswer: any) => handleAnswerChange(currentQuestion.id, newAnswer)}
           />
         );
 
@@ -738,7 +738,7 @@ export function StudentExamInterface({ examId, onComplete, enrollmentId }: { exa
           <OrderingQuestion 
             question={currentQuestion}
             answer={answer}
-            onChange={(newAnswer) => handleAnswerChange(currentQuestion.id, newAnswer)}
+            onChange={(newAnswer: any) => handleAnswerChange(currentQuestion.id, newAnswer)}
           />
         );
 
@@ -747,7 +747,7 @@ export function StudentExamInterface({ examId, onComplete, enrollmentId }: { exa
           <CodeEditor 
             question={currentQuestion}
             answer={answer}
-            onChange={(newAnswer) => handleAnswerChange(currentQuestion.id, newAnswer)}
+            onChange={(newAnswer: any) => handleAnswerChange(currentQuestion.id, newAnswer)}
           />
         );
 

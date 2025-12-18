@@ -2192,14 +2192,10 @@ export function ExamDetailPage({
                                     // Close the dialog
                                     setSelectedStudentForDetails(null);
                                     // Show success notification
-                                    if (notifications) {
-                                      notifications.success('Monitoring data deleted successfully');
-                                    }
+                                    success('Monitoring data deleted successfully');
                                   } catch (error: any) {
                                     console.error('Failed to delete monitoring data:', error);
-                                    if (notifications) {
-                                      notifications.error(error.message || 'Failed to delete monitoring data');
-                                    }
+                                    error(error.message || 'Failed to delete monitoring data');
                                   }
                                 }
                               }}
