@@ -215,6 +215,8 @@ export function StudentExamInterface({ examId, onComplete, enrollmentId }: { exa
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const submitExamRef = useRef<(() => void) | null>(null);
+  const tabSwitchCountRef = useRef(0); // Synchronous ref to track count
+  const isSubmittingRef = useRef(false); // Prevent multiple submissions
 
   const { captureSnapshot } = useExamMonitoring({
     examId,
@@ -284,56 +286,70 @@ export function StudentExamInterface({ examId, onComplete, enrollmentId }: { exa
     if (!examState.proctoring.lockdownEnabled) return;
 
     let lastTabSwitchTime = 0;
-    const TAB_SWITCH_DEBOUNCE_MS = 1000; // Prevent counting same switch multiple times
+    const TAB_SWITCH_DEBOUNCE_MS = 500; // Prevent counting same switch multiple times (reduced from 1000ms)
     let visibilityCheckInterval: ReturnType<typeof setInterval> | null = null;
+    let lastVisibilityState = !document.hidden; // Track previous visibility state
 
     // Helper function to handle tab switch detection
     const handleTabSwitchDetection = () => {
+      // Prevent if already submitting
+      if (isSubmittingRef.current) {
+        return;
+      }
+
       const now = Date.now();
-      // Debounce: only count if it's been more than 1 second since last detection
+      // Debounce: only count if it's been more than debounce time since last detection
       if (now - lastTabSwitchTime < TAB_SWITCH_DEBOUNCE_MS) {
         return;
       }
       lastTabSwitchTime = now;
       
-      setTabSwitchCount(prev => {
-        const newCount = prev + 1;
-        
-        // If 3 or more switches, show warning and auto-submit
-        if (newCount >= 3) {
-          if (newCount === 3) {
-            // First time reaching 3, show final warning
-            setWarningMessage(`WARNING: Tab switching detected ${newCount} times. If you switch tabs one more time, the exam will be automatically submitted.`);
-            setShowWarning(true);
-          } else if (newCount > 3) {
-            // More than 3 times, auto-submit
-            setWarningMessage(`Tab switching detected ${newCount} times. The exam is being automatically submitted.`);
-            setShowWarning(true);
-            // Auto-submit the exam
-            setTimeout(() => {
-              if (submitExamRef.current) {
-                submitExamRef.current();
-              }
-            }, 1000);
-          }
-        } else {
-          // Less than 3, show regular warning
-          setWarningMessage(`Tab/window switching detected (${newCount} time${newCount > 1 ? 's' : ''}). Please stay focused on the exam. ${3 - newCount} warning${3 - newCount > 1 ? 's' : ''} remaining before auto-submit.`);
-          setShowWarning(true);
+      // Use ref for synchronous counting to prevent race conditions
+      tabSwitchCountRef.current += 1;
+      const newCount = tabSwitchCountRef.current;
+      
+      // Update state for UI
+      setTabSwitchCount(newCount);
+      
+      // If 3 or more switches, auto-submit immediately
+      if (newCount >= 3) {
+        // Prevent multiple submissions
+        if (isSubmittingRef.current) {
+          return;
         }
+        isSubmittingRef.current = true;
         
-        return newCount;
-      });
+        // Auto-submit immediately on 3rd attempt
+        setWarningMessage(`Tab switching detected ${newCount} times. The exam is being automatically submitted.`);
+        setShowWarning(true);
+        // Auto-submit the exam immediately without delay
+        if (submitExamRef.current) {
+          submitExamRef.current();
+        }
+      } else {
+        // Less than 3, show regular warning
+        setWarningMessage(`Tab/window switching detected (${newCount} time${newCount > 1 ? 's' : ''}). Please stay focused on the exam. ${3 - newCount} warning${3 - newCount > 1 ? 's' : ''} remaining before auto-submit.`);
+        setShowWarning(true);
+      }
     };
 
     // Prevent context menu
     const handleContextMenu = (e: MouseEvent) => e.preventDefault();
     
-    // Detect tab switches
+    // Detect tab switches - PRIMARY detection method
     const handleVisibilityChange = () => {
-      if (document.hidden) {
+      // Only count when transitioning from visible to hidden (actual tab switch)
+      const isNowHidden = document.hidden;
+      if (isNowHidden && !lastVisibilityState) {
+        // State changed from visible to hidden - this is a real tab switch
+        lastVisibilityState = true;
         handleTabSwitchDetection();
-        
+      } else if (!isNowHidden) {
+        // Tab became visible again
+        lastVisibilityState = false;
+      }
+      
+      if (isNowHidden) {
         // Try to refocus immediately
         setTimeout(() => {
           if (window.focus) {
@@ -658,7 +674,7 @@ export function StudentExamInterface({ examId, onComplete, enrollmentId }: { exa
             />
             {currentQuestion.metadata?.minWords && (
               <div className="text-sm text-muted-foreground">
-                Word count: {(answer || '').split(' ').filter(word => word.length > 0).length} / {currentQuestion.metadata.minWords} minimum
+                Word count: {(answer || '').split(' ').filter((word: string) => word.length > 0).length} / {currentQuestion.metadata.minWords} minimum
               </div>
             )}
           </div>
@@ -713,7 +729,7 @@ export function StudentExamInterface({ examId, onComplete, enrollmentId }: { exa
           <MatchingQuestion 
             question={currentQuestion}
             answer={answer}
-            onChange={(newAnswer) => handleAnswerChange(currentQuestion.id, newAnswer)}
+            onChange={(newAnswer: any) => handleAnswerChange(currentQuestion.id, newAnswer)}
           />
         );
 
@@ -722,7 +738,7 @@ export function StudentExamInterface({ examId, onComplete, enrollmentId }: { exa
           <OrderingQuestion 
             question={currentQuestion}
             answer={answer}
-            onChange={(newAnswer) => handleAnswerChange(currentQuestion.id, newAnswer)}
+            onChange={(newAnswer: any) => handleAnswerChange(currentQuestion.id, newAnswer)}
           />
         );
 
@@ -731,7 +747,7 @@ export function StudentExamInterface({ examId, onComplete, enrollmentId }: { exa
           <CodeEditor 
             question={currentQuestion}
             answer={answer}
-            onChange={(newAnswer) => handleAnswerChange(currentQuestion.id, newAnswer)}
+            onChange={(newAnswer: any) => handleAnswerChange(currentQuestion.id, newAnswer)}
           />
         );
 

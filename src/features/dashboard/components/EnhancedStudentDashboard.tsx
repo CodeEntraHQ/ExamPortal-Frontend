@@ -21,10 +21,13 @@ import {
   Eye,
   Play,
   Star,
-  Download
+  Download,
+  CheckCircle2
 } from 'lucide-react';
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { getStudentEnrollments, StudentEnrollment, examApi } from '../../../services/api/exam';
+import { getResumptionRequest, requestResumption, GetResumptionRequestResponse } from '../../../services/api/resumptionRequest';
+import { useNotifications } from '../../../shared/providers/NotificationProvider';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { motion } from 'motion/react';
 
@@ -35,6 +38,7 @@ interface StudentDashboardProps {
 
 export function EnhancedStudentDashboard({ onStartExam, onViewResults }: StudentDashboardProps) {
   const { user } = useAuth();
+  const { success, error: showError } = useNotifications();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedSubject, setSelectedSubject] = useState('all');
@@ -42,6 +46,8 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
   const [loading, setLoading] = useState(true);
   const [enrollmentTab, setEnrollmentTab] = useState<'ongoing' | 'upcoming' | 'completed'>('ongoing');
   const [questionCounts, setQuestionCounts] = useState<Record<string, number>>({});
+  const [resumptionRequests, setResumptionRequests] = useState<Record<string, GetResumptionRequestResponse['payload']>>({});
+  const [requestingResumption, setRequestingResumption] = useState<Record<string, boolean>>({});
 
   // Fetch enrollments on component mount
   useEffect(() => {
@@ -82,6 +88,52 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
     fetchEnrollments();
   }, []);
 
+  // Fetch resumption requests for ongoing enrollments
+  useEffect(() => {
+    const fetchResumptionRequests = async () => {
+      const ongoingEnrollments = enrollments.filter(
+        (e) => e.status && e.status.toUpperCase() === 'ONGOING'
+      );
+
+      const requests: Record<string, GetResumptionRequestResponse['payload']> = {};
+      await Promise.all(
+        ongoingEnrollments.map(async (enrollment) => {
+          try {
+            const response = await getResumptionRequest(enrollment.id);
+            requests[enrollment.id] = response.payload;
+          } catch (err) {
+            console.error(`Failed to fetch resumption request for enrollment ${enrollment.id}:`, err);
+            requests[enrollment.id] = { has_request: false };
+          }
+        })
+      );
+      setResumptionRequests(requests);
+    };
+
+    if (enrollments.length > 0) {
+      fetchResumptionRequests();
+    }
+  }, [enrollments]);
+
+  // Handle requesting resumption
+  const handleRequestResumption = async (enrollmentId: string) => {
+    setRequestingResumption(prev => ({ ...prev, [enrollmentId]: true }));
+    try {
+      await requestResumption(enrollmentId);
+      success('Resumption request submitted. Waiting for admin approval.');
+      // Refresh resumption request status
+      const response = await getResumptionRequest(enrollmentId);
+      setResumptionRequests(prev => ({
+        ...prev,
+        [enrollmentId]: response.payload,
+      }));
+    } catch (err: any) {
+      showError(err?.message || 'Failed to submit resumption request. Please try again.');
+    } finally {
+      setRequestingResumption(prev => ({ ...prev, [enrollmentId]: false }));
+    }
+  };
+
   // Transform enrollment data to match existing exam structure
   const transformEnrollmentToExam = (enrollment: StudentEnrollment) => {
     const exam = enrollment.exam;
@@ -96,6 +148,7 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
     
     return {
       id: exam.id,
+      enrollmentId: enrollment.id, // Add enrollment ID for resumption requests
       name: exam.title,
       date: metadata.startDate || exam.created_at,
       duration: Math.floor(exam.duration_seconds / 60),
@@ -653,14 +706,87 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                               <Badge variant="default" className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
                                 Ongoing
                               </Badge>
-                              <Button 
-                                size="sm"
-                                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-                                onClick={() => onStartExam?.(exam.id.toString())}
-                              >
-                                <Play className="h-4 w-4 mr-1" />
-                                Continue Exam
-                              </Button>
+                              {(() => {
+                                const enrollmentId = (exam as any).enrollmentId;
+                                const resumptionRequest = enrollmentId ? resumptionRequests[enrollmentId] : null;
+                                const isRequesting = enrollmentId ? requestingResumption[enrollmentId] : false;
+                                
+                                // Check if resumption is approved
+                                if (resumptionRequest?.has_request && resumptionRequest.status === 'APPROVED') {
+                                  return (
+                                    <Button 
+                                      size="sm"
+                                      className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                                      onClick={() => onStartExam?.(exam.id.toString())}
+                                    >
+                                      <Play className="h-4 w-4 mr-1" />
+                                      Continue Exam
+                                    </Button>
+                                  );
+                                }
+                                
+                                // Check if request is pending
+                                if (resumptionRequest?.has_request && resumptionRequest.status === 'PENDING') {
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="outline" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                        <Clock className="h-3 w-3 mr-1" />
+                                        Waiting for Approval
+                                      </Badge>
+                                    </div>
+                                  );
+                                }
+                                
+                                // Check if request was rejected
+                                if (resumptionRequest?.has_request && resumptionRequest.status === 'REJECTED') {
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <Button 
+                                        size="sm"
+                                        variant="outline"
+                                        className="border-orange-500 text-orange-600 hover:bg-orange-50"
+                                        onClick={() => enrollmentId && handleRequestResumption(enrollmentId)}
+                                        disabled={isRequesting}
+                                      >
+                                        {isRequesting ? (
+                                          <>
+                                            <Clock className="h-4 w-4 mr-1 animate-spin" />
+                                            Requesting...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <AlertCircle className="h-4 w-4 mr-1" />
+                                            Request Approval Again
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
+                                  );
+                                }
+                                
+                                // No request yet - show request approval button
+                                return (
+                                  <Button 
+                                    size="sm"
+                                    variant="outline"
+                                    className="border-primary text-primary hover:bg-primary/10"
+                                    onClick={() => enrollmentId && handleRequestResumption(enrollmentId)}
+                                    disabled={isRequesting}
+                                  >
+                                    {isRequesting ? (
+                                      <>
+                                        <Clock className="h-4 w-4 mr-1 animate-spin" />
+                                        Requesting...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle2 className="h-4 w-4 mr-1" />
+                                        Request Approval
+                                      </>
+                                    )}
+                                  </Button>
+                                );
+                              })()}
                             </div>
                           </motion.div>
                         ))}

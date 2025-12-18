@@ -22,7 +22,7 @@ interface UseExamMonitoringOptions {
   enrollmentId?: string; // required to post monitoring events
   autoUploadSnapshots?: boolean; // upload snapshots to backend automatically
   autoPostEvents?: boolean; // post tab/fullscreen events automatically
-  externalVideoRef?: React.RefObject<HTMLVideoElement> | null; // optional external video element to use
+  externalVideoRef?: React.RefObject<HTMLVideoElement | null> | null; // optional external video element to use
 }
 
 export function useExamMonitoring({

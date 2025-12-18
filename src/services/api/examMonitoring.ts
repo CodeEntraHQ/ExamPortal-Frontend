@@ -115,3 +115,19 @@ export async function getMonitoringByExam(examId: string): Promise<ExamMonitorin
 
   return res.json();
 }
+
+export interface DeleteMonitoringResponse {
+  payload: {
+    enrollment_id: string;
+    deleted_media_count: number;
+    deleted_media_ids: string[];
+  };
+}
+
+export async function deleteMonitoringByEnrollment(enrollmentId: string): Promise<DeleteMonitoringResponse> {
+  const res = await authenticatedFetch(getApiUrl(`/v1/exam-monitorings/${enrollmentId}`), {
+    method: 'DELETE',
+  });
+
+  return res.json();
+}

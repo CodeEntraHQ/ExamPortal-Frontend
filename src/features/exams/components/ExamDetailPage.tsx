@@ -41,7 +41,8 @@ import {
   Maximize,
   Camera,
   AlertTriangle,
-  Mic
+  Mic,
+  Trash2
 } from 'lucide-react';
 import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
 import { motion } from 'motion/react';
@@ -52,9 +53,10 @@ import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { useExamContext } from '../providers/ExamContextProvider';
 import { EditExamModal } from './EditExamModal';
 import { examApi, LeaderboardEntry, ExamEnrollment } from '../../../services/api/exam';
+import { getPendingResumptionRequests, approveResumption, rejectResumption, ResumptionRequest } from '../../../services/api/resumptionRequest';
 import { admissionFormApi } from '../../../services/api/admissionForm';
 import { getUsers, ApiUser } from '../../../services/api/user';
-import { getMonitoringByExam, ExamMonitoringData } from '../../../services/api/examMonitoring';
+import { getMonitoringByExam, ExamMonitoringData, deleteMonitoringByEnrollment } from '../../../services/api/examMonitoring';
 import { getApiUrl } from '../../../services/api/core';
 import { getEntityById } from '../../../services/api/entity';
 import { useNavigate } from 'react-router-dom';
@@ -202,6 +204,10 @@ export function ExamDetailPage({
   const [examMonitoringEnabled, setExamMonitoringEnabled] = useState<boolean>(true);
   const [loadingEntityMonitoring, setLoadingEntityMonitoring] = useState(false);
   const [selectedStudentForDetails, setSelectedStudentForDetails] = useState<string | null>(null);
+  const [resumptionRequests, setResumptionRequests] = useState<ResumptionRequest[]>([]);
+  const [loadingResumptionRequests, setLoadingResumptionRequests] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [showRejectDialog, setShowRejectDialog] = useState<string | null>(null);
   
   // Statistics state
   const [statistics, setStatistics] = useState<{
@@ -405,6 +411,25 @@ export function ExamDetailPage({
 
     fetchMonitoringData();
   }, [activeTab, effectiveExamId, entityMonitoringEnabled, examMonitoringEnabled, user?.role]);
+
+  // Fetch resumption requests when resumptions tab is active
+  useEffect(() => {
+    const fetchResumptionRequests = async () => {
+      if (activeTab === 'resumptions' && effectiveExamId && canManageQuestions) {
+        setLoadingResumptionRequests(true);
+        try {
+          const response = await getPendingResumptionRequests(effectiveExamId);
+          setResumptionRequests(response.payload.requests);
+        } catch (err) {
+          console.error('Failed to fetch resumption requests:', err);
+        } finally {
+          setLoadingResumptionRequests(false);
+        }
+      }
+    };
+
+    fetchResumptionRequests();
+  }, [activeTab, effectiveExamId, canManageQuestions]);
 
   // Fetch representatives when modal opens
   useEffect(() => {
@@ -903,14 +928,6 @@ export function ExamDetailPage({
       color: 'text-purple-600',
       bgColor: 'bg-purple-100 dark:bg-purple-900/30',
       subtext: `${statistics.totalStudentsInvited} total students`
-    },
-    {
-      title: 'Live Sessions',
-      value: examDetails.activeAttempts.toString(),
-      icon: Monitor,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100 dark:bg-orange-900/30',
-      subtext: 'Currently active'
     }
   ];
 
@@ -1288,23 +1305,13 @@ export function ExamDetailPage({
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
-                <Button 
-                  size="sm" 
-                  className="bg-primary hover:bg-primary/90"
-                  onClick={() => {
-                    info('Exam monitoring dashboard would open here');
-                  }}
-                >
-                  <Monitor className="h-4 w-4 mr-2" />
-                  Monitor Exam
-                </Button>
               </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {stats.map((stat, index) => (
             <motion.div
               key={stat.title}
@@ -1334,7 +1341,7 @@ export function ExamDetailPage({
 
         {/* Detailed Monitoring */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className={`grid w-full ${canManageQuestions ? 'grid-cols-5' : 'grid-cols-4'}`}>
+          <TabsList className={`grid w-full ${canManageQuestions ? 'grid-cols-6' : 'grid-cols-4'}`}>
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <Eye className="h-4 w-4" />
               Overview
@@ -1343,6 +1350,12 @@ export function ExamDetailPage({
               <Monitor className="h-4 w-4" />
               Monitor
             </TabsTrigger>
+            {canManageQuestions && (
+              <TabsTrigger value="resumptions" className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Resumptions
+              </TabsTrigger>
+            )}
             {canManageQuestions && (
               <TabsTrigger value="questions" className="flex items-center gap-2">
                 <Layers className="h-4 w-4" />
@@ -1746,6 +1759,118 @@ export function ExamDetailPage({
           </TabsContent>
 
           {canManageQuestions && (
+            <TabsContent value="resumptions" className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Resumption Requests</CardTitle>
+                      <CardDescription>Approve or reject student requests to resume ongoing exams</CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        if (effectiveExamId) {
+                          setLoadingResumptionRequests(true);
+                          try {
+                            const response = await getPendingResumptionRequests(effectiveExamId);
+                            setResumptionRequests(response.payload.requests);
+                            success('Resumption requests refreshed');
+                          } catch (err) {
+                            error('Failed to refresh resumption requests');
+                          } finally {
+                            setLoadingResumptionRequests(false);
+                          }
+                        }
+                      }}
+                      disabled={loadingResumptionRequests}
+                    >
+                      <RefreshCcw className={`h-4 w-4 mr-2 ${loadingResumptionRequests ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {loadingResumptionRequests ? (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : resumptionRequests.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                      <AlertTriangle className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                      <p>No pending resumption requests</p>
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Student</TableHead>
+                          <TableHead>Requested At</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {resumptionRequests.map((request) => (
+                          <TableRow key={request.id}>
+                            <TableCell>
+                              <div>
+                                <div className="font-medium">{request.user?.name || 'Unknown'}</div>
+                                <div className="text-sm text-muted-foreground">{request.user?.email}</div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {request.requested_at ? new Date(request.requested_at).toLocaleString() : 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                                Pending
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={async () => {
+                                    try {
+                                      await approveResumption(request.id);
+                                      success('Resumption request approved');
+                                      // Refresh requests
+                                      if (effectiveExamId) {
+                                        const response = await getPendingResumptionRequests(effectiveExamId);
+                                        setResumptionRequests(response.payload.requests);
+                                      }
+                                    } catch (err: any) {
+                                      error(err.message || 'Failed to approve request');
+                                    }
+                                  }}
+                                >
+                                  <Check className="h-4 w-4 mr-1" />
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => setShowRejectDialog(request.id)}
+                                >
+                                  <AlertTriangle className="h-4 w-4 mr-1" />
+                                  Reject
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {canManageQuestions && (
             <TabsContent value="questions" className="space-y-6">
               <QuestionManagement 
                 examId={currentExam?.id || examId}
@@ -1893,7 +2018,13 @@ export function ExamDetailPage({
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {monitoringData.map((enrollmentData) => {
+                    {monitoringData
+                      .filter((enrollmentData) => {
+                        // Only show students with monitoring data present in the monitoring table
+                        // monitoring.id exists only when there's an actual record in the monitoring table
+                        return enrollmentData.monitoring?.id !== undefined && enrollmentData.monitoring.id !== null;
+                      })
+                      .map((enrollmentData) => {
                       // Check if student has any violations
                       const hasViolations = 
                         enrollmentData.monitoring.tab_switch_count > 0 ||
@@ -2038,13 +2169,42 @@ export function ExamDetailPage({
                     >
                       <DialogContent className="max-w-[95vw] max-h-[95vh] w-[95vw] h-[95vh] p-6 flex flex-col overflow-hidden">
                         <DialogHeader className="flex-shrink-0">
-                          <DialogTitle className="text-2xl">
-                            Monitoring Details - {enrollmentData.user?.name || 'Unknown Student'}
-                          </DialogTitle>
-                          <DialogDescription>
-                            {enrollmentData.user?.email || 'No email'}
-                            {enrollmentData.user?.roll_number && ` • Roll: ${enrollmentData.user.roll_number}`}
-                          </DialogDescription>
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <DialogTitle className="text-2xl">
+                                Monitoring Details - {enrollmentData.user?.name || 'Unknown Student'}
+                              </DialogTitle>
+                              <DialogDescription>
+                                {enrollmentData.user?.email || 'No email'}
+                                {enrollmentData.user?.roll_number && ` • Roll: ${enrollmentData.user.roll_number}`}
+                              </DialogDescription>
+                            </div>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={async () => {
+                                if (window.confirm('Are you sure you want to delete all monitoring data and associated media for this student? This action cannot be undone.')) {
+                                  try {
+                                    await deleteMonitoringByEnrollment(enrollmentData.enrollment_id);
+                                    // Refresh monitoring data
+                                    const response = await getMonitoringByExam(examId);
+                                    setMonitoringData(response.payload.enrollments);
+                                    // Close the dialog
+                                    setSelectedStudentForDetails(null);
+                                    // Show success notification
+                                    success('Monitoring data deleted successfully');
+                                  } catch (error: any) {
+                                    console.error('Failed to delete monitoring data:', error);
+                                    error(error.message || 'Failed to delete monitoring data');
+                                  }
+                                }
+                              }}
+                              className="ml-4"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Clear Data
+                            </Button>
+                          </div>
                         </DialogHeader>
                         
                         <div className="flex-1 overflow-y-auto mt-4 pr-2" style={{ maxHeight: 'calc(95vh - 120px)' }}>
@@ -2588,6 +2748,58 @@ export function ExamDetailPage({
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Reject Resumption Request Dialog */}
+        <Dialog open={showRejectDialog !== null} onOpenChange={(open) => !open && setShowRejectDialog(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reject Resumption Request</DialogTitle>
+              <DialogDescription>
+                Provide a reason for rejecting this resumption request (optional)
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="reject-reason">Rejection Reason</Label>
+                <Textarea
+                  id="reject-reason"
+                  placeholder="Enter reason for rejection (optional)"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => {
+                setShowRejectDialog(null);
+                setRejectReason('');
+              }}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={async () => {
+                  if (!showRejectDialog) return;
+                  try {
+                    await rejectResumption(showRejectDialog, rejectReason || undefined);
+                    success('Resumption request rejected');
+                    setShowRejectDialog(null);
+                    setRejectReason('');
+                    if (effectiveExamId) {
+                      const response = await getPendingResumptionRequests(effectiveExamId);
+                      setResumptionRequests(response.payload.requests);
+                    }
+                  } catch (err: any) {
+                    error(err.message || 'Failed to reject request');
+                  }
+                }}
+              >
+                Reject
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
