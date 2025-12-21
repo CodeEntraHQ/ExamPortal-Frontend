@@ -129,6 +129,7 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
             >
               Get Started
             </Button>
+            {/* Watch Demo button - commented out
             <Button 
               size="lg" 
               variant="outline"
@@ -136,6 +137,7 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
             >
               Watch Demo
             </Button>
+            */}
           </div>
         </div>
       </section>
@@ -209,6 +211,7 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
             >
               Start Free Trial
             </Button>
+            {/* Contact Sales button - commented out
             <Button 
               size="lg" 
               variant="outline"
@@ -216,6 +219,7 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
             >
               Contact Sales
             </Button>
+            */}
           </div>
         </div>
       </section>

@@ -18,7 +18,6 @@ import {
   CheckCircle,
   AlertCircle,
   Search,
-  Eye,
   Play,
   Star,
   Download,
@@ -405,9 +404,11 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-foreground">{completedExams.length}</div>
+                {/* This semester text - commented out
                 <p className="text-xs text-muted-foreground mt-1">
                   <span className="text-primary font-medium">This semester</span>
                 </p>
+                */}
               </CardContent>
             </Card>
           </motion.div>
@@ -450,9 +451,11 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-foreground">{upcomingExams.length}</div>
+                {/* Next 7 days text - commented out
                 <p className="text-xs text-muted-foreground mt-1">
                   <span className="text-primary font-medium">Next 7 days</span>
                 </p>
+                */}
               </CardContent>
             </Card>
           </motion.div>
@@ -952,14 +955,6 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                                   </Badge>
                                 </div>
                               )}
-                              <Button 
-                                size="sm"
-                                variant="outline"
-                                onClick={() => onViewResults?.(exam.id.toString())}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View Results
-                              </Button>
                             </div>
                           </motion.div>
                         ))}

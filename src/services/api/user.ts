@@ -225,13 +225,13 @@ export async function updateUserProfile(formData: FormData): Promise<{ payload: 
  */
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   const response = await authenticatedFetch(getApiUrl('/v1/users/password/change'), {
-    method: 'PATCH',
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      current_password: currentPassword,
-      new_password: newPassword,
+      currentPassword: currentPassword,
+      newPassword: newPassword,
     }),
   });
 

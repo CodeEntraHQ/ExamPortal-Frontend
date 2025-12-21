@@ -428,9 +428,11 @@ function StudentDashboard({ onStartExam }: { onStartExam?: (examId: string) => v
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-foreground">{completedExams.length}</div>
+                {/* This semester text - commented out
                 <p className="text-xs text-muted-foreground mt-1">
                   <span className="text-primary font-medium">This semester</span>
                 </p>
+                */}
               </CardContent>
             </Card>
           </motion.div>
@@ -470,9 +472,11 @@ function StudentDashboard({ onStartExam }: { onStartExam?: (examId: string) => v
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-foreground">{upcomingExams.length}</div>
+                {/* Next 7 days text - commented out
                 <p className="text-xs text-muted-foreground mt-1">
                   <span className="text-primary font-medium">Next 7 days</span>
                 </p>
+                */}
               </CardContent>
             </Card>
           </motion.div>
@@ -641,15 +645,6 @@ function StudentDashboard({ onStartExam }: { onStartExam?: (examId: string) => v
                            exam.score! >= 70 ? "Average" : "Poor"}
                         </Badge>
                       </div>
-                      <Button 
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          // Would show detailed results
-                        }}
-                      >
-                        View Results
-                      </Button>
                     </div>
                   </motion.div>
                 ))
