@@ -203,6 +203,7 @@ export function EntityDetailPage({
                 </div>
               </div>
               <div className="flex gap-2">
+                {/* Generate Insights button and dialog - commented out
                 <Dialog open={showInsightsModal} onOpenChange={setShowInsightsModal}>
                   <DialogTrigger asChild>
                     <Button size="sm" className="bg-primary hover:bg-primary/90">
@@ -256,6 +257,7 @@ export function EntityDetailPage({
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
+                */}
               </div>
             </div>
           </CardContent>
