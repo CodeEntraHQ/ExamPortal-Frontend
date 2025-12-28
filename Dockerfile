@@ -5,10 +5,10 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# Production stage
-FROM nginx:1.29.1-alpine AS production
+FROM nginx:1.27-alpine AS production
 COPY --from=builder /app/build /usr/share/nginx/html
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 EXPOSE 80
+ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["nginx", "-g", "daemon off;"]
-
-# remove the build folder from github repo
