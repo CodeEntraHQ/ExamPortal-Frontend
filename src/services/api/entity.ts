@@ -14,6 +14,7 @@ export interface ApiEntity {
   phone_number?: string;
   type?: string;
   logo_link?: string;
+  signature_link?: string;
   created_at?: string;
   total_exams?: number;
   total_students?: number;
@@ -178,6 +179,9 @@ export async function updateEntity(payload: UpdateEntityPayload | FormData): Pro
     if (regularPayload.logo && regularPayload.logo instanceof File) {
       formData.append('logo', regularPayload.logo);
     }
+    if (regularPayload.signature && regularPayload.signature instanceof File) {
+      formData.append('signature', regularPayload.signature);
+    }
     
     isFormData = true;
   } else if (isFormData) {
@@ -204,6 +208,9 @@ export async function updateEntity(payload: UpdateEntityPayload | FormData): Pro
     }
     if (jsonPayload.logo && jsonPayload.logo instanceof File) {
       formData.append('logo', jsonPayload.logo);
+    }
+    if (jsonPayload.signature && jsonPayload.signature instanceof File) {
+      formData.append('signature', jsonPayload.signature);
     }
     isFormData = true;
   }

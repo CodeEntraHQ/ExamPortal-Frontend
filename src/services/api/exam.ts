@@ -226,6 +226,15 @@ export interface StudentEnrollment {
     entity_id: string;
     results_visible?: boolean;
   };
+  entity: {
+    id: string;
+    name: string;
+    address: string;
+    email: string | null;
+    phone_number: string | null;
+    logo_link: string | null;
+    signature_link: string | null;
+  } | null;
   result: {
     id: string;
     score: number;

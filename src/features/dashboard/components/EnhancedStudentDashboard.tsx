@@ -26,6 +26,7 @@ import {
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { getStudentEnrollments, StudentEnrollment, examApi } from '../../../services/api/exam';
 import { getResumptionRequest, requestResumption, GetResumptionRequestResponse } from '../../../services/api/resumptionRequest';
+import { authenticatedFetch, getApiUrl } from '../../../services/api/core';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 import { motion } from 'motion/react';
@@ -47,6 +48,45 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
   const [questionCounts, setQuestionCounts] = useState<Record<string, number>>({});
   const [resumptionRequests, setResumptionRequests] = useState<Record<string, GetResumptionRequestResponse['payload']>>({});
   const [requestingResumption, setRequestingResumption] = useState<Record<string, boolean>>({});
+
+  // Calculate profile completion percentage based on phone_number, gender, address, and profile_picture_link
+  const calculateProfileCompletion = (): number => {
+    if (!user) return 0;
+    
+    const fields = [
+      user.phone_number,
+      user.gender,
+      user.address,
+      user.profile_picture_link
+    ];
+    
+    // Filter out null, undefined, empty string, and handle number 0 case
+    const filledFields = fields.filter(field => {
+      if (field === null || field === undefined) return false;
+      if (typeof field === 'string' && field.trim() === '') return false;
+      if (typeof field === 'number' && field === 0) return false;
+      return true;
+    }).length;
+    
+    const totalFields = fields.length;
+    
+    return Math.round((filledFields / totalFields) * 100);
+  };
+
+  const profileCompletion = calculateProfileCompletion();
+  
+  // Debug: Log user data for troubleshooting
+  useEffect(() => {
+    if (user) {
+      console.log('Profile completion calculation:', {
+        phone_number: user.phone_number,
+        gender: user.gender,
+        address: user.address,
+        profile_picture_link: user.profile_picture_link,
+        completion: profileCompletion
+      });
+    }
+  }, [user, profileCompletion]);
 
   // Fetch enrollments on component mount
   useEffect(() => {
@@ -130,6 +170,675 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
       showError(err?.message || 'Failed to submit resumption request. Please try again.');
     } finally {
       setRequestingResumption(prev => ({ ...prev, [enrollmentId]: false }));
+    }
+  };
+
+  // Handle downloading admit card
+  const handleDownloadAdmitCard = async (exam: any) => {
+    // Check if profile is 100% complete before allowing download (early return to avoid any UI flicker)
+    const completionPercentage = calculateProfileCompletion();
+    if (completionPercentage < 100) {
+      const missingFields: string[] = [];
+      if (!user?.phone_number) missingFields.push('Phone number');
+      if (!user?.gender) missingFields.push('Gender');
+      if (!user?.address) missingFields.push('Address');
+      if (!user?.profile_picture_link) missingFields.push('Profile picture');
+      
+      showError(`Please complete your profile before downloading the admit card. Missing: ${missingFields.join(', ')}.`, { 
+        persistent: false, 
+        duration: 6000 
+      });
+      return;
+    }
+
+    try {
+
+      const enrollment = exam.enrollment as StudentEnrollment;
+      const examData = enrollment.exam;
+      const metadata = examData.metadata || {};
+      const entityData = enrollment.entity;
+      
+      console.log('Entity data from enrollment:', entityData);
+      console.log('Logo link value:', entityData?.logo_link);
+
+      // Format dates
+      const examDate = metadata.startDate || examData.created_at;
+      const formattedDate = examDate ? new Date(examDate).toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      }) : 'Not specified';
+      
+      const formattedTime = examDate ? new Date(examDate).toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      }) : 'Not specified';
+
+      // Student details
+      const studentName = user?.name || 'Student';
+      const studentEmail = user?.email || '';
+      const studentRollNumber = user?.roll_number || 'N/A';
+      const studentAddress = user?.address || 'N/A';
+
+      // Exam details
+      const examTitle = examData.title || 'Exam';
+      const examDuration = Math.floor(examData.duration_seconds / 60);
+      const examType = examData.type || 'EXAM';
+      const totalMarks = metadata.totalMarks || 'N/A';
+      const passingMarks = metadata.passingMarks || 'N/A';
+      const instructions = Array.isArray(metadata.instructions) 
+        ? metadata.instructions.join('\n') 
+        : (metadata.instructions || 'Follow the exam guidelines provided during the exam.');
+
+      // Entity details (from enrollment response)
+      const entityName = entityData?.name || 'Institution';
+      const entityAddress = entityData?.address || 'N/A';
+      const entityEmail = entityData?.email || 'N/A';
+      const entityPhone = entityData?.phone_number || 'N/A';
+      
+      // Fetch logo, signature, and student photo images and convert to base64 for PDF embedding
+      // Use same logic as ImageWithFallback component
+      let entityLogoBase64 = null;
+      let entitySignatureBase64 = null;
+      let studentPhotoBase64 = null;
+      if (entityData?.logo_link) {
+        try {
+          const logoLink = entityData.logo_link;
+          console.log('Processing logo_link:', logoLink);
+          
+          // Use same URL construction as ImageWithFallback
+          const logoUrl = logoLink.startsWith('http') ? logoLink : getApiUrl(logoLink);
+          console.log('Fetching logo from URL:', logoUrl);
+          
+          const logoResponse = await authenticatedFetch(logoUrl);
+          
+          if (!logoResponse.ok) {
+            const errorText = await logoResponse.text();
+            console.error('Logo fetch failed:', logoResponse.status, errorText);
+            throw new Error(`HTTP ${logoResponse.status}: ${logoResponse.statusText}`);
+          }
+          
+          const logoData = await logoResponse.json();
+          console.log('Logo response data:', logoData);
+          
+          if (logoData.payload?.media) {
+            // Convert media buffer to base64
+            let buffer: Uint8Array;
+            const mediaData = logoData.payload.media;
+            
+            if (mediaData instanceof Array || (typeof mediaData === 'object' && mediaData.type === 'Buffer')) {
+              // Buffer array format
+              const mediaBuffer = mediaData.data || mediaData;
+              buffer = new Uint8Array(mediaBuffer);
+            } else if (typeof mediaData === 'string') {
+              // Already base64 string
+              const base64Data = mediaData.replace(/^data:image\/\w+;base64,/, '');
+              const binaryString = atob(base64Data);
+              buffer = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                buffer[i] = binaryString.charCodeAt(i);
+              }
+            } else if (mediaData && typeof mediaData === 'object' && 'data' in mediaData) {
+              // Buffer object with data property
+              buffer = new Uint8Array(mediaData.data);
+            } else {
+              console.warn('Unknown media format:', typeof mediaData, mediaData);
+              throw new Error('Unknown media format');
+            }
+            
+            // Convert to base64 data URL
+            const blob = new Blob([buffer], { type: 'image/jpeg' });
+            entityLogoBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = () => {
+                console.error('FileReader error converting logo to base64');
+                reject(new Error('Failed to convert logo to base64'));
+              };
+              reader.readAsDataURL(blob);
+            });
+            
+            console.log('Logo converted to base64 successfully');
+          } else {
+            console.warn('No media data in logo response:', logoData);
+          }
+        } catch (err) {
+          console.error('Failed to fetch logo image:', err);
+          console.error('Logo URL was:', entityData.logo_link);
+          // Continue without logo if fetch fails
+        }
+      }
+
+      // Fetch signature image and convert to base64 for PDF embedding
+      if (entityData?.signature_link) {
+        try {
+          const signatureLink = entityData.signature_link;
+          console.log('Processing signature_link:', signatureLink);
+          
+          // Use same URL construction as ImageWithFallback
+          const signatureUrl = signatureLink.startsWith('http') ? signatureLink : getApiUrl(signatureLink);
+          console.log('Fetching signature from URL:', signatureUrl);
+          
+          const signatureResponse = await authenticatedFetch(signatureUrl);
+          
+          if (!signatureResponse.ok) {
+            const errorText = await signatureResponse.text();
+            console.error('Signature fetch failed:', signatureResponse.status, errorText);
+            // Continue without signature if fetch fails
+          } else {
+            const signatureData = await signatureResponse.json();
+            console.log('Signature response data:', signatureData);
+            
+            if (signatureData.payload?.media) {
+              // Convert media buffer to base64
+              let buffer: Uint8Array;
+              const mediaData = signatureData.payload.media;
+              
+              if (mediaData instanceof Array || (typeof mediaData === 'object' && mediaData.type === 'Buffer')) {
+                const mediaBuffer = mediaData.data || mediaData;
+                buffer = new Uint8Array(mediaBuffer);
+              } else if (typeof mediaData === 'string') {
+                const base64Data = mediaData.replace(/^data:image\/\w+;base64,/, '');
+                const binaryString = atob(base64Data);
+                buffer = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  buffer[i] = binaryString.charCodeAt(i);
+                }
+              } else if (mediaData && typeof mediaData === 'object' && 'data' in mediaData) {
+                buffer = new Uint8Array(mediaData.data);
+              } else {
+                console.warn('Unknown media format:', typeof mediaData, mediaData);
+                throw new Error('Unknown media format');
+              }
+              
+              // Convert to base64 data URL
+              const blob = new Blob([buffer], { type: 'image/jpeg' });
+              entitySignatureBase64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.onerror = () => {
+                  console.error('FileReader error converting signature to base64');
+                  reject(new Error('Failed to convert signature to base64'));
+                };
+                reader.readAsDataURL(blob);
+              });
+              
+              console.log('Signature converted to base64 successfully');
+            } else {
+              console.warn('No media data in signature response:', signatureData);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to fetch signature image:', err);
+          console.error('Signature URL was:', entityData.signature_link);
+          // Continue without signature if fetch fails
+        }
+      }
+
+      // Fetch student photo and convert to base64 for PDF embedding
+      if (user?.profile_picture_link) {
+        try {
+          const photoLink = user.profile_picture_link;
+          console.log('Processing student photo_link:', photoLink);
+          
+          // Use same URL construction as ImageWithFallback
+          const photoUrl = photoLink.startsWith('http') ? photoLink : getApiUrl(photoLink);
+          console.log('Fetching student photo from URL:', photoUrl);
+          
+          const photoResponse = await authenticatedFetch(photoUrl);
+          
+          if (!photoResponse.ok) {
+            const errorText = await photoResponse.text();
+            console.error('Student photo fetch failed:', photoResponse.status, errorText);
+            throw new Error(`HTTP ${photoResponse.status}: ${photoResponse.statusText}`);
+          }
+          
+          const photoData = await photoResponse.json();
+          console.log('Student photo response data:', photoData);
+          
+          if (photoData.payload?.media) {
+            // Convert media buffer to base64
+            let buffer: Uint8Array;
+            const mediaData = photoData.payload.media;
+            
+            if (mediaData instanceof Array || (typeof mediaData === 'object' && mediaData.type === 'Buffer')) {
+              // Buffer array format
+              const mediaBuffer = mediaData.data || mediaData;
+              buffer = new Uint8Array(mediaBuffer);
+            } else if (typeof mediaData === 'string') {
+              // Already base64 string
+              const base64Data = mediaData.replace(/^data:image\/\w+;base64,/, '');
+              const binaryString = atob(base64Data);
+              buffer = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                buffer[i] = binaryString.charCodeAt(i);
+              }
+            } else if (mediaData && typeof mediaData === 'object' && 'data' in mediaData) {
+              // Buffer object with data property
+              buffer = new Uint8Array(mediaData.data);
+            } else {
+              console.warn('Unknown media format:', typeof mediaData, mediaData);
+              throw new Error('Unknown media format');
+            }
+            
+            // Convert to base64 data URL
+            const blob = new Blob([buffer], { type: 'image/jpeg' });
+            studentPhotoBase64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onloadend = () => resolve(reader.result as string);
+              reader.onerror = () => {
+                console.error('FileReader error converting student photo to base64');
+                reject(new Error('Failed to convert student photo to base64'));
+              };
+              reader.readAsDataURL(blob);
+            });
+            
+            console.log('Student photo converted to base64 successfully');
+          } else {
+            console.warn('No media data in student photo response:', photoData);
+          }
+        } catch (err) {
+          console.error('Failed to fetch student photo image:', err);
+          console.error('Student photo URL was:', user.profile_picture_link);
+          // Continue without student photo if fetch fails
+        }
+      }
+
+      // Create HTML content for admit card
+      const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Admit Card - ${examTitle}</title>
+  <style>
+    @media print {
+      @page {
+        margin: 1cm;
+        size: A4;
+      }
+      body {
+        margin: 0;
+        padding: 20px;
+      }
+    }
+    body {
+      font-family: 'Arial', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      color: #333;
+      background: white;
+    }
+    .header {
+      text-align: center;
+      border: 3px solid #10b981;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 25px;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+    }
+    .header-logo {
+      max-width: 120px;
+      max-height: 120px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .header-content {
+      flex: 1;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    .header p {
+      margin: 8px 0 0 0;
+      font-size: 16px;
+      opacity: 0.95;
+    }
+    .card-container {
+      border: 2px solid #10b981;
+      border-radius: 10px;
+      padding: 25px;
+      margin-bottom: 20px;
+      background: #f9fafb;
+    }
+    .section {
+      margin-bottom: 25px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #059669;
+      margin-bottom: 15px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 2px solid #10b981;
+      padding-bottom: 8px;
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+    .info-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .info-label {
+      font-weight: 600;
+      color: #6b7280;
+      font-size: 13px;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .info-value {
+      color: #111827;
+      font-size: 15px;
+      font-weight: 500;
+      word-break: break-word;
+    }
+    .full-width {
+      grid-column: 1 / -1;
+    }
+    .instructions-box {
+      background: #fff7ed;
+      border-left: 4px solid #f59e0b;
+      padding: 15px;
+      border-radius: 5px;
+      margin-top: 10px;
+    }
+    .instructions-box .info-label {
+      color: #92400e;
+      margin-bottom: 8px;
+    }
+    .instructions-box .info-value {
+      color: #78350f;
+      white-space: pre-line;
+      line-height: 1.6;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 2px solid #e5e7eb;
+      color: #6b7280;
+      font-size: 12px;
+    }
+    .signature-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 2px solid #e5e7eb;
+    }
+    .signature-box {
+      text-align: center;
+    }
+    .signature-image {
+      max-width: 200px;
+      max-height: 80px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      margin: 10px auto;
+      display: block;
+    }
+    .signature-line {
+      border-top: 2px solid #111827;
+      margin-top: 50px;
+      padding-top: 5px;
+      font-weight: 600;
+    }
+    .photo-placeholder {
+      width: 120px;
+      height: 150px;
+      border: 2px dashed #9ca3af;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #6b7280;
+      font-size: 12px;
+      text-align: center;
+      margin: 0 auto 15px;
+      background: #f9fafb;
+    }
+    .student-photo {
+      width: 120px;
+      height: 150px;
+      border: 2px solid #10b981;
+      border-radius: 5px;
+      object-fit: cover;
+      margin: 0 auto 15px;
+      display: block;
+      background: #f9fafb;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    ${entityLogoBase64 ? `<img src="${entityLogoBase64}" alt="${entityName} Logo" class="header-logo" />` : ''}
+    <div class="header-content">
+      <h1>ADMIT CARD</h1>
+      <p>${entityName}</p>
+    </div>
+  </div>
+
+  <div class="card-container">
+    <div class="section">
+      ${studentPhotoBase64 
+        ? `<img src="${studentPhotoBase64}" alt="Student Photo" class="student-photo" />`
+        : `<div class="photo-placeholder">
+            <div>Student<br/>Photo</div>
+          </div>`
+      }
+    </div>
+
+    <div class="section">
+      <div class="section-title">Student Information</div>
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Student Name</div>
+          <div class="info-value">${studentName}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Roll Number</div>
+          <div class="info-value">${studentRollNumber}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Email</div>
+          <div class="info-value">${studentEmail}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Address</div>
+          <div class="info-value">${studentAddress}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Exam Information</div>
+      <div class="info-grid">
+        <div class="info-item full-width">
+          <div class="info-label">Exam Name</div>
+          <div class="info-value">${examTitle}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Exam Date</div>
+          <div class="info-value">${formattedDate}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Exam Time</div>
+          <div class="info-value">${formattedTime}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Duration</div>
+          <div class="info-value">${examDuration} minutes</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Exam Type</div>
+          <div class="info-value">${examType}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Total Marks</div>
+          <div class="info-value">${totalMarks}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Passing Marks</div>
+          <div class="info-value">${passingMarks}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Institution Information</div>
+      <div class="info-grid">
+        <div class="info-item full-width">
+          <div class="info-label">Institution Name</div>
+          <div class="info-value">${entityName}</div>
+        </div>
+        <div class="info-item full-width">
+          <div class="info-label">Address</div>
+          <div class="info-value">${entityAddress}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Email</div>
+          <div class="info-value">${entityEmail}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Phone</div>
+          <div class="info-value">${entityPhone}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Important Instructions</div>
+      <div class="instructions-box">
+        <div class="info-label">Please read carefully:</div>
+        <div class="info-value">${instructions}</div>
+      </div>
+      <div style="margin-top: 15px; padding: 10px; background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 5px;">
+        <div style="color: #991b1b; font-size: 13px; line-height: 1.6;">
+          <strong>General Instructions:</strong><br/>
+          • Report to the exam center 30 minutes before the scheduled time<br/>
+          • Bring a valid ID card and this admit card<br/>
+          • Electronic devices are not allowed in the examination hall<br/>
+          • Follow all instructions provided by the invigilator<br/>
+          • Maintain decorum throughout the examination
+        </div>
+      </div>
+    </div>
+
+    <div class="signature-section">
+      <div class="signature-box">
+        <div class="signature-line">Student Signature</div>
+      </div>
+      <div class="signature-box">
+        ${entitySignatureBase64 ? `<img src="${entitySignatureBase64}" alt="Authorized Signature" class="signature-image" />` : ''}
+        <div class="signature-line">Authorized Signatory</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div><strong>ExamEntra</strong> - Secure Online Examination Platform</div>
+    <div style="margin-top: 5px;">This is a computer-generated document. No signature is required.</div>
+    <div style="margin-top: 5px;">Generated on: ${new Date().toLocaleString()}</div>
+  </div>
+</body>
+</html>
+      `;
+
+      // Create a new window with the HTML content
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        showError('Please allow popups to download the admit card');
+        return;
+      }
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+
+      // Wait for images to load before printing
+      const waitForImages = () => {
+        const images = printWindow.document.querySelectorAll('img');
+        const totalImages = images.length;
+
+        if (totalImages === 0) {
+          // No images, proceed immediately
+          setTimeout(() => {
+            printWindow.print();
+            success('Admit card download started. Please use "Save as PDF" in the print dialog.');
+          }, 500);
+          return;
+        }
+
+        let loadedCount = 0;
+        let hasTriggeredPrint = false;
+
+        const checkAndPrint = () => {
+          if (!hasTriggeredPrint && loadedCount === totalImages) {
+            hasTriggeredPrint = true;
+            setTimeout(() => {
+              printWindow.print();
+              success('Admit card download started. Please use "Save as PDF" in the print dialog.');
+            }, 500);
+          }
+        };
+
+        images.forEach((img: HTMLImageElement) => {
+          if (img.complete && img.naturalHeight !== 0) {
+            // Image already loaded
+            loadedCount++;
+            checkAndPrint();
+          } else {
+            // Wait for image to load
+            img.onload = () => {
+              loadedCount++;
+              checkAndPrint();
+            };
+            img.onerror = () => {
+              // Image failed to load, count it as loaded to proceed
+              console.warn('Logo image failed to load:', img.src);
+              loadedCount++;
+              checkAndPrint();
+            };
+          }
+        });
+      };
+
+      // Wait for window to load, then wait for images
+      printWindow.onload = () => {
+        setTimeout(waitForImages, 300);
+      };
+    } catch (err: any) {
+      console.error('Error generating admit card:', err);
+      showError(err?.message || 'Failed to generate admit card. Please try again.');
     }
   };
 
@@ -387,6 +1096,54 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
             <div className="text-2xl font-bold text-primary">{new Date().toLocaleDateString()}</div>
           </div>
         </div>
+
+        {/* Profile Completion Card */}
+        {profileCompletion < 100 && (
+          <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    <h3 className="text-lg font-semibold text-foreground">Complete Your Profile</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Your profile is {profileCompletion}% complete. Complete your profile to get the best experience.
+                  </p>
+                  <div className="space-y-2">
+                    <Progress value={profileCompletion} className="h-2" />
+                    <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+                      {!user?.phone_number && (
+                        <div className="flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Phone number</span>
+                        </div>
+                      )}
+                      {!user?.gender && (
+                        <div className="flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Gender</span>
+                        </div>
+                      )}
+                      {!user?.address && (
+                        <div className="flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Address</span>
+                        </div>
+                      )}
+                      {!user?.profile_picture_link && (
+                        <div className="flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3" />
+                          <span>Profile picture</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
@@ -709,6 +1466,14 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                               <Badge variant="default" className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
                                 Ongoing
                               </Badge>
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownloadAdmitCard(exam)}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Admit Card
+                              </Button>
                               {(() => {
                                 const enrollmentId = (exam as any).enrollmentId;
                                 const resumptionRequest = enrollmentId ? resumptionRequests[enrollmentId] : null;
@@ -865,6 +1630,14 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                               <Badge variant="default" className="bg-primary text-primary-foreground">
                                 Upcoming
                               </Badge>
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownloadAdmitCard(exam)}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Admit Card
+                              </Button>
                               <Button 
                                 size="sm"
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground"

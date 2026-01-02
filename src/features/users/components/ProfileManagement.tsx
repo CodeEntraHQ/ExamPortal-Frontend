@@ -34,7 +34,7 @@ import { ImageWithFallback } from '../../../shared/components/common/ImageWithFa
 import { envConfig } from '@/config/env';
 
 export function ProfileManagement() {
-  const { user, setUser } = useAuth();
+  const { user, setUser, updateUser } = useAuth();
   const { theme } = useTheme();
   const appName = envConfig.appName;
   const [isEditing, setIsEditing] = useState(false);
@@ -150,7 +150,9 @@ export function ProfileManagement() {
 
     try {
       const updatedUser = await updateUserProfile(formData);
+      // Update user state and save to localStorage
       setUser(updatedUser.payload);
+      updateUser(updatedUser.payload);
       setProfilePicturePreview(updatedUser.payload.profile_picture_link || null);
       setInitialProfileData({
         name: updatedUser.payload.name || '',

@@ -47,6 +47,7 @@ export interface Entity {
   lastActivity: string;
   description?: string;
   logo_link?: string;
+  signature_link?: string;
   monitoring_enabled?: boolean;
 }
 
@@ -64,6 +65,7 @@ const mapApiEntityToUiEntity = (apiEntity: ApiEntity): Entity => ({
   lastActivity: apiEntity.created_at ? new Date(apiEntity.created_at).toLocaleDateString() : '',
   description: apiEntity.description || '',
   logo_link: apiEntity.logo_link || '',
+  signature_link: apiEntity.signature_link || '',
   monitoring_enabled: apiEntity.monitoring_enabled !== undefined ? apiEntity.monitoring_enabled : true,
 });
 
@@ -568,6 +570,7 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
     email: string;
     phone: string;
     logo: File | null;
+    signature: File | null;
   }>({
     name: '',
     type: 'COLLEGE',
@@ -576,8 +579,10 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
     email: '',
     phone: '',
     logo: null,
+    signature: null,
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (entity) {
@@ -591,6 +596,7 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
         phone: entity.phone,
       }));
       setLogoPreview(entity.logo_link || null);
+      setSignaturePreview(entity.signature_link || null);
     } else {
       setFormData({
         name: '',
@@ -600,8 +606,10 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
         email: '',
         phone: '',
         logo: null,
+        signature: null,
       });
       setLogoPreview(null);
+      setSignaturePreview(null);
     }
   }, [entity]);
 
@@ -723,37 +731,78 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
 
         </TabsContent>
 
-        <TabsContent value="branding" className="space-y-4">
-          <div className="flex flex-col items-center space-y-4">
-            <div className="relative">
-              <div className="w-32 h-32 rounded-full border-2 border-dashed flex items-center justify-center bg-muted/50">
-                {logoPreview? (
-                  <ImageWithFallback
-                    src={logoPreview}
-                    fallback={<Building className="h-6 w-6 text-primary" />}
-                    alt={entity?.name || "Logo"}
-                    className="w-full h-full rounded-full object-cover"
+        <TabsContent value="branding" className="space-y-6">
+          <div className="space-y-4">
+            <div>
+              <Label className="text-base font-semibold mb-3 block">College Logo</Label>
+              <div className="flex flex-col items-center space-y-4">
+                <div className="relative">
+                  <div className="w-32 h-32 rounded-full border-2 border-dashed flex items-center justify-center bg-muted/50">
+                    {logoPreview? (
+                      <ImageWithFallback
+                        src={logoPreview}
+                        fallback={<Building className="h-6 w-6 text-primary" />}
+                        alt={entity?.name || "Logo"}
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Add logo</span>
+                    )}
+                  </div>
+                  <Label htmlFor="logo" className="absolute -bottom-2 -right-2 cursor-pointer bg-primary text-primary-foreground p-2 rounded-full">
+                    <Upload className="h-4 w-4" />
+                  </Label>
+                  <Input
+                    id="logo"
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        const file = e.target.files[0];
+                        setFormData(prev => ({ ...prev, logo: file }));
+                        setLogoPreview(URL.createObjectURL(file));
+                      }
+                    }}
+                    accept="image/*"
                   />
-                ) : (
-                  <span className="text-sm text-muted-foreground">Add logo</span>
-                )}
+                </div>
               </div>
-              <Label htmlFor="logo" className="absolute -bottom-2 -right-2 cursor-pointer bg-primary text-primary-foreground p-2 rounded-full">
-                <Upload className="h-4 w-4" />
-              </Label>
-              <Input
-                id="logo"
-                type="file"
-                className="hidden"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    const file = e.target.files[0];
-                    setFormData(prev => ({ ...prev, logo: file }));
-                    setLogoPreview(URL.createObjectURL(file));
-                  }
-                }}
-                accept="image/*"
-              />
+            </div>
+            
+            <div>
+              <Label className="text-base font-semibold mb-3 block">Authorized Signature</Label>
+              <div className="flex flex-col items-center space-y-4">
+                <div className="relative">
+                  <div className="w-48 h-24 border-2 border-dashed flex items-center justify-center bg-muted/50 rounded-lg">
+                    {signaturePreview? (
+                      <ImageWithFallback
+                        src={signaturePreview}
+                        fallback={<span className="text-sm text-muted-foreground">Signature</span>}
+                        alt={entity?.name || "Signature"}
+                        className="w-full h-full rounded-lg object-contain"
+                      />
+                    ) : (
+                      <span className="text-sm text-muted-foreground">Add signature</span>
+                    )}
+                  </div>
+                  <Label htmlFor="signature" className="absolute -bottom-2 -right-2 cursor-pointer bg-primary text-primary-foreground p-2 rounded-full">
+                    <Upload className="h-4 w-4" />
+                  </Label>
+                  <Input
+                    id="signature"
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        const file = e.target.files[0];
+                        setFormData(prev => ({ ...prev, signature: file }));
+                        setSignaturePreview(URL.createObjectURL(file));
+                      }
+                    }}
+                    accept="image/*"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </TabsContent>
