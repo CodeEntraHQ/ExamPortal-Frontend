@@ -23,7 +23,8 @@ import {
   Settings,
   Pencil,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Upload
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { RoleAwareExamManagement } from '../../../features/exams/components/RoleAwareExamManagement';
@@ -57,6 +58,7 @@ const mapApiEntityToUiEntity = (apiEntity: ApiEntity): Entity => ({
   lastActivity: apiEntity.created_at ? new Date(apiEntity.created_at).toLocaleDateString() : '',
   description: apiEntity.description || '',
   logo_link: apiEntity.logo_link || '',
+  signature_link: apiEntity.signature_link || '',
   monitoring_enabled: apiEntity.monitoring_enabled !== undefined ? apiEntity.monitoring_enabled : true,
 });
 
@@ -82,6 +84,10 @@ export function EntityDetailPage({
     contactPhone: entity.phone || '',
     logoLink: entity.logo_link || ''
   });
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(entity.logo_link || null);
+  const [signatureFile, setSignatureFile] = useState<File | null>(null);
+  const [signaturePreview, setSignaturePreview] = useState<string | null>(entity.signature_link || null);
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
@@ -106,8 +112,13 @@ export function EntityDetailPage({
       description: entity.description || '',
       contactEmail: entity.email || '',
       contactPhone: entity.phone || '',
-      logoLink: entity.logo_link || ''
+      logoLink: entity.logo_link || '',
+      signatureLink: entity.signature_link || ''
     });
+    setLogoPreview(entity.logo_link || null);
+    setLogoFile(null);
+    setSignaturePreview(entity.signature_link || null);
+    setSignatureFile(null);
     setIsEditing(false);
   }, [entity]);
 
@@ -131,7 +142,8 @@ export function EntityDetailPage({
             description: fullEntity.description || '',
             contactEmail: fullEntity.email || '',
             contactPhone: fullEntity.phone || '',
-            logoLink: fullEntity.logo_link || ''
+            logoLink: fullEntity.logo_link || '',
+            signatureLink: fullEntity.signature_link || ''
           });
         }
       } catch (err) {
@@ -358,23 +370,93 @@ export function EntityDetailPage({
                 e.preventDefault();
                 setIsSaving(true);
                 try {
-                  const payload: any = {
-                    entity_id: entityDetails.id,
-                    name: entitySettings.name,
-                    type: entitySettings.type,
-                    address: entitySettings.address,
-                    description: entitySettings.description || '',
-                    email: entitySettings.contactEmail || '',
-                    phone_number: entitySettings.contactPhone || '',
-                  };
-                  
-                  // Note: logo_link is not supported by the API - only file uploads are supported
-                  // If logo needs to be updated, it should be done via file upload in a separate feature
+                  // Use FormData if logo or signature file is selected, otherwise use regular payload
+                  if (logoFile || signatureFile) {
+                    const formData = new FormData();
+                    formData.append('entity_id', entityDetails.id);
+                    formData.append('name', entitySettings.name);
+                    formData.append('type', entitySettings.type);
+                    formData.append('address', entitySettings.address);
+                    if (entitySettings.description) {
+                      formData.append('description', entitySettings.description);
+                    }
+                    if (entitySettings.contactEmail) {
+                      formData.append('email', entitySettings.contactEmail);
+                    }
+                    if (entitySettings.contactPhone) {
+                      formData.append('phone_number', entitySettings.contactPhone);
+                    }
+                    if (logoFile) {
+                      formData.append('logo', logoFile);
+                    }
+                    if (signatureFile) {
+                      formData.append('signature', signatureFile);
+                    }
 
-                  const response = await updateEntity(payload);
-                  
-                  // Update local state with response
-                  if (response && response.payload) {
+                    const response = await updateEntity(formData);
+                    
+                    // Update local state with response
+                    if (response && response.payload) {
+                      const updatedEntity = response.payload;
+                      const updatedEntityDetails: Entity = {
+                        ...entityDetails,
+                        name: updatedEntity.name || entityDetails.name,
+                        type: updatedEntity.type || entityDetails.type || '',
+                        location: updatedEntity.address || entityDetails.location || '',
+                        description: updatedEntity.description || entityDetails.description || '',
+                        email: updatedEntity.email || entityDetails.email || '',
+                        phone: updatedEntity.phone_number || entityDetails.phone || '',
+                        logo_link: updatedEntity.logo_link || entityDetails.logo_link || '',
+                        signature_link: updatedEntity.signature_link || entityDetails.signature_link || '',
+                        createdAt: updatedEntity.created_at 
+                          ? new Date(updatedEntity.created_at).toLocaleDateString() 
+                          : entityDetails.createdAt || new Date().toLocaleDateString(),
+                      };
+                      
+                      setEntityDetails(updatedEntityDetails);
+                      setLogoPreview(updatedEntity.logo_link || null);
+                      setLogoFile(null);
+                      setSignaturePreview(updatedEntity.signature_link || null);
+                      setSignatureFile(null);
+                      
+                      // Save entity data to localStorage for admin users (so it persists on reload)
+                      if (user?.role === 'ADMIN' && updatedEntityDetails.id) {
+                        const savedEntityKey = `entity_${updatedEntityDetails.id}`;
+                        const dataToSave = {
+                          name: updatedEntityDetails.name,
+                          type: updatedEntityDetails.type,
+                          location: updatedEntityDetails.location,
+                          email: updatedEntityDetails.email,
+                          phone: updatedEntityDetails.phone,
+                          description: updatedEntityDetails.description,
+                          logo_link: updatedEntityDetails.logo_link,
+                          createdAt: updatedEntityDetails.createdAt,
+                          status: updatedEntityDetails.status,
+                          studentsCount: updatedEntityDetails.studentsCount,
+                          examsCount: updatedEntityDetails.examsCount,
+                        };
+                        localStorage.setItem(savedEntityKey, JSON.stringify(dataToSave));
+                      }
+                      
+                      success('Entity details updated successfully');
+                      setIsEditing(false);
+                      return;
+                    }
+                  } else {
+                    const payload: any = {
+                      entity_id: entityDetails.id,
+                      name: entitySettings.name,
+                      type: entitySettings.type,
+                      address: entitySettings.address,
+                      description: entitySettings.description || '',
+                      email: entitySettings.contactEmail || '',
+                      phone_number: entitySettings.contactPhone || '',
+                    };
+
+                    const response = await updateEntity(payload);
+                    
+                    // Update local state with response
+                    if (response && response.payload) {
                     const updatedEntity = response.payload;
                     const updatedEntityDetails: Entity = {
                       ...entityDetails,
@@ -385,12 +467,15 @@ export function EntityDetailPage({
                       email: updatedEntity.email || entityDetails.email || '',
                       phone: updatedEntity.phone_number || entityDetails.phone || '',
                       logo_link: updatedEntity.logo_link || entityDetails.logo_link || '',
+                      signature_link: updatedEntity.signature_link || entityDetails.signature_link || '',
                       createdAt: updatedEntity.created_at 
                         ? new Date(updatedEntity.created_at).toLocaleDateString() 
                         : entityDetails.createdAt || new Date().toLocaleDateString(),
                     };
                     
                     setEntityDetails(updatedEntityDetails);
+                    setLogoPreview(updatedEntity.logo_link || null);
+                    setSignaturePreview(updatedEntity.signature_link || null);
                     
                     // Save entity data to localStorage for admin users (so it persists on reload)
                     if (user?.role === 'ADMIN' && updatedEntityDetails.id) {
@@ -405,6 +490,8 @@ export function EntityDetailPage({
                         logo_link: updatedEntityDetails.logo_link,
                         createdAt: updatedEntityDetails.createdAt,
                         status: updatedEntityDetails.status,
+                        studentsCount: updatedEntityDetails.studentsCount,
+                        examsCount: updatedEntityDetails.examsCount,
                       };
                       localStorage.setItem(savedEntityKey, JSON.stringify(dataToSave));
                     }
@@ -418,11 +505,13 @@ export function EntityDetailPage({
                       contactEmail: updatedEntityDetails.email || '',
                       contactPhone: updatedEntityDetails.phone || '',
                       logoLink: updatedEntityDetails.logo_link || '',
+                      signatureLink: updatedEntityDetails.signature_link || '',
                     });
+                    }
+                    
+                    success('Entity settings updated successfully');
+                    setIsEditing(false);
                   }
-                  
-                  success('Entity settings updated successfully');
-                setIsEditing(false);
                 } catch (err: any) {
                   console.error('❌ EntityDetailPage - Error updating entity:', err);
                   const errorMessage = err?.message || err?.response?.data?.message || 'Failed to update entity settings';
@@ -476,14 +565,100 @@ export function EntityDetailPage({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="entity-logo">Logo URL</Label>
-                      <Input
-                        id="entity-logo"
-                        value={entitySettings.logoLink}
-                        onChange={(e) => setEntitySettings({ ...entitySettings, logoLink: e.target.value })}
-                        placeholder="https://example.com/logo.png"
-                        disabled={!isEditing}
-                      />
+                      <Label>College Logo</Label>
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className="relative">
+                          <div className="w-32 h-32 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/50">
+                            {logoPreview ? (
+                              <ImageWithFallback
+                                src={logoPreview}
+                                fallback={<Building className="h-12 w-12 text-muted-foreground" />}
+                                alt={entityDetails.name || "Logo"}
+                                className="w-full h-full rounded-lg object-cover"
+                              />
+                            ) : (
+                              <div className="text-center p-4">
+                                <Building className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                                <span className="text-sm text-muted-foreground">No logo</span>
+                              </div>
+                            )}
+                          </div>
+                          {isEditing && (
+                            <>
+                              <Label htmlFor="entity-logo-upload" className="absolute -bottom-2 -right-2 cursor-pointer bg-primary text-primary-foreground p-2 rounded-full hover:bg-primary/90 transition-colors">
+                                <Upload className="h-4 w-4" />
+                              </Label>
+                              <Input
+                                id="entity-logo-upload"
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    const file = e.target.files[0];
+                                    setLogoFile(file);
+                                    setLogoPreview(URL.createObjectURL(file));
+                                  }
+                                }}
+                                disabled={!isEditing}
+                              />
+                            </>
+                          )}
+                        </div>
+                        {!isEditing && logoPreview && (
+                          <p className="text-xs text-muted-foreground text-center max-w-xs break-all">
+                            {logoPreview}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Authorized Signature</Label>
+                      <div className="flex flex-col items-center space-y-4">
+                        <div className="relative">
+                          <div className="w-48 h-24 rounded-lg border-2 border-dashed flex items-center justify-center bg-muted/50">
+                            {signaturePreview ? (
+                              <ImageWithFallback
+                                src={signaturePreview}
+                                fallback={<Building className="h-8 w-8 text-muted-foreground" />}
+                                alt="Authorized Signature"
+                                className="w-full h-full rounded-lg object-contain"
+                              />
+                            ) : (
+                              <div className="text-center p-4">
+                                <Building className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                                <span className="text-sm text-muted-foreground">No signature</span>
+                              </div>
+                            )}
+                          </div>
+                          {isEditing && (
+                            <>
+                              <Label htmlFor="entity-signature-upload" className="absolute -bottom-2 -right-2 cursor-pointer bg-primary text-primary-foreground p-2 rounded-full hover:bg-primary/90 transition-colors">
+                                <Upload className="h-4 w-4" />
+                              </Label>
+                              <Input
+                                id="entity-signature-upload"
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    const file = e.target.files[0];
+                                    setSignatureFile(file);
+                                    setSignaturePreview(URL.createObjectURL(file));
+                                  }
+                                }}
+                                disabled={!isEditing}
+                              />
+                            </>
+                          )}
+                        </div>
+                        {!isEditing && signaturePreview && (
+                          <p className="text-xs text-muted-foreground text-center max-w-xs break-all">
+                            {signaturePreview}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

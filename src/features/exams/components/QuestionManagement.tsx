@@ -58,28 +58,48 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
     }
   });
 
-  // Fetch questions from backend
+  // Fetch all questions from backend (paginated)
   const fetchQuestions = async () => {
     try {
       setLoading(true);
       setErrorMessage(null);
       // Clean examId by removing any suffix like ":1"
       const cleanedExamId = examId.split(':')[0].trim();
-      // Backend limit is max 10, so we fetch with limit 10
-      const response = await examApi.getQuestions(cleanedExamId, 1, 10);
-      setQuestions(response.payload.questions || []);
-    } catch (err) {
-      // Only show error if it's not a validation error (which shouldn't happen now)
-      // For validation errors or when there are no questions, silently handle it
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch questions';
-      // Don't show validation errors to user if it's just about limit
-      if (errorMsg.includes('limit')) {
-        // Silently set empty questions and let the UI show "No questions found"
-        setQuestions([]);
-      } else {
-        setErrorMessage(errorMsg);
-        error(errorMsg);
+      
+      // Fetch all questions by paginating through pages
+      // Backend limit must be less than 10, so we use 9
+      const allQuestions: BackendQuestion[] = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      const pageSize = 9; // Backend requires limit < 10
+      
+      while (currentPage <= totalPages) {
+        const response = await examApi.getQuestions(cleanedExamId, currentPage, pageSize);
+        const { questions = [], totalPages: serverTotalPages, total, limit } = response.payload;
+        
+        allQuestions.push(...questions);
+        
+        const effectiveLimit = limit ?? pageSize;
+        if (serverTotalPages) {
+          totalPages = serverTotalPages;
+        } else if (typeof total === 'number' && effectiveLimit > 0) {
+          totalPages = Math.max(1, Math.ceil(total / effectiveLimit));
+        } else if (questions.length < effectiveLimit) {
+          break;
+        }
+        
+        if (questions.length < effectiveLimit) {
+          break;
+        }
+        
+        currentPage += 1;
       }
+      
+      setQuestions(allQuestions);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch questions';
+      setErrorMessage(errorMsg);
+      error(errorMsg);
       console.error('Error fetching questions:', err);
     } finally {
       setLoading(false);
@@ -816,72 +836,78 @@ export function QuestionManagement({ examId, examTitle }: QuestionManagementProp
 
       {/* Questions List */}
       <Card>
-        <CardContent className="p-6">
+        <CardContent className="p-0">
           {loading && questions.length === 0 ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex items-center justify-center py-12 px-6">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : filteredQuestions.length === 0 ? (
-            <div className="text-center py-12">
+            <div className="text-center py-12 px-6">
               <p className="text-muted-foreground">
                 {questions.length === 0 ? 'No questions found. Add your first question!' : 'No questions match your search criteria.'}
               </p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">#</TableHead>
-                  <TableHead>Question</TableHead>
-                  <TableHead className="w-24">Type</TableHead>
-                  <TableHead className="w-32">Created</TableHead>
-                  <TableHead className="w-32 text-right">Delete</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredQuestions.map((question, index) => (
-                  <TableRow
-                    key={question.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => openEditModal(question)}
-                  >
-                    <TableCell className="font-mono text-sm">{index + 1}</TableCell>
-                    <TableCell>
-                      <div className="max-w-2xl">
-                        <p className="line-clamp-2">{question.question_text}</p>
-                        {(question.type === 'MCQ_SINGLE' || question.type === 'MCQ_MULTIPLE') && question.metadata?.options && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {question.metadata.options.length} options
-                          </p>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{question.type}</Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {question.created_at ? new Date(question.created_at).toLocaleDateString() : 'N/A'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleDeleteQuestion(question.id);
-                          }}
-                          disabled={loading}
-                          className="text-destructive hover:text-destructive"
+            <div className="relative">
+              <div className="overflow-y-auto border-t" style={{ maxHeight: '500px' }}>
+                <div className="px-6 pt-4 pb-4">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-background z-10 border-b">
+                      <TableRow>
+                        <TableHead className="w-12 bg-background">#</TableHead>
+                        <TableHead className="bg-background">Question</TableHead>
+                        <TableHead className="w-24 bg-background">Type</TableHead>
+                        <TableHead className="w-32 bg-background">Created</TableHead>
+                        <TableHead className="w-32 text-right bg-background">Delete</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredQuestions.map((question, index) => (
+                        <TableRow
+                          key={question.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => openEditModal(question)}
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                          <TableCell className="font-mono text-sm">{index + 1}</TableCell>
+                          <TableCell>
+                            <div className="max-w-2xl">
+                              <p className="line-clamp-2">{question.question_text}</p>
+                              {(question.type === 'MCQ_SINGLE' || question.type === 'MCQ_MULTIPLE') && question.metadata?.options && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {question.metadata.options.length} options
+                                </p>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{question.type}</Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {question.created_at ? new Date(question.created_at).toLocaleDateString() : 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center justify-end">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleDeleteQuestion(question.id);
+                                }}
+                                disabled={loading}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
