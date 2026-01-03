@@ -12,20 +12,20 @@ const ExamContext = createContext<ExamContextType | undefined>(undefined);
 
 const loadExamFromStorage = (): BackendExam | null => {
   try {
-    const storedExam = localStorage.getItem('currentExam');
+    const storedExam = sessionStorage.getItem('currentExam');
     const token = getToken();
     
     // If no token, clear exam data (token is source of truth)
     if (!token) {
       if (storedExam) {
-        localStorage.removeItem('currentExam');
+        sessionStorage.removeItem('currentExam');
       }
       return null;
     }
     
     return storedExam ? JSON.parse(storedExam) : null;
   } catch (error) {
-    console.error('Failed to load exam from localStorage:', error);
+    console.error('Failed to load exam from sessionStorage:', error);
     return null;
   }
 };
@@ -33,12 +33,12 @@ const loadExamFromStorage = (): BackendExam | null => {
 const saveExamToStorage = (exam: BackendExam | null) => {
   try {
     if (exam) {
-      localStorage.setItem('currentExam', JSON.stringify(exam));
+      sessionStorage.setItem('currentExam', JSON.stringify(exam));
     } else {
-      localStorage.removeItem('currentExam');
+      sessionStorage.removeItem('currentExam');
     }
   } catch (error) {
-    console.error('Failed to save exam to localStorage:', error);
+    console.error('Failed to save exam to sessionStorage:', error);
   }
 };
 
