@@ -24,7 +24,8 @@ import {
   Pencil,
   FileText,
   AlertCircle,
-  Upload
+  Upload,
+  Clock
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { RoleAwareExamManagement } from '../../../features/exams/components/RoleAwareExamManagement';
@@ -32,6 +33,7 @@ import { UserManagement } from '../../../features/users/components/UserManagemen
 import { AnalyticsDashboard } from '../../../features/dashboard/components/AnalyticsDashboard';
 import { SubmissionsManagement } from '../../../features/submissions/components/SubmissionsManagement';
 import { ImageWithFallback } from '../../../shared/components/common/ImageWithFallback';
+import { SubscriptionTimer } from './SubscriptionTimer';
 
 interface EntityDetailPageProps {
   entity: Entity;
@@ -60,6 +62,7 @@ const mapApiEntityToUiEntity = (apiEntity: ApiEntity): Entity => ({
   logo_link: apiEntity.logo_link || '',
   signature_link: apiEntity.signature_link || '',
   monitoring_enabled: apiEntity.monitoring_enabled !== undefined ? apiEntity.monitoring_enabled : true,
+  subscription_end_date: apiEntity.subscription_end_date || null,
 });
 
 export function EntityDetailPage({
@@ -214,7 +217,11 @@ export function EntityDetailPage({
                   </div>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col items-end gap-2">
+                <SubscriptionTimer 
+                  subscriptionEndDate={entityDetails.subscription_end_date} 
+                  variant="default"
+                />
                 {/* Generate Insights button and dialog - commented out
                 <Dialog open={showInsightsModal} onOpenChange={setShowInsightsModal}>
                   <DialogTrigger asChild>
@@ -277,7 +284,7 @@ export function EntityDetailPage({
 
         {/* Management Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="exams" className="flex items-center gap-2">
               <BookOpen className="h-4 w-4" />
               Manage Exams
@@ -295,6 +302,10 @@ export function EntityDetailPage({
               <BarChart3 className="h-4 w-4" />
               Monitoring
             </TabsTrigger> */}
+            <TabsTrigger value="subscription" className="flex items-center gap-2">
+              <Clock className="h-4 w-4" />
+              Subscription
+            </TabsTrigger>
             <TabsTrigger value="settings" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Settings
@@ -319,6 +330,61 @@ export function EntityDetailPage({
 
           <TabsContent value="submissions" className="space-y-6">
             <SubmissionsManagement currentEntity={entityDetails.id} />
+          </TabsContent>
+
+          <TabsContent value="subscription" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Subscription Details</CardTitle>
+                <CardDescription>
+                  View subscription information and expiration details
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {entityDetails.subscription_end_date ? (
+                  <>
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-muted-foreground">Subscription Status</p>
+                        <div className="flex items-center gap-2">
+                          <SubscriptionTimer 
+                            subscriptionEndDate={entityDetails.subscription_end_date} 
+                            variant="default"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">Subscription End Date</Label>
+                        <p className="text-lg font-semibold">
+                          {new Date(entityDetails.subscription_end_date).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                          })}
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-muted-foreground">Time Remaining</Label>
+                        <SubscriptionTimer 
+                          subscriptionEndDate={entityDetails.subscription_end_date} 
+                          variant="default"
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      No subscription information available for this entity.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* COMMENTED OUT: Monitoring tab content removed from entity level */}
