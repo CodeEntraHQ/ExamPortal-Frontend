@@ -17,24 +17,26 @@ export function getApiUrl(endpoint: string): string {
 }
 
 /**
- * Get authentication token from localStorage
+ * Get authentication token from sessionStorage
+ * sessionStorage is cleared when browser tab/window is closed
  */
 export function getToken(): string | null {
-  return localStorage.getItem('token');
+  return sessionStorage.getItem('token');
 }
 
 /**
- * Set authentication token in localStorage
+ * Set authentication token in sessionStorage
+ * sessionStorage is cleared when browser tab/window is closed
  */
 export function setToken(token: string): void {
-  localStorage.setItem('token', token);
+  sessionStorage.setItem('token', token);
 }
 
 /**
- * Remove authentication token from localStorage
+ * Remove authentication token from sessionStorage
  */
 export function removeToken(): void {
-  localStorage.removeItem('token');
+  sessionStorage.removeItem('token');
 }
 
 /**
@@ -74,7 +76,7 @@ export async function authenticatedFetch(
     if (response.status === 401) {
       // Clear authentication data
       removeToken();
-      localStorage.removeItem('user');
+      sessionStorage.removeItem('user');
       
       // Only redirect if we're not already on the login/landing page
       // This prevents infinite redirect loops

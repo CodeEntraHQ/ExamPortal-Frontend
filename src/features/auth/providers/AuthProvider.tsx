@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { login as apiLogin, logout as apiLogout } from '../../../services/api';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { login as apiLogin, logout as apiLogout, renewToken as apiRenewToken } from '../../../services/api';
 import { clearAuthStorage } from '../../../services/api/storage';
 import { getToken, removeToken } from '../../../services/api/core';
+import { isTokenExpired, getTimeUntilExpiration } from '../../../services/api/jwt';
+import { envConfig } from '../../../config/env';
 
 type UserRole = 'SUPERADMIN' | 'ADMIN' | 'STUDENT' | 'REPRESENTATIVE';
 
@@ -38,14 +40,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const loadUserFromStorage = (): User | null => {
   try {
-    const storedUser = localStorage.getItem('user');
+    const storedUser = sessionStorage.getItem('user');
     const token = getToken();
     
     // If no token, clear user data (token is source of truth)
     if (!token) {
       if (storedUser) {
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
       }
+      return null;
+    }
+    
+    // Check if token is expired
+    if (token && isTokenExpired(token)) {
+      sessionStorage.removeItem('user');
+      sessionStorage.removeItem('token');
       return null;
     }
     
@@ -63,12 +72,12 @@ const loadUserFromStorage = (): User | null => {
 const saveUserToStorage = (user: User | null) => {
   try {
     if (user) {
-      localStorage.setItem('user', JSON.stringify(user));
+      sessionStorage.setItem('user', JSON.stringify(user));
     } else {
-      localStorage.removeItem('user');
+      sessionStorage.removeItem('user');
     }
   } catch (error) {
-    console.error('❌ AuthProvider - Failed to save user to localStorage:', error);
+    console.error('❌ AuthProvider - Failed to save user to sessionStorage:', error);
   }
 };
 
@@ -76,6 +85,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(() => loadUserFromStorage());
   const [loginCredentials, setLoginCredentials] = useState<{ email: string; password: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const renewalTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Validate token on mount and when user changes
   useEffect(() => {
@@ -98,6 +109,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoginCredentials(null);
       removeToken();
       
+      // Clear renewal timers
+      if (renewalTimerRef.current) {
+        clearTimeout(renewalTimerRef.current);
+        renewalTimerRef.current = null;
+      }
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+        checkIntervalRef.current = null;
+      }
+      
       // Only redirect if not already on landing page
       if (window.location.pathname !== '/') {
         window.location.href = '/';
@@ -109,6 +130,110 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
     };
   }, []);
+
+  // Automatic token renewal mechanism
+  useEffect(() => {
+    const token = getToken();
+    if (!token || !user) {
+      // Clear any existing timers if no token/user
+      if (renewalTimerRef.current) {
+        clearTimeout(renewalTimerRef.current);
+        renewalTimerRef.current = null;
+      }
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+        checkIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Check if token is expired
+    if (isTokenExpired(token)) {
+      clearAuthStorage();
+      setUser(null);
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      return;
+    }
+
+    const scheduleTokenRenewal = () => {
+      // Clear existing timer
+      if (renewalTimerRef.current) {
+        clearTimeout(renewalTimerRef.current);
+      }
+
+      // Get current token dynamically (may have been renewed)
+      const currentToken = getToken();
+      if (!currentToken) {
+        clearAuthStorage();
+        setUser(null);
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        return;
+      }
+
+      const timeUntilExpiration = getTimeUntilExpiration(currentToken);
+      if (timeUntilExpiration <= 0) {
+        // Token already expired
+        clearAuthStorage();
+        setUser(null);
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        return;
+      }
+
+      // Calculate renewal time: renew before expiry using threshold (default 2 minutes = 120000ms)
+      const renewalThreshold = envConfig.tokenRenewalThreshold; // milliseconds
+      const timeUntilRenewal = Math.max(0, timeUntilExpiration - renewalThreshold);
+
+      renewalTimerRef.current = setTimeout(async () => {
+        try {
+          await apiRenewToken();
+          console.log('✅ Token renewed successfully');
+          
+          // Reschedule next renewal with new token
+          scheduleTokenRenewal();
+        } catch (error) {
+          console.error('❌ Token renewal failed:', error);
+          // If renewal fails, clear auth and trigger logout
+          clearAuthStorage();
+          setUser(null);
+          window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        }
+      }, timeUntilRenewal);
+    };
+
+    // Set up periodic check for token expiration (every 30 seconds by default)
+    const checkInterval = envConfig.tokenCheckInterval; // milliseconds
+    checkIntervalRef.current = setInterval(() => {
+      const currentToken = getToken();
+      if (!currentToken || isTokenExpired(currentToken)) {
+        clearAuthStorage();
+        setUser(null);
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+        if (checkIntervalRef.current) {
+          clearInterval(checkIntervalRef.current);
+          checkIntervalRef.current = null;
+        }
+        if (renewalTimerRef.current) {
+          clearTimeout(renewalTimerRef.current);
+          renewalTimerRef.current = null;
+        }
+      }
+    }, checkInterval);
+
+    // Schedule initial renewal
+    scheduleTokenRenewal();
+
+    // Cleanup function
+    return () => {
+      if (renewalTimerRef.current) {
+        clearTimeout(renewalTimerRef.current);
+        renewalTimerRef.current = null;
+      }
+      if (checkIntervalRef.current) {
+        clearInterval(checkIntervalRef.current);
+        checkIntervalRef.current = null;
+      }
+    };
+  }, [user]);
 
   const updateUser = useCallback((updates: Partial<User>) => {
     setUser(prevUser => {

@@ -121,6 +121,25 @@ export async function resendOTP(): Promise<void> {
 }
 
 /**
+ * Renew user session token
+ * Gets a new token with fresh expiration time
+ */
+export async function renewToken(): Promise<string> {
+  const response = await authenticatedFetch(getApiUrl('/v1/users/renew'), {
+    method: 'POST',
+  });
+
+  const data = await response.json();
+
+  if (data.payload?.token) {
+    setToken(data.payload.token);
+    return data.payload.token;
+  }
+
+  throw new Error('Token renewal failed: No token in response');
+}
+
+/**
  * Logout user
  * Calls the backend logout endpoint and clears all authentication data
  */
@@ -153,6 +172,7 @@ export const authAPI = {
   forgotPassword,
   resetPassword,
   resendOTP,
+  renewToken,
   logout,
 };
 

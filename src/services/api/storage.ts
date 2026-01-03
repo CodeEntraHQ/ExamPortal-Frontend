@@ -1,28 +1,29 @@
 /**
  * Centralized storage management for authentication-related data
  * Provides a single source of truth for clearing all auth-related storage
+ * Uses sessionStorage so data is cleared when browser tab/window is closed
  */
 
 /**
- * List of all localStorage keys that should be cleared on logout
+ * List of all sessionStorage keys that should be cleared on logout
  */
 const AUTH_STORAGE_KEYS = [
   'token',
   'user',
   'currentExam',
   // Note: 'rememberedEmail' and 'theme' are intentionally excluded
-  // as they are user preferences, not authentication data
+  // as they are user preferences, not authentication data (stored in localStorage)
 ] as const;
 
 /**
- * Clear all authentication-related data from localStorage
+ * Clear all authentication-related data from sessionStorage
  */
 export function clearAuthStorage(): void {
   AUTH_STORAGE_KEYS.forEach((key) => {
     try {
-      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
     } catch (error) {
-      console.error(`Failed to remove ${key} from localStorage:`, error);
+      console.error(`Failed to remove ${key} from sessionStorage:`, error);
     }
   });
 }

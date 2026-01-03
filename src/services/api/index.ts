@@ -7,7 +7,7 @@
 export { authenticatedFetch, getApiUrl, getToken, setToken, removeToken } from './core';
 
 // Auth API
-export { login, logout, forgotPassword, resetPassword, resendOTP, authAPI } from './auth';
+export { login, logout, renewToken, forgotPassword, resetPassword, resendOTP, authAPI } from './auth';
 export type { LoginResponse } from './auth';
 
 // Exam API
