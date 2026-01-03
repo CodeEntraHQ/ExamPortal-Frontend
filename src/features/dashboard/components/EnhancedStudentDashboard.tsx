@@ -48,6 +48,7 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
   const [questionCounts, setQuestionCounts] = useState<Record<string, number>>({});
   const [resumptionRequests, setResumptionRequests] = useState<Record<string, GetResumptionRequestResponse['payload']>>({});
   const [requestingResumption, setRequestingResumption] = useState<Record<string, boolean>>({});
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Calculate profile completion percentage based on phone_number, gender, address, and profile_picture_link
   const calculateProfileCompletion = (): number => {
@@ -87,6 +88,14 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
       });
     }
   }, [user, profileCompletion]);
+
+  // Update current time every second for countdown timers
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Fetch enrollments on component mount
   useEffect(() => {
@@ -870,6 +879,7 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
       timeSpent: result?.metadata?.timeSpent ? Math.floor(result.metadata.timeSpent / 60) : undefined,
       correctAnswers: result?.metadata?.correct_answer || undefined,
       resultsVisible: exam.results_visible ?? false,
+      scheduled_at: exam.scheduled_at || null,
       enrollment: enrollment, // Keep full enrollment for access to result data
     };
   };
@@ -1625,6 +1635,34 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                                 <span>{exam.totalQuestions} questions</span>
                                 <span>Passing: {exam.passingScore}%</span>
                               </div>
+                              {exam.scheduled_at && (() => {
+                                const scheduledTime = new Date(exam.scheduled_at);
+                                const timeRemaining = scheduledTime.getTime() - currentTime.getTime();
+                                const isScheduledTimePassed = timeRemaining <= 0;
+                                
+                                if (isScheduledTimePassed) {
+                                  return null; // Don't show timer if scheduled time has passed
+                                }
+                                
+                                const days = Math.floor(timeRemaining / (1000 * 60 * 60 * 24));
+                                const hours = Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                                const minutes = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+                                const seconds = Math.floor((timeRemaining % (1000 * 60)) / 1000);
+                                
+                                const formatTime = (value: number) => value.toString().padStart(2, '0');
+                                const timeString = days > 0 
+                                  ? `${days}d ${formatTime(hours)}h ${formatTime(minutes)}m`
+                                  : hours > 0
+                                  ? `${formatTime(hours)}h ${formatTime(minutes)}m ${formatTime(seconds)}s`
+                                  : `${formatTime(minutes)}m ${formatTime(seconds)}s`;
+                                
+                                return (
+                                  <div className="flex items-center gap-2 text-sm font-medium text-orange-600 dark:text-orange-500">
+                                    <Clock className="h-4 w-4" />
+                                    <span>Starts in: {timeString}</span>
+                                  </div>
+                                );
+                              })()}
                             </div>
                             <div className="flex items-center gap-3">
                               <Badge variant="default" className="bg-primary text-primary-foreground">
@@ -1642,6 +1680,7 @@ export function EnhancedStudentDashboard({ onStartExam, onViewResults }: Student
                                 size="sm"
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground"
                                 onClick={() => onStartExam?.(exam.id.toString())}
+                                disabled={exam.scheduled_at ? new Date(exam.scheduled_at).getTime() > currentTime.getTime() : false}
                               >
                                 <Play className="h-4 w-4 mr-1" />
                                 Start Exam

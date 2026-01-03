@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -27,8 +27,15 @@ import '../../../styles/scrollbar.css';
 interface CreateExamModalProps {
   open: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (examId?: string) => void;
   entityId?: string;
+  initialData?: {
+    title?: string;
+    type?: CreateExamPayload['type'];
+    duration_seconds?: number;
+    scheduled_at?: string | null;
+    metadata?: MetadataField;
+  };
 }
 
 type MetadataFieldType = 'text' | 'number' | 'boolean';
@@ -52,11 +59,12 @@ type ExamFormData = {
   title: string;
   type: CreateExamPayload['type'];
   duration_seconds: number;
+  scheduled_at?: string | null;
   metadata: MetadataField;
   entity_id?: string;
 };
 
-export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateExamModalProps) => {
+export const CreateExamModal = ({ open, onClose, onSuccess, entityId, initialData }: CreateExamModalProps) => {
   const { user } = useAuth();
   const availableMetadataFields: (MetadataFieldDefinition & { description: string })[] = [
     { 
@@ -82,22 +90,49 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
     }
   ];
 
-  const initialFormState: ExamFormData = {
-    title: '',
-    type: 'QUIZ',
-    duration_seconds: 3600, // Default 1 hour
-    metadata: {},
+  const getInitialFormState = (): ExamFormData => ({
+    title: initialData?.title || '',
+    type: initialData?.type || 'QUIZ',
+    duration_seconds: initialData?.duration_seconds || 3600, // Default 1 hour
+    scheduled_at: initialData?.scheduled_at || null,
+    metadata: initialData?.metadata || {},
     entity_id: entityId
-  };
+  });
+
+  const initialFormState = getInitialFormState();
 
   const [formData, setFormData] = useState<ExamFormData>(initialFormState);
   const [activeMetadataFields, setActiveMetadataFields] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Reset form when modal is opened/closed or initialData changes
+  useEffect(() => {
+    if (open) {
+      const newFormState = getInitialFormState();
+      setFormData(newFormState);
+      setError(null);
+      
+      // Set active metadata fields if metadata is provided
+      if (initialData?.metadata) {
+        const activeFields = Object.keys(initialData.metadata).filter(
+          key => initialData.metadata?.[key as keyof MetadataField] !== undefined &&
+                 initialData.metadata[key as keyof MetadataField] !== null &&
+                 (Array.isArray(initialData.metadata[key as keyof MetadataField]) 
+                   ? (initialData.metadata[key as keyof MetadataField] as any[]).length > 0
+                   : true)
+        );
+        setActiveMetadataFields(activeFields);
+      } else {
+        setActiveMetadataFields([]);
+      }
+    }
+  }, [open, initialData, entityId]);
+
   // Reset form when modal is closed
   const handleClose = () => {
-    setFormData(initialFormState);
+    setFormData(getInitialFormState());
+    setActiveMetadataFields([]);
     setError(null);
     onClose();
   };
@@ -121,17 +156,18 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
   };
 
   const handleNumberChange = (value: string, field: string) => {
-    const numberValue = Number(value);
+    // Allow empty string to clear the field
     if (field.startsWith('metadata.')) {
       const metadataField = field.split('.')[1] as keyof ExamFormData['metadata'];
       setFormData(prev => ({
         ...prev,
         metadata: {
           ...prev.metadata,
-          [metadataField]: numberValue
+          [metadataField]: value === '' ? undefined : Number(value)
         }
       }));
     } else {
+      const numberValue = value === '' ? 0 : Number(value);
       setFormData(prev => ({
         ...prev,
         [field]: field === 'duration_seconds' ? numberValue * 60 : numberValue
@@ -184,11 +220,13 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
         ...(user?.role === 'SUPERADMIN' && formData.entity_id && formData.entity_id.trim().length > 0
           ? { entity_id: formData.entity_id.trim() }
           : {}),
+        // Include scheduled_at if provided
+        ...(formData.scheduled_at ? { scheduled_at: formData.scheduled_at } : {}),
       };
-      await examApi.createExam(submissionData);
-      setFormData(initialFormState);
+      const response = await examApi.createExam(submissionData);
+      setFormData(getInitialFormState());
       setActiveMetadataFields([]);
-      onSuccess();
+      onSuccess(response.payload.id);
       handleClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create exam');
@@ -201,9 +239,9 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Create New Exam</DialogTitle>
+          <DialogTitle>{initialData ? 'Copy Exam' : 'Create New Exam'}</DialogTitle>
           <DialogDescription>
-            Fill in the details to create a new exam.
+            {initialData ? 'Edit the details and create a copy of this exam.' : 'Fill in the details to create a new exam.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -242,10 +280,30 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
             <Label htmlFor="duration">Duration (minutes)</Label>
             <Input
               id="duration"
+              type="number"
               value={formData.duration_seconds / 60}
               onChange={(e) => handleNumberChange(e.target.value, 'duration_seconds')}
               required
             />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="scheduled_at">Scheduled Time (Optional)</Label>
+            <Input
+              id="scheduled_at"
+              type="datetime-local"
+              value={formData.scheduled_at ? new Date(formData.scheduled_at).toISOString().slice(0, 16) : ''}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFormData(prev => ({
+                  ...prev,
+                  scheduled_at: value ? new Date(value).toISOString() : null
+                }));
+              }}
+            />
+            <p className="text-xs text-muted-foreground">
+              Set a specific date and time when the exam should be available
+            </p>
           </div>
 
           <div className="grid gap-2">
@@ -424,7 +482,7 @@ export const CreateExamModal = ({ open, onClose, onSuccess, entityId }: CreateEx
                     id={fieldKey}
                     type="number"
                     min={0}
-                    value={formData.metadata[fieldKey] || 0}
+                    value={formData.metadata[fieldKey] ?? ''}
                     onChange={(e) => handleNumberChange(e.target.value, `metadata.${fieldKey}`)}
                     placeholder={`Enter ${field.label.toLowerCase()}...`}
                     className="mt-2"

@@ -23,6 +23,7 @@ export interface BackendExam {
   has_admission_form?: boolean;
   results_visible?: boolean;
   monitoring_enabled?: boolean;
+  scheduled_at?: string | null;
 }
 
 export interface BackendQuestion {
@@ -82,6 +83,7 @@ export interface UpdateExamPayload {
   active?: boolean;
   results_visible?: boolean;
   monitoring_enabled?: boolean;
+  scheduled_at?: string | null;
   metadata?: {
     totalMarks?: number;
     passingMarks?: number;
@@ -225,6 +227,7 @@ export interface StudentEnrollment {
     metadata: any;
     entity_id: string;
     results_visible?: boolean;
+    scheduled_at?: string | null;
   };
   entity: {
     id: string;
@@ -327,13 +330,29 @@ export async function getQuestions(
 /**
  * Create a question
  */
-export async function createQuestion(payload: CreateQuestionPayload): Promise<{ payload: BackendQuestion }> {
+export async function createQuestion(payload: CreateQuestionPayload | FormData): Promise<{ payload: BackendQuestion }> {
+  // Backend expects FormData with metadata as JSON string (due to multer middleware)
+  let formData: FormData;
+  
+  if (payload instanceof FormData) {
+    formData = payload;
+  } else {
+    // Convert regular payload to FormData
+    formData = new FormData();
+    formData.append('exam_id', payload.exam_id);
+    formData.append('question_text', payload.question_text);
+    formData.append('type', payload.type);
+    
+    // Metadata must be sent as JSON string
+    if (payload.metadata) {
+      formData.append('metadata', JSON.stringify(payload.metadata));
+    }
+  }
+  
   const response = await authenticatedFetch(getApiUrl('/v1/exams/question'), {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    // Don't set Content-Type header - browser will set it with boundary for FormData
+    body: formData,
   });
 
   return response.json();
@@ -573,6 +592,17 @@ export async function updateExam(examId: string, payload: UpdateExamPayload): Pr
 }
 
 /**
+ * Delete an exam
+ */
+export async function deleteExam(examId: string): Promise<void> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/exams/${examId}`), {
+    method: 'DELETE',
+  });
+
+  await response.json();
+}
+
+/**
  * Get exam statistics
  */
 export async function getExamStatistics(entityId?: string): Promise<GetExamStatisticsResponse> {
@@ -761,6 +791,7 @@ export const examApi = {
   deleteExamEnrollment,
   createExam,
   updateExam,
+  deleteExam,
   inviteStudents,
   inviteRepresentatives,
   getExamStatistics,
