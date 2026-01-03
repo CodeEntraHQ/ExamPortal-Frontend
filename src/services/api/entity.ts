@@ -19,6 +19,7 @@ export interface ApiEntity {
   total_exams?: number;
   total_students?: number;
   monitoring_enabled?: boolean;
+  subscription_end_date?: string | null;
 }
 
 export interface CreateEntityPayload {
@@ -28,6 +29,9 @@ export interface CreateEntityPayload {
   email?: string;
   phone_number?: string;
   type?: string;
+  subscription_years?: number;
+  subscription_months?: number;
+  subscription_days?: number;
 }
 
 export interface UpdateEntityPayload {
@@ -39,6 +43,9 @@ export interface UpdateEntityPayload {
   phone_number?: string;
   type?: string;
   monitoring_enabled?: boolean;
+  subscription_years?: number;
+  subscription_months?: number;
+  subscription_days?: number;
 }
 
 export interface GetEntitiesResponse {
@@ -109,6 +116,9 @@ export async function createEntity(payload: CreateEntityPayload | FormData): Pro
     }
     if (regularPayload.type) formData.append('type', regularPayload.type);
     if (regularPayload.logo) formData.append('logo', regularPayload.logo);
+    if (regularPayload.subscription_years !== undefined) formData.append('subscription_years', String(regularPayload.subscription_years));
+    if (regularPayload.subscription_months !== undefined) formData.append('subscription_months', String(regularPayload.subscription_months));
+    if (regularPayload.subscription_days !== undefined) formData.append('subscription_days', String(regularPayload.subscription_days));
     
     isFormData = true;
   } else if (isFormData) {
@@ -175,6 +185,15 @@ export async function updateEntity(payload: UpdateEntityPayload | FormData): Pro
     if (regularPayload.monitoring_enabled !== undefined && regularPayload.monitoring_enabled !== null) {
       formData.append('monitoring_enabled', String(regularPayload.monitoring_enabled));
     }
+    if (regularPayload.subscription_years !== undefined && regularPayload.subscription_years !== null) {
+      formData.append('subscription_years', String(regularPayload.subscription_years));
+    }
+    if (regularPayload.subscription_months !== undefined && regularPayload.subscription_months !== null) {
+      formData.append('subscription_months', String(regularPayload.subscription_months));
+    }
+    if (regularPayload.subscription_days !== undefined && regularPayload.subscription_days !== null) {
+      formData.append('subscription_days', String(regularPayload.subscription_days));
+    }
     // Only append logo if it's a File object
     if (regularPayload.logo && regularPayload.logo instanceof File) {
       formData.append('logo', regularPayload.logo);
@@ -206,6 +225,9 @@ export async function updateEntity(payload: UpdateEntityPayload | FormData): Pro
     if (jsonPayload.monitoring_enabled !== undefined && jsonPayload.monitoring_enabled !== null) {
       formData.append('monitoring_enabled', String(jsonPayload.monitoring_enabled));
     }
+    if (jsonPayload.subscription_years !== undefined) formData.append('subscription_years', String(jsonPayload.subscription_years));
+    if (jsonPayload.subscription_months !== undefined) formData.append('subscription_months', String(jsonPayload.subscription_months));
+    if (jsonPayload.subscription_days !== undefined) formData.append('subscription_days', String(jsonPayload.subscription_days));
     if (jsonPayload.logo && jsonPayload.logo instanceof File) {
       formData.append('logo', jsonPayload.logo);
     }

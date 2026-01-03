@@ -32,6 +32,7 @@ import { getEntities, createEntity, updateEntity, Entity as ApiEntity, CreateEnt
 import { toast } from 'sonner';
 import { Separator } from '../../../shared/components/ui/separator';
 import { Switch } from '../../../shared/components/ui/switch';
+import { SubscriptionTimer } from './SubscriptionTimer';
 
 export interface Entity {
   id: string;
@@ -49,6 +50,7 @@ export interface Entity {
   logo_link?: string;
   signature_link?: string;
   monitoring_enabled?: boolean;
+  subscription_end_date?: string | null;
 }
 
 const mapApiEntityToUiEntity = (apiEntity: ApiEntity): Entity => ({
@@ -67,6 +69,7 @@ const mapApiEntityToUiEntity = (apiEntity: ApiEntity): Entity => ({
   logo_link: apiEntity.logo_link || '',
   signature_link: apiEntity.signature_link || '',
   monitoring_enabled: apiEntity.monitoring_enabled !== undefined ? apiEntity.monitoring_enabled : true,
+  subscription_end_date: apiEntity.subscription_end_date || null,
 });
 
 interface EntityManagementProps {
@@ -373,9 +376,10 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
                           </div>
                           </div>
                         </div>
-                        {/* <Button variant="ghost" size="sm">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button> */}
+                        <SubscriptionTimer 
+                          subscriptionEndDate={entity.subscription_end_date} 
+                          variant="card"
+                        />
                       </div>
 
                       {/* Metrics */}
@@ -496,6 +500,11 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
                           </Badge>
                         </div>
 
+                        <SubscriptionTimer 
+                          subscriptionEndDate={entity.subscription_end_date} 
+                          variant="compact"
+                        />
+
                         {/* Monitoring Toggle - Only for SUPERADMIN */}
                         {user?.role === 'SUPERADMIN' && (
                           <div className="flex items-center gap-2">
@@ -560,8 +569,44 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
   );
 }
 
+// Helper function to calculate years, months, and days from subscription_end_date
+function calculateSubscriptionDuration(subscriptionEndDate: string | null | undefined): { years: number; months: number; days: number } {
+  if (!subscriptionEndDate) {
+    return { years: 0, months: 0, days: 0 };
+  }
+
+  const endDate = new Date(subscriptionEndDate);
+  const now = new Date();
+  
+  // If end date is in the past, return 0
+  if (endDate <= now) {
+    return { years: 0, months: 0, days: 0 };
+  }
+
+  // Calculate the difference
+  let years = endDate.getFullYear() - now.getFullYear();
+  let months = endDate.getMonth() - now.getMonth();
+  let days = endDate.getDate() - now.getDate();
+
+  // Adjust for negative days
+  if (days < 0) {
+    months--;
+    const lastDayOfPrevMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 0).getDate();
+    days += lastDayOfPrevMonth;
+  }
+
+  // Adjust for negative months
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+
+  return { years, months, days };
+}
+
 // Unified Entity Form Component
 function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onSubmit: (data: CreateEntityPayload | UpdateEntityPayload) => void, onCancel: () => void }) {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<{
     name: string;
     type: 'COLLEGE' | 'SCHOOL';
@@ -571,6 +616,9 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
     phone: string;
     logo: File | null;
     signature: File | null;
+    subscription_years: number;
+    subscription_months: number;
+    subscription_days: number;
   }>({
     name: '',
     type: 'COLLEGE',
@@ -580,12 +628,16 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
     phone: '',
     logo: null,
     signature: null,
+    subscription_years: 0,
+    subscription_months: 0,
+    subscription_days: 0,
   });
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [signaturePreview, setSignaturePreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (entity) {
+      const duration = calculateSubscriptionDuration(entity.subscription_end_date);
       setFormData(prev => ({
         ...prev,
         name: entity.name,
@@ -594,6 +646,9 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
         description: entity.description || '',
         email: entity.email,
         phone: entity.phone,
+        subscription_years: duration.years,
+        subscription_months: duration.months,
+        subscription_days: duration.days,
       }));
       setLogoPreview(entity.logo_link || null);
       setSignaturePreview(entity.signature_link || null);
@@ -607,6 +662,9 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
         phone: '',
         logo: null,
         signature: null,
+        subscription_years: 0,
+        subscription_months: 0,
+        subscription_days: 0,
       });
       setLogoPreview(null);
       setSignaturePreview(null);
@@ -638,6 +696,13 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
 
     if (formData.logo) {
       payload.logo = formData.logo;
+    }
+
+    // Only SUPERADMIN can update subscription
+    if (user?.role === 'SUPERADMIN' && (formData.subscription_years > 0 || formData.subscription_months > 0 || formData.subscription_days > 0)) {
+      payload.subscription_years = formData.subscription_years;
+      payload.subscription_months = formData.subscription_months;
+      payload.subscription_days = formData.subscription_days;
     }
 
     if (entity) {
@@ -703,6 +768,47 @@ function EntityForm({ entity, onSubmit, onCancel }: { entity: Entity | null, onS
               rows={3}
             />
           </div>
+
+          {user?.role === 'SUPERADMIN' && (
+            <div className="space-y-4 pt-4 border-t">
+              <Label className="text-base font-semibold">Subscription Duration</Label>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="subscription_years">Years</Label>
+                  <Input
+                    id="subscription_years"
+                    type="number"
+                    min="0"
+                    value={formData.subscription_years}
+                    onChange={(e) => setFormData(prev => ({ ...prev, subscription_years: parseInt(e.target.value) || 0 }))}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="subscription_months">Months</Label>
+                  <Input
+                    id="subscription_months"
+                    type="number"
+                    min="0"
+                    value={formData.subscription_months}
+                    onChange={(e) => setFormData(prev => ({ ...prev, subscription_months: parseInt(e.target.value) || 0 }))}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="subscription_days">Days</Label>
+                  <Input
+                    id="subscription_days"
+                    type="number"
+                    min="0"
+                    value={formData.subscription_days}
+                    onChange={(e) => setFormData(prev => ({ ...prev, subscription_days: parseInt(e.target.value) || 0 }))}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="contact" className="space-y-4">
