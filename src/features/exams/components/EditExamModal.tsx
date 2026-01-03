@@ -46,6 +46,7 @@ type ExamFormData = {
   metadata: MetadataField;
   active: boolean;
   results_visible: boolean;
+  scheduled_at: string | null;
 };
 
 export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalProps) => {
@@ -72,6 +73,7 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
         metadata,
         active: exam.active !== undefined ? exam.active : true,
         results_visible: exam.results_visible ?? false,
+        scheduled_at: exam.scheduled_at || null,
       };
     }
     return {
@@ -81,6 +83,7 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
       metadata: {},
       active: true,
       results_visible: false,
+      scheduled_at: null,
     };
   };
 
@@ -177,6 +180,7 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
         duration_seconds: formData.duration_seconds,
         active: formData.active,
         results_visible: formData.results_visible,
+        scheduled_at: formData.scheduled_at,
         metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
       };
       
@@ -289,6 +293,19 @@ export const EditExamModal = ({ open, onClose, onSuccess, exam }: EditExamModalP
                   onChange={(e) => handleNumberChange(e.target.value, 'duration_seconds')}
                   required
                 />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="scheduled_at">Scheduled Time (Optional)</Label>
+                <Input
+                  id="scheduled_at"
+                  type="datetime-local"
+                  value={formData.scheduled_at ? new Date(formData.scheduled_at).toISOString().slice(0, 16) : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, scheduled_at: e.target.value ? new Date(e.target.value).toISOString() : null }))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Set an optional scheduled date and time for the exam.
+                </p>
               </div>
 
               <div className="grid gap-2">

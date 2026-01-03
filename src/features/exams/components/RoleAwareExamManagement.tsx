@@ -8,6 +8,7 @@ import { Label } from '../../../shared/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../shared/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../shared/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../../../shared/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../../../shared/components/ui/alert-dialog';
 import { Checkbox } from '../../../shared/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '../../../shared/components/ui/dropdown-menu';
 import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
@@ -16,7 +17,7 @@ import { useAuth } from '../../../features/auth/providers/AuthProvider';
 import { useNotifications } from '../../../shared/providers/NotificationProvider';
 import { QuestionManagement } from './QuestionManagement';
 import { motion, AnimatePresence } from 'motion/react';
-import { examApi, BackendExam } from '../../../services/api/exam';
+import { examApi, BackendExam, BackendQuestion, CreateQuestionPayload } from '../../../services/api/exam';
 import { getUsers, ApiUser } from '../../../services/api/user';
 import { admissionFormApi } from '../../../services/api/admissionForm';
 import { getEntityById } from '../../../services/api/entity';
@@ -151,6 +152,25 @@ export function RoleAwareExamManagement({
   const [copied, setCopied] = useState<boolean>(false);
   const [entityMonitoringEnabled, setEntityMonitoringEnabled] = useState<boolean>(true);
   const [togglingMonitoring, setTogglingMonitoring] = useState<Set<string>>(new Set());
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [examToCopy, setExamToCopy] = useState<BackendExam | null>(null);
+  const [copyingExam, setCopyingExam] = useState(false);
+  const [examCopyData, setExamCopyData] = useState<{
+    title?: string;
+    type?: 'QUIZ' | 'OTHER';
+    duration_seconds?: number;
+    scheduled_at?: string | null;
+    metadata?: {
+      totalMarks?: number;
+      passingMarks?: number;
+      instructions?: string[];
+    };
+  } | null>(null);
+  const [copiedQuestions, setCopiedQuestions] = useState<BackendQuestion[]>([]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [examToDelete, setExamToDelete] = useState<BackendExam | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingExam, setDeletingExam] = useState(false);
 
   // Mock exam data based on user role
   // Keep the original exams for reference (as requested)
@@ -457,11 +477,194 @@ export function RoleAwareExamManagement({
         success(`${exam.title} archived successfully`);
         break;
       case 'delete':
-        if (confirm(`Are you sure you want to delete "${exam.title}"? This action cannot be undone.`)) {
-          setExams(exams.filter(e => e.id !== exam.id));
-          success(`${exam.title} deleted successfully`);
-        }
+        setExamToDelete(exam);
+        setDeleteConfirmText('');
+        setShowDeleteDialog(true);
         break;
+    }
+  };
+
+  // Handler for copying exam
+  const handleCopyExam = async (exam: BackendExam) => {
+    console.log('handleCopyExam called for exam:', exam.id);
+    try {
+      setCopyingExam(true);
+      
+      // Fetch exam details
+      const examResponse = await examApi.getExamById(exam.id);
+      const examData = examResponse.payload;
+      
+      // Fetch all questions (with pagination)
+      const allQuestions: BackendQuestion[] = [];
+      let currentPage = 1;
+      let totalPages = 1;
+      const QUESTIONS_PAGE_SIZE = 9;
+      
+      while (currentPage <= totalPages) {
+        const questionsResponse = await examApi.getQuestions(exam.id, currentPage, QUESTIONS_PAGE_SIZE);
+        const { questions, totalPages: serverTotalPages, total, limit } = questionsResponse.payload;
+        
+        allQuestions.push(...questions);
+        
+        const effectiveLimit = limit ?? QUESTIONS_PAGE_SIZE;
+        if (serverTotalPages) {
+          totalPages = serverTotalPages;
+        } else if (typeof total === 'number' && effectiveLimit > 0) {
+          totalPages = Math.max(1, Math.ceil(total / effectiveLimit));
+        } else if (questions.length < effectiveLimit) {
+          break;
+        }
+        
+        if (questions.length < effectiveLimit) {
+          break;
+        }
+        
+        currentPage += 1;
+      }
+      
+      // Store questions for later copying
+      setCopiedQuestions(allQuestions);
+      
+      // Prepare initial data for the modal
+      const metadata = examData.metadata || {};
+      setExamCopyData({
+        title: `${examData.title} (Copy)`,
+        type: examData.type as 'QUIZ' | 'OTHER',
+        duration_seconds: examData.duration_seconds,
+        scheduled_at: examData.scheduled_at || null,
+        metadata: {
+          totalMarks: metadata.totalMarks,
+          passingMarks: metadata.passingMarks,
+          instructions: Array.isArray(metadata.instructions) 
+            ? metadata.instructions 
+            : (metadata.instructions ? [metadata.instructions] : [])
+        }
+      });
+      
+      setExamToCopy(exam);
+      console.log('Setting showCopyModal to true, examCopyData:', examCopyData);
+      setShowCopyModal(true);
+    } catch (err: any) {
+      console.error('Error in handleCopyExam:', err);
+      error(err?.message || 'Failed to fetch exam details. Please try again.');
+    } finally {
+      setCopyingExam(false);
+    }
+  };
+
+  // Handler for deleting exam
+  const handleDeleteExam = async () => {
+    if (!examToDelete) return;
+    
+    if (deleteConfirmText.toLowerCase() !== 'confirm') {
+      error('Please type "confirm" to delete the exam');
+      return;
+    }
+
+    try {
+      setDeletingExam(true);
+      await examApi.deleteExam(examToDelete.id);
+      
+      // Remove from local state
+      setBackendExams(backendExams.filter(e => e.id !== examToDelete.id));
+      setTotalExams(totalExams - 1);
+      
+      success(`Exam "${examToDelete.title}" deleted successfully`);
+      setShowDeleteDialog(false);
+      setExamToDelete(null);
+      setDeleteConfirmText('');
+    } catch (err: any) {
+      console.error('Failed to delete exam:', err);
+      error(err?.message || 'Failed to delete exam. Please try again.');
+    } finally {
+      setDeletingExam(false);
+    }
+  };
+
+  // Handler for when copy modal succeeds
+  const handleCopyExamSuccess = async (newExamId: string) => {
+    if (!newExamId) {
+      error('Failed to create exam copy. Please try again.');
+      return;
+    }
+
+    if (copiedQuestions.length === 0) {
+      success('Exam copied successfully (no questions to copy).');
+      setShowCopyModal(false);
+      setExamCopyData(null);
+      setCopiedQuestions([]);
+      setExamToCopy(null);
+      // Refresh exams list
+      try {
+        const response = await examApi.getExams(page, limit, user?.role === 'SUPERADMIN' ? currentEntity : undefined);
+        setBackendExams(response.payload.exams);
+        setTotalPages(response.payload.totalPages);
+        setTotalExams(response.payload.total);
+      } catch (err) {
+        console.error('Failed to refresh exams list:', err);
+      }
+      return;
+    }
+    
+    try {
+      // Copy all questions to the new exam
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const question of copiedQuestions) {
+        try {
+          // Prepare question metadata - remove image_url fields (they're just for display)
+          // and keep only the structure the backend expects
+          const metadata = question.metadata ? { ...question.metadata } : {};
+          
+          // Remove image_url from options if present (backend only needs image_id)
+          if (metadata.options && Array.isArray(metadata.options)) {
+            metadata.options = metadata.options.map((option: any) => {
+              const { image_url, ...rest } = option;
+              return rest;
+            });
+          }
+          
+          // Prepare question payload - backend expects everything in metadata
+          const questionPayload: CreateQuestionPayload = {
+            exam_id: newExamId,
+            question_text: question.question_text,
+            type: question.type,
+            metadata: metadata,
+          };
+          
+          await examApi.createQuestion(questionPayload);
+          successCount++;
+        } catch (err: any) {
+          console.error('Failed to copy question:', err);
+          console.error('Question data:', JSON.stringify(question, null, 2));
+          console.error('Error details:', err?.message || err);
+          failCount++;
+        }
+      }
+      
+      if (failCount === 0) {
+        success(`Exam copied successfully with ${successCount} question(s).`);
+      } else {
+        success(`Exam copied with ${successCount} question(s). ${failCount} question(s) failed to copy.`);
+      }
+      
+      setShowCopyModal(false);
+      setExamCopyData(null);
+      setCopiedQuestions([]);
+      setExamToCopy(null);
+      
+      // Refresh exams list
+      try {
+        const response = await examApi.getExams(page, limit, user?.role === 'SUPERADMIN' ? currentEntity : undefined);
+        setBackendExams(response.payload.exams);
+        setTotalPages(response.payload.totalPages);
+        setTotalExams(response.payload.total);
+      } catch (err) {
+        console.error('Failed to refresh exams list:', err);
+      }
+    } catch (err: any) {
+      error(err?.message || 'Failed to copy questions. Please try again.');
     }
   };
 
@@ -737,7 +940,7 @@ export function RoleAwareExamManagement({
   const canCreateExam = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
   const canManageAllEntities = user?.role === 'SUPERADMIN';
   const canManageQuestions = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
-  const examTableColumnCount = 9; // Name, Type, Duration, Admission Form, Public Link, Invite Representative, Monitoring, Status, Created At
+  const examTableColumnCount = 11; // Name, Type, Duration, Admission Form, Public Link, Invite Representative, Monitoring, Copy, Actions, Status, Created At
 
   if (user?.role === 'STUDENT') {
     return (
@@ -886,6 +1089,65 @@ export function RoleAwareExamManagement({
                     }}
                     entityId={currentEntity}
                   />
+                  {/* Copy Exam Modal */}
+                  <CreateExamModal
+                    open={showCopyModal}
+                    onClose={() => {
+                      setShowCopyModal(false);
+                      setExamCopyData(null);
+                      setCopiedQuestions([]);
+                      setExamToCopy(null);
+                    }}
+                    onSuccess={async (newExamId) => {
+                      if (newExamId) {
+                        await handleCopyExamSuccess(newExamId);
+                      }
+                    }}
+                    entityId={currentEntity}
+                    initialData={examCopyData || undefined}
+                  />
+
+      {/* Delete Exam Confirmation Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Exam</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "<strong>{examToDelete?.title}</strong>"? This action cannot be undone.
+              <br /><br />
+              This will permanently delete the exam, all its questions, enrollments, submissions, and results.
+              <br /><br />
+              Type <strong>confirm</strong> to proceed:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="Type 'confirm' to delete"
+              className="w-full"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setExamToDelete(null);
+                setDeleteConfirmText('');
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteExam}
+              disabled={deleteConfirmText.toLowerCase() !== 'confirm' || deletingExam}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingExam ? 'Deleting...' : 'Delete Exam'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline">
@@ -963,6 +1225,8 @@ export function RoleAwareExamManagement({
                     <TableHead className="text-center">Public Link</TableHead>
                     <TableHead className="text-center">Invite Representative</TableHead>
                     <TableHead className="text-center">Monitoring</TableHead>
+                    <TableHead className="text-center">Copy</TableHead>
+                    <TableHead className="text-center">Actions</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Created At</TableHead>
                   </TableRow>
@@ -1157,6 +1421,56 @@ export function RoleAwareExamManagement({
                                 </Tooltip>
                               </TooltipProvider>
                             )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-center">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label="Copy exam"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      event.preventDefault();
+                                      handleCopyExam(exam);
+                                    }}
+                                    disabled={copyingExam}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Copy exam with all questions</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-center">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label="Delete exam"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      event.preventDefault();
+                                      handleExamAction('delete', exam as any);
+                                    }}
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete exam</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </TableCell>
                         <TableCell>
