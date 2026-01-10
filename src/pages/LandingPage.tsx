@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../shared/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../shared/components/ui/card';
@@ -14,10 +14,12 @@ import {
   Sun,
   BookOpen,
   Award,
-  TrendingUp
+  TrendingUp,
+  Sparkles
 } from 'lucide-react';
 import { useTheme } from '../shared/providers/ThemeProvider';
 import { envConfig } from '@/config/env';
+import { TrialEntityForm } from '../features/entities/components/TrialEntityForm';
 
 interface LandingPageProps {
   onLoginClick?: () => void;
@@ -27,6 +29,7 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const appName = envConfig.appName;
+  const [showTrialForm, setShowTrialForm] = useState(false);
 
   const handleLoginClick = () => {
     if (onLoginClick) {
@@ -34,6 +37,10 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
     } else {
       navigate('/login');
     }
+  };
+
+  const handleTryNowClick = () => {
+    setShowTrialForm(true);
   };
 
   const features = [
@@ -124,21 +131,24 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button 
               size="lg" 
-              onClick={handleLoginClick}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3"
+              onClick={handleTryNowClick}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground px-8 py-3 shadow-lg hover:shadow-xl transition-all"
             >
-              Get Started
+              <Sparkles className="mr-2 h-5 w-5" />
+              Try Now - 14 Days Free
             </Button>
-            {/* Watch Demo button - commented out
             <Button 
               size="lg" 
               variant="outline"
+              onClick={handleLoginClick}
               className="border-border hover:bg-accent px-8 py-3"
             >
-              Watch Demo
+              Sign In
             </Button>
-            */}
           </div>
+          <p className="text-sm text-muted-foreground mt-4">
+            No credit card required • Full access for 14 days • Set up in minutes
+          </p>
         </div>
       </section>
 
@@ -206,24 +216,32 @@ export function LandingPage({ onLoginClick }: LandingPageProps) {
             <Button 
               size="lg" 
               variant="secondary"
-              onClick={handleLoginClick}
-              className="bg-white text-primary hover:bg-white/90 px-8 py-3"
+              onClick={handleTryNowClick}
+              className="bg-white text-primary hover:bg-white/90 px-8 py-3 shadow-lg hover:shadow-xl transition-all"
             >
-              Start Free Trial
+              <Sparkles className="mr-2 h-5 w-5" />
+              Start Your 14-Day Free Trial
             </Button>
-            {/* Contact Sales button - commented out
             <Button 
               size="lg" 
               variant="outline"
+              onClick={handleLoginClick}
               className="border-white text-white hover:bg-white/10 px-8 py-3"
             >
-              Contact Sales
+              Sign In
             </Button>
-            */}
           </div>
+          <p className="text-sm text-primary-foreground/80 mt-4">
+            No credit card required • Full access for 14 days • Set up in minutes
+          </p>
         </div>
       </section>
 
+      {/* Trial Entity Form Modal */}
+      <TrialEntityForm 
+        isOpen={showTrialForm}
+        onClose={() => setShowTrialForm(false)}
+      />
     </div>
   );
 }

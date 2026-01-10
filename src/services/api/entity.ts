@@ -90,6 +90,49 @@ export async function getEntityById(entityId: string): Promise<{ payload: ApiEnt
 }
 
 /**
+ * Create a trial entity with admin user (public endpoint, no auth required)
+ */
+export async function createTrialEntity(payload: CreateEntityPayload & { admin_email: string } | FormData): Promise<{ payload: { entity_id: string; entity_name: string; admin_id: string; admin_email: string; invitation_token: string; subscription_end_date: string } }> {
+  let formData: FormData;
+  const isFormData = payload instanceof FormData;
+  
+  if (!isFormData && payload && typeof payload === 'object') {
+    const regularPayload = payload as any;
+    formData = new FormData();
+    
+    if (regularPayload.name) formData.append('name', regularPayload.name);
+    if (regularPayload.address) formData.append('address', regularPayload.address);
+    if (regularPayload.description) formData.append('description', regularPayload.description);
+    if (regularPayload.email) formData.append('email', regularPayload.email);
+    if (regularPayload.phone_number) {
+      const phoneStr = String(regularPayload.phone_number).replace(/\D/g, '');
+      const phoneNum = parseInt(phoneStr, 10);
+      if (phoneStr.length > 0 && phoneNum >= 6000000000 && phoneNum <= 9999999999) {
+        formData.append('phone_number', phoneStr);
+      }
+    }
+    if (regularPayload.type) formData.append('type', regularPayload.type);
+    if (regularPayload.logo) formData.append('logo', regularPayload.logo);
+    if (regularPayload.admin_email) formData.append('admin_email', regularPayload.admin_email);
+  } else {
+    formData = payload as FormData;
+  }
+  
+  // Use regular fetch instead of authenticatedFetch for public endpoint
+  const response = await fetch(getApiUrl('/v1/entities/trial'), {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.responseMessage || errorData.message || `Server error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
  * Create an entity
  */
 export async function createEntity(payload: CreateEntityPayload | FormData): Promise<{ payload: ApiEntity }> {
