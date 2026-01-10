@@ -109,13 +109,29 @@ export async function authenticatedFetch(
     try {
       errorData = await response.json();
       errorMessage = errorData.message || errorData.responseMessage || errorMessage;
+      
+      // Preserve error code for subscription expired errors
+      // Backend sends responseCode as "SUBSCRIPTION_EXPIRED" in error response
+      if (errorData.responseCode === 'SUBSCRIPTION_EXPIRED' || 
+          errorData.code === 'SUBSCRIPTION_EXPIRED' || 
+          errorMessage.toLowerCase().includes('subscription has expired')) {
+        const customError: any = new Error(errorMessage);
+        customError.code = 'SUBSCRIPTION_EXPIRED';
+        customError.subscriptionExpired = true;
+        throw customError;
+      }
+      
       console.error('❌ API Error Response:', {
         status: response.status,
         statusText: response.statusText,
         url: response.url,
         errorData: errorData
       });
-    } catch (e) {
+    } catch (e: any) {
+      // If it's already our custom error, re-throw it
+      if (e && (e.code === 'SUBSCRIPTION_EXPIRED' || e.subscriptionExpired)) {
+        throw e;
+      }
       // If response is not JSON, use default error message
       console.error('❌ API Error - Non-JSON response:', {
         status: response.status,

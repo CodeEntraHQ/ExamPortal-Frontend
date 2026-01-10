@@ -14,6 +14,7 @@ import { authAPI, forgotPassword } from '../../../services/api';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import { envConfig } from '@/config/env';
+import { SubscriptionExpiredModal } from './SubscriptionExpiredModal';
 
 interface LoginFormProps {
   onBackToHome?: () => void;
@@ -35,6 +36,9 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
   // 2FA states
   const [show2FAModal, setShow2FAModal] = useState(false);
   const [otp, setOtp] = useState('');
+  
+  // Subscription expired state
+  const [showSubscriptionExpiredModal, setShowSubscriptionExpiredModal] = useState(false);
   
   const { login, verify2FA, user } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -113,7 +117,11 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
       // If no 2FA required, login is complete and user will be redirected automatically
       
     } catch (err: any) {
-      if (err.message.includes('Server')) {
+      // Check if it's a subscription expired error
+      if (err.code === 'SUBSCRIPTION_EXPIRED' || err.subscriptionExpired) {
+        setShowSubscriptionExpiredModal(true);
+        setError('');
+      } else if (err.message && err.message.includes('Server')) {
         setError(err.message);
       } else {
         setError('Invalid credentials.');
@@ -491,6 +499,12 @@ export function LoginForm({ onBackToHome }: LoginFormProps) {
         </CardContent>
       </Card>
       </motion.div>
+
+      {/* Subscription Expired Modal */}
+      <SubscriptionExpiredModal 
+        isOpen={showSubscriptionExpiredModal}
+        onClose={() => setShowSubscriptionExpiredModal(false)}
+      />
     </div>
   );
 }
