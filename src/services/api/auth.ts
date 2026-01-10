@@ -26,6 +26,7 @@ export interface LoginResponse {
     two_fa_enabled?: boolean;
   };
   requires2FA?: boolean;
+  subscriptionExpired?: boolean;
   token?: string;
 }
 
@@ -42,38 +43,51 @@ export async function login(email: string, password: string, otp?: string): Prom
     body.authentication_code = otp;
   }
 
-  const response = await authenticatedFetch(getApiUrl('/v1/users/login'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  try {
+    const response = await authenticatedFetch(getApiUrl('/v1/users/login'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
 
-  const data = await response.json();
+    const data = await response.json();
 
-  // Check if 2FA is required
-  if (data.message === 'AUTHENTICATION_CODE_REQUIRED' || data.message === 'AUTHENTICATION_CODE_REQUIRED') {
-    return { requires2FA: true };
+    // Check if 2FA is required
+    if (data.message === 'AUTHENTICATION_CODE_REQUIRED' || data.message === 'AUTHENTICATION_CODE_REQUIRED') {
+      return { requires2FA: true };
+    }
+
+    // Store token if provided
+    if (data.payload?.token) {
+      setToken(data.payload.token);
+    }
+
+    // Normalize entity field names (backend uses entity_id/entity_name, frontend uses entityId/entityName)
+    const userData = data.payload?.user || data.payload;
+    if (userData) {
+      userData.entityId = userData.entityId || userData.entity_id;
+      userData.entityName = userData.entityName || userData.entity_name;
+    }
+
+    return {
+      user: userData,
+      token: data.payload?.token,
+      requires2FA: false,
+      subscriptionExpired: false,
+    };
+  } catch (error: any) {
+    // Check if it's a subscription expired error
+    if (error.message && error.message.includes('subscription has expired')) {
+      throw { 
+        code: 'SUBSCRIPTION_EXPIRED',
+        message: error.message || 'Your subscription has expired. Please contact your administrator to renew your subscription.',
+        subscriptionExpired: true 
+      };
+    }
+    throw error;
   }
-
-  // Store token if provided
-  if (data.payload?.token) {
-    setToken(data.payload.token);
-  }
-
-  // Normalize entity field names (backend uses entity_id/entity_name, frontend uses entityId/entityName)
-  const userData = data.payload?.user || data.payload;
-  if (userData) {
-    userData.entityId = userData.entityId || userData.entity_id;
-    userData.entityName = userData.entityName || userData.entity_name;
-  }
-
-  return {
-    user: userData,
-    token: data.payload?.token,
-    requires2FA: false,
-  };
 }
 
 /**
