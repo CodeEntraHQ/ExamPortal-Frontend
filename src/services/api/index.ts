@@ -37,7 +37,7 @@ export type {
 } from './exam';
 
 // Entity API
-export { getEntities, createEntity, updateEntity } from './entity';
+export { getEntities, createEntity, updateEntity, deleteEntity } from './entity';
 export type {
   ApiEntity as Entity,
   CreateEntityPayload,

@@ -305,3 +305,14 @@ export async function updateEntity(payload: UpdateEntityPayload | FormData): Pro
   }
 }
 
+/**
+ * Delete an entity
+ * Only SUPERADMIN can delete entities
+ */
+export async function deleteEntity(entityId: string): Promise<{ payload: { message: string } }> {
+  const response = await authenticatedFetch(getApiUrl(`/v1/entities/${entityId}`), {
+    method: 'DELETE',
+  });
+
+  return response.json();
+}

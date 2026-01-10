@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../shared/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../../../shared/components/ui/dialog';
 import { Alert, AlertDescription } from '../../../shared/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../../../shared/components/ui/alert-dialog';
 import { ImageWithFallback } from '../../../shared/components/common/ImageWithFallback';
 import { 
   Building,
@@ -25,10 +26,12 @@ import {
   Shield,
   Settings,
   Upload,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../../../features/auth/providers/AuthProvider';
-import { getEntities, createEntity, updateEntity, Entity as ApiEntity, CreateEntityPayload, UpdateEntityPayload, GetEntitiesResponse } from '../../../services/api';
+import { getEntities, createEntity, updateEntity, deleteEntity, Entity as ApiEntity, CreateEntityPayload, UpdateEntityPayload, GetEntitiesResponse } from '../../../services/api';
 import { toast } from 'sonner';
 import { Separator } from '../../../shared/components/ui/separator';
 import { Switch } from '../../../shared/components/ui/switch';
@@ -89,6 +92,9 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEntity, setEditingEntity] = useState<Entity | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [entityToDelete, setEntityToDelete] = useState<Entity | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchEntities = useCallback(async () => {
     setLoading(true);
@@ -154,6 +160,29 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
   const handleEditClick = (entity: Entity) => {
     setEditingEntity(entity);
     setIsModalOpen(true);
+  };
+
+  const handleDeleteClick = (entity: Entity) => {
+    setEntityToDelete(entity);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!entityToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteEntity(entityToDelete.id);
+      toast.success('Entity deleted successfully!');
+      setDeleteDialogOpen(false);
+      setEntityToDelete(null);
+      fetchEntities();
+    } catch (err: any) {
+      console.error('❌ handleDeleteConfirm - Error:', err);
+      toast.error(`Failed to delete entity: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleToggleMonitoring = async (entity: Entity) => {
@@ -376,10 +405,22 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
                           </div>
                           </div>
                         </div>
-                        <SubscriptionTimer 
-                          subscriptionEndDate={entity.subscription_end_date} 
-                          variant="card"
-                        />
+                        <div className="flex items-center gap-2">
+                          <SubscriptionTimer 
+                            subscriptionEndDate={entity.subscription_end_date} 
+                            variant="card"
+                          />
+                          {user?.role === 'SUPERADMIN' && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => handleDeleteClick(entity)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
 
                       {/* Metrics */}
@@ -534,9 +575,16 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
                             >
                               <Settings className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
+                            {user?.role === 'SUPERADMIN' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                onClick={() => handleDeleteClick(entity)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </motion.div>
@@ -565,6 +613,37 @@ export function EntityManagement({ onBackToDashboard, onViewEntity, onEditEntity
           />
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Entity</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{entityToDelete?.name}</strong>? 
+              <br /><br />
+              This action cannot be undone. All associated data including users, exams, submissions, and results will be permanently deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Entity'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
